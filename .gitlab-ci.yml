@@ -1,0 +1,75 @@
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - project: 'cms-tsg/common/paas-ci-cd-templates'
+    file: '/build-image.yml'
+
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  PYTHON_IMAGE: registry.cern.ch/docker.io/library/python:3.11-slim
+  NODE_IMAGE: registry.cern.ch/docker.io/library/node:24-slim
+  IMAGE_TAG: $CI_COMMIT_SHA # what build pushes. deploy should promote this instead of rebuilding
+
+sast:
+  stage: test
+
+secret_detection:
+  stage: test
+
+lint:
+  stage: lint
+  image: $PYTHON_IMAGE
+  before_script:
+    - pip install --no-cache-dir ruff==0.8.4
+  script:
+    - ruff check api
+    - ruff format --check api
+
+test-api:
+  stage: test
+  image: $PYTHON_IMAGE
+  variables:
+    ENVIRONMENT: test
+    GIT_SHA: $CI_COMMIT_SHA
+  before_script:
+    - pip install --no-cache-dir -e "api[dev]"
+  script:
+    - pytest api/tests -v
+
+test-web:
+  stage: test
+  image: $NODE_IMAGE
+  before_script:
+    - cd web && npm ci
+  script:
+    - npm run type-check
+    - npm run test:unit -- --run
+
+.build:
+  extends: .build-image-template
+  stage: build
+  rules:
+    - when: on_success
+
+build-api:
+  extends: .build
+  variables:
+    DOCKERFILE_NAME: api/Dockerfile
+  before_script:
+    - export CI_REGISTRY_IMAGE="$CI_REGISTRY_IMAGE/api" # upstream template pushes to $CI_REGISTRY_IMAGE:$IMAGE_TAG, so each job re-exports that var to a subpath to get one image repo per service
+    - APP_VERSION=$(grep -m1 '^version' api/pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+    - EXTRA="--build-arg GIT_SHA=$CI_COMMIT_SHA --build-arg APP_VERSION=$APP_VERSION"
+    - if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then EXTRA="$EXTRA --destination $CI_REGISTRY_IMAGE:latest"; fi
+    - export EXTRA_BUILD_ARGS="$EXTRA"
+
+build-web:
+  extends: .build
+  variables:
+    DOCKERFILE_NAME: web/Dockerfile
+  before_script:
+    - export CI_REGISTRY_IMAGE="$CI_REGISTRY_IMAGE/web"
+    - if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then export EXTRA_BUILD_ARGS="--destination $CI_REGISTRY_IMAGE:latest"; fi
