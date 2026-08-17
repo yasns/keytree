@@ -1,5 +1,6 @@
 # Keytree
-**_The CMS L1T+HLT configuration database editor for the Phase-2 upgrade._**
+**The CMS L1T+HLT configuration database editor for the Phase-2 upgrade.**
+
 Built on PostgreSQL, FastAPI, and Vue 3.
 
 ## Run locally
@@ -8,8 +9,8 @@ Built on PostgreSQL, FastAPI, and Vue 3.
 cd api
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-ENVIRONMENT=local GIT_SHA=$(git rev-parse --short HEAD) \
-  uvicorn app.main:app --reload --port 8080
+cp .env.example .env  # fill in the required environment variables
+GIT_SHA=$(git rev-parse --short HEAD) uvicorn app.main:app --reload --port 8080
 ```
 
 ```bash
@@ -18,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Then: <http://localhost:5173/> for the app, <http://localhost:5173/api/docs> for the Swagger API docs. Vite proxies `/api` to the API on port 8080 (single origin).
+Then: <http://localhost:5173/> for the app, <http://localhost:5173/api/docs> for the Swagger API docs. Vite proxies `/api` to the API on port 8080.
 
 ## Build and run the containers
 
@@ -31,7 +32,7 @@ docker build \
 
 docker network create keytree
 
-docker run -d --rm --network keytree --name api -e ENVIRONMENT=local keytree-api
+docker run -d --rm --network keytree --name api --env-file api/.env keytree-api
 ```
 
 ```bash
@@ -40,5 +41,4 @@ docker build -f web/Dockerfile . -t keytree-web
 docker run -d --rm --network keytree -p 8081:8080 keytree-web
 ```
 
-Then: <http://localhost:8081/>. nginx proxies `/api/` to the api container by
-its Docker network hostname (`api:8080`).
+Then: <http://localhost:8081/>. nginx proxies `/api/` to the api container by its Docker network hostname (`api:8080`).

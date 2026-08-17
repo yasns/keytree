@@ -3,11 +3,12 @@ import logging
 import sys
 import time
 
+import tsgauth.fastapi as tsgauth
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 
 from .config import APP_VERSION, settings
-from .routers.users import router as users_router
+from .routers.user import router as user_router
 
 log = logging.getLogger("access")
 
@@ -22,6 +23,7 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
+tsgauth.setup_app(app, secret_key=settings.secret_key)
 
 
 @app.middleware("http")
@@ -59,4 +61,4 @@ def health() -> dict[str, str]:
     }
 
 
-app.include_router(users_router)
+app.include_router(user_router)
