@@ -17,6 +17,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // changeOrigin: false preserves the browser's Host header so tsgauth builds
+      // redirect_uri to match this origin instead of the API's
       '/api': { target: 'http://localhost:8080', changeOrigin: false },
     },
   },

@@ -4,7 +4,7 @@ from tsgauth.fastapi import JWTBearerClaims
 router = APIRouter(
     prefix="/api/user",
     dependencies=[Depends(JWTBearerClaims())],
-    tags=["Users"],
+    tags=["user"],
 )
 
 
