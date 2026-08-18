@@ -42,3 +42,13 @@ docker run -d --rm --network keytree -p 8081:8080 keytree-web
 ```
 
 Then: <http://localhost:8081/>. nginx proxies `/api/` to the api container by its Docker network hostname (`api:8080`).
+
+## Tests
+
+```bash
+cd api && pytest tests
+```
+
+```bash
+cd web && npm run test:unit
+```
