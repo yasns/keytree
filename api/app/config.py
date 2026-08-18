@@ -1,9 +1,4 @@
-from importlib.metadata import version
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-# pyproject.toml [project].version
-APP_VERSION = version("keytree-api")
 
 
 class Settings(BaseSettings):

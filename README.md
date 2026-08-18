@@ -26,7 +26,6 @@ Then: <http://localhost:5173/> for the app, <http://localhost:5173/api/docs> for
 ```bash
 docker build \
   -f api/Dockerfile \
-  --build-arg APP_VERSION=$(grep -m1 '^version' api/pyproject.toml | sed -E 's/version = "(.*)"/\1/') \
   --build-arg GIT_SHA=$(git rev-parse --short HEAD) \
   -t keytree-api .
 

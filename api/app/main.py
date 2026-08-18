@@ -7,7 +7,7 @@ import tsgauth.fastapi as tsgauth
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 
-from .config import APP_VERSION, settings
+from .config import settings
 from .routers.user import router as user_router
 
 log = logging.getLogger("access")
@@ -18,7 +18,7 @@ logging.basicConfig(level=settings.log_level, handlers=[_handler], force=True)
 
 app = FastAPI(
     title="Keytree",
-    version=APP_VERSION,
+    commit=settings.git_sha,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -55,7 +55,6 @@ def root() -> RedirectResponse:
 def health() -> dict[str, str]:
     return {
         "status": "ok",
-        "version": APP_VERSION,
         "commit": settings.git_sha,
         "environment": settings.environment,
     }
