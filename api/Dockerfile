@@ -7,13 +7,11 @@ RUN pip install --no-cache-dir --prefix=/install .
 
 FROM registry.cern.ch/docker.io/library/python:3.11-slim
 
-ARG APP_VERSION=0.0.0
 ARG GIT_SHA=unknown
 
 COPY --from=builder /install /usr/local
 
 ENV GIT_SHA=${GIT_SHA} \
-    APP_VERSION=${APP_VERSION} \
     HOME=/tmp \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
