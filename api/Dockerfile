@@ -1,15 +1,19 @@
+FROM registry.cern.ch/docker.io/astral/uv:0.12.5 AS uv
+
 FROM registry.cern.ch/docker.io/library/python:3.11-slim AS builder
+COPY --from=uv /uv /usr/local/bin/uv
 
 WORKDIR /src
-COPY api/pyproject.toml ./
+ENV UV_PROJECT_ENVIRONMENT=/usr/local
+COPY api/pyproject.toml api/uv.lock ./
 COPY api/app ./app
-RUN pip install --no-cache-dir --prefix=/install .
+RUN uv sync --locked --no-dev --no-editable
 
 FROM registry.cern.ch/docker.io/library/python:3.11-slim
 
 ARG GIT_SHA=unknown
 
-COPY --from=builder /install /usr/local
+COPY --from=builder /usr/local /usr/local
 
 ENV GIT_SHA=${GIT_SHA} \
     HOME=/tmp \
