@@ -5,12 +5,13 @@ Built on PostgreSQL, FastAPI, and Vue 3.
 
 ## Run locally
 
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) for the API and Node for the web app.
+
 ```bash
 cd api
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync
 cp .env.example .env  # fill in the required environment variables
-GIT_SHA=$(git rev-parse --short HEAD) uvicorn app.main:app --reload --port 8080
+GIT_SHA=$(git rev-parse --short HEAD) uv run uvicorn app.main:app --reload --port 8080
 ```
 
 ```bash
@@ -45,7 +46,7 @@ Then: <http://localhost:8081/>. nginx proxies `/api/` to the api container by it
 ## Tests
 
 ```bash
-cd api && pytest tests
+cd api && uv run pytest tests
 ```
 
 ```bash

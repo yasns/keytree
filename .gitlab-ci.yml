@@ -16,7 +16,7 @@ stages:
 
 variables:
   DEPLOY_BRANCHES_REGEX: "/^(main|dev|test)$/"
-  PYTHON_IMAGE: registry.cern.ch/docker.io/library/python:3.11-slim
+  UV_IMAGE: registry.cern.ch/docker.io/astral/uv:0.12.5-python3.11-trixie-slim
   NODE_IMAGE: registry.cern.ch/docker.io/library/node:24-slim
 
 sast:
@@ -27,23 +27,19 @@ secret_detection:
 
 lint:
   stage: lint
-  image: $PYTHON_IMAGE
-  before_script:
-    - pip install --no-cache-dir ruff==0.16.3
+  image: $UV_IMAGE
   script:
-    - ruff check api
-    - ruff format --check api
+    - uv run --project api ruff check api
+    - uv run --project api ruff format --check api
 
 test-api:
   stage: test
-  image: $PYTHON_IMAGE
+  image: $UV_IMAGE
   variables:
     ENVIRONMENT: test
     GIT_SHA: $CI_COMMIT_SHA
-  before_script:
-    - pip install --no-cache-dir -e "api[dev]"
   script:
-    - pytest api/tests -v
+    - uv run --project api pytest api/tests -v
 
 test-web:
   stage: test
