@@ -2,12 +2,16 @@ import json
 import logging
 import sys
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import tsgauth.fastapi as tsgauth
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 
 from .config import settings
+from .db.base import engine
+from .routers.health import router as health_router
 from .routers.user import router as user_router
 
 log = logging.getLogger("access")
@@ -16,8 +20,16 @@ _handler = logging.StreamHandler(sys.stdout)
 _handler.setFormatter(logging.Formatter("%(message)s"))
 logging.basicConfig(level=settings.log_level, handlers=[_handler], force=True)
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    await engine.dispose()
+
+
 app = FastAPI(
     title="Keytree",
+    lifespan=lifespan,
     commit=settings.git_sha,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -51,13 +63,5 @@ def root() -> RedirectResponse:
     return RedirectResponse("/api/docs")
 
 
-@app.get("/api/health")
-def health() -> dict[str, str]:
-    return {
-        "status": "ok",
-        "commit": settings.git_sha,
-        "environment": settings.environment,
-    }
-
-
-app.include_router(user_router)
+app.include_router(health_router, prefix="/api")
+app.include_router(user_router, prefix="/api")

@@ -1,0 +1,50 @@
+# Local development only. The owner credentials below are not secret.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: keytree # owns the schema
+      POSTGRES_PASSWORD: keytree
+      POSTGRES_DB: keytree
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keytree -d keytree"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: development
+    env_file: api/.env
+    environment:
+      POSTGRES_HOST: db
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./api:/src
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/src
+      - /src/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
