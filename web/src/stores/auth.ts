@@ -5,7 +5,7 @@ export const useAuthStore = defineStore('auth', () => {
   const claims = ref<Record<string, unknown> | null>(null)
 
   async function checkAuth() {
-    // redirect: 'manual' stops fetch from following the SSO redirect (cross-origin, would fail)
+    // 'manual' stops fetch following the SSO redirect, which is cross-origin and would fail
     const res = await fetch('/api/user/claims', { redirect: 'manual' })
     if (res.type === 'opaqueredirect') {
       const returnTo = encodeURIComponent(window.location.href)

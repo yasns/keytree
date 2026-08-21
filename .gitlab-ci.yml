@@ -12,6 +12,7 @@ stages:
   - lint
   - test
   - build
+  - migrate
   - deploy
 
 variables:
@@ -39,7 +40,8 @@ test-api:
     ENVIRONMENT: test
     GIT_SHA: $CI_COMMIT_SHA
   script:
-    - uv run --project api pytest api/tests -v
+
+    - uv run --project api pytest api/tests -v --ignore=api/tests/test_db.py # Skip DB integration tests in CI, k8s runners can't grant privileged pods for dind
 
 test-web:
   stage: test
@@ -47,6 +49,7 @@ test-web:
   before_script:
     - cd web && npm ci
   script:
+    - npm run lint
     - npm run type-check
     - npm run test:unit -- --run
 
@@ -81,6 +84,21 @@ build-web:
   rules:
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
+
+migrate-api:
+  stage: migrate
+  image: $UV_IMAGE
+  environment:
+    name: $CI_COMMIT_BRANCH
+  variables:
+    # env.py expects these, however they are not used by the migrations
+    ENVIRONMENT: $CI_COMMIT_BRANCH
+    SECRET_KEY: unused-by-migrations
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
+      when: on_success
+  script:
+    - uv run --project api alembic -c api/alembic.ini upgrade heads
 
 deploy-web:
   extends: .deploy
