@@ -20,18 +20,19 @@ variables:
   UV_IMAGE: registry.cern.ch/docker.io/astral/uv:0.12.5-python3.11-trixie-slim
   NODE_IMAGE: registry.cern.ch/docker.io/library/node:24-slim
 
-sast:
-  stage: test
-
-secret_detection:
-  stage: test
-
 lint:
   stage: lint
   image: $UV_IMAGE
   script:
     - uv run --project api ruff check api
     - uv run --project api ruff format --check api
+
+
+sast:
+  stage: test
+
+secret_detection:
+  stage: test
 
 test-api:
   stage: test
@@ -40,8 +41,7 @@ test-api:
     ENVIRONMENT: test
     GIT_SHA: $CI_COMMIT_SHA
   script:
-
-    - uv run --project api pytest api/tests -v --ignore=api/tests/test_db.py # Skip DB integration tests in CI, k8s runners can't grant privileged pods for dind
+    - uv run --project api pytest api/tests -v --ignore=api/tests/test_db.py # Skip DB integration tests in CI
 
 test-web:
   stage: test
@@ -53,10 +53,13 @@ test-web:
     - npm run type-check
     - npm run test:unit -- --run
 
+
 .build:
   extends: .build-image-template
   stage: build
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
 
@@ -82,6 +85,8 @@ build-web:
 .deploy:
   extends: .deploy-template
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
 
@@ -95,6 +100,8 @@ migrate-api:
     ENVIRONMENT: $CI_COMMIT_BRANCH
     SECRET_KEY: unused-by-migrations
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
   script:
