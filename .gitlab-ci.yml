@@ -12,12 +12,21 @@ stages:
   - lint
   - test
   - build
+  - migrate
   - deploy
 
 variables:
   DEPLOY_BRANCHES_REGEX: "/^(main|dev|test)$/"
-  PYTHON_IMAGE: registry.cern.ch/docker.io/library/python:3.11-slim
+  UV_IMAGE: registry.cern.ch/docker.io/astral/uv:0.12.5-python3.11-trixie-slim
   NODE_IMAGE: registry.cern.ch/docker.io/library/node:24-slim
+
+lint:
+  stage: lint
+  image: $UV_IMAGE
+  script:
+    - uv run --project api ruff check api
+    - uv run --project api ruff format --check api
+
 
 sast:
   stage: test
@@ -25,25 +34,14 @@ sast:
 secret_detection:
   stage: test
 
-lint:
-  stage: lint
-  image: $PYTHON_IMAGE
-  before_script:
-    - pip install --no-cache-dir ruff==0.16.3
-  script:
-    - ruff check api
-    - ruff format --check api
-
 test-api:
   stage: test
-  image: $PYTHON_IMAGE
+  image: $UV_IMAGE
   variables:
     ENVIRONMENT: test
     GIT_SHA: $CI_COMMIT_SHA
-  before_script:
-    - pip install --no-cache-dir -e "api[dev]"
   script:
-    - pytest api/tests -v
+    - uv run --project api pytest api/tests -v --ignore=api/tests/test_db.py # Skip DB integration tests in CI
 
 test-web:
   stage: test
@@ -51,13 +49,17 @@ test-web:
   before_script:
     - cd web && npm ci
   script:
+    - npm run lint
     - npm run type-check
     - npm run test:unit -- --run
+
 
 .build:
   extends: .build-image-template
   stage: build
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
 
@@ -83,8 +85,27 @@ build-web:
 .deploy:
   extends: .deploy-template
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
     - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
       when: on_success
+
+migrate-api:
+  stage: migrate
+  image: $UV_IMAGE
+  environment:
+    name: $CI_COMMIT_BRANCH
+  variables:
+    # env.py expects these, however they are not used by the migrations
+    ENVIRONMENT: $CI_COMMIT_BRANCH
+    SECRET_KEY: unused-by-migrations
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_REF_NAME =~ $DEPLOY_BRANCHES_REGEX'
+      when: on_success
+  script:
+    - uv run --project api alembic -c api/alembic.ini upgrade heads
 
 deploy-web:
   extends: .deploy

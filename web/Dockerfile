@@ -1,10 +1,21 @@
+FROM registry.cern.ch/docker.io/library/node:24-slim AS development
+
+WORKDIR /src
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+
+
 FROM registry.cern.ch/docker.io/library/node:24-slim AS builder
 
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
-# ponytail: build-only skips type-check; CI runs vue-tsc separately
 RUN npm run build-only
 
 FROM registry.cern.ch/docker.io/nginxinc/nginx-unprivileged:1.29-alpine

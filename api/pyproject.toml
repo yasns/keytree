@@ -9,13 +9,16 @@ dependencies = [
     "pydantic-settings>=2.15",
     "tsgauth[fastapi]==0.12.0",
     "psycopg[binary]>=3.3",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.19",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "ruff==0.16.3",
     "pytest==8.3.4",
-    "httpx2==2.10.0",  # required by fastapi.testclient
+    "httpx2==2.10.0",
+    "testcontainers[postgres]>=4.9",
 ]
 
 [build-system]

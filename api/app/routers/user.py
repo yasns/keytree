@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from tsgauth.fastapi import JWTBearerClaims
 
 router = APIRouter(
-    prefix="/api/user",
+    prefix="/user",
     dependencies=[Depends(JWTBearerClaims())],
     tags=["user"],
 )
