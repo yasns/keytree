@@ -11,7 +11,7 @@ import migrations.seed as seed_module
 
 
 class ProbeRow(TypedDict):
-    path: str
+    slug: str
     display_name: str
     meta: dict[str, Any] | None
 
@@ -26,7 +26,6 @@ def test_both_branches_applied(engine, alembic_config):
 
 def test_schema_branch_effects(engine):
     with engine.connect() as conn:
-        assert conn.scalar(text("SELECT true FROM pg_extension WHERE extname = 'ltree'"))
         assert conn.scalar(
             text("SELECT NOT rolcanlogin FROM pg_roles WHERE rolname = 'keytree_app'")
         ), "keytree_app must be a privilege bundle, not a login"
@@ -37,41 +36,38 @@ def test_ready_reports_the_applied_revision(client, engine):
         stored = sorted(conn.scalars(text("SELECT version_num FROM alembic_version")))
     body = client.get("/api/health/ready").json()
     assert body["status"] == "ok"
-    assert body["ltree"] is True
     assert sorted(body["applied_revisions"]) == stored
     assert body["server_version"].startswith("17.")
 
 
 def test_seed_inserts_then_upserts(engine, monkeypatch):
     rows: list[ProbeRow] = [
-        {"path": "cms", "display_name": "CMS", "meta": {"kind": "root"}},
-        {"path": "cms.l1_hlt", "display_name": "L1 + HLT", "meta": None},
+        {"slug": "cms", "display_name": "CMS", "meta": {"kind": "root"}},
+        {"slug": "l1_hlt", "display_name": "L1 + HLT", "meta": None},
     ]
     with engine.begin() as conn:
         conn.execute(
             text(
-                "CREATE TABLE probe (id serial PRIMARY KEY, path ltree UNIQUE, "
+                "CREATE TABLE probe (id serial PRIMARY KEY, slug text UNIQUE, "
                 "display_name text, meta jsonb)"
             )
         )
         monkeypatch.setattr(seed_module.op, "get_bind", lambda: conn)
 
-        seed_module.seed("probe", rows, key=["path"])
+        seed_module.seed("probe", rows, key=["slug"])
         assert conn.execute(text("SELECT count(*) FROM probe")).scalar() == 2
 
-        seed_module.seed("probe", rows, key=["path"])  # idempotent
+        seed_module.seed("probe", rows, key=["slug"])  # idempotent
         assert conn.execute(text("SELECT count(*) FROM probe")).scalar() == 2
 
-        renamed: list[ProbeRow] = [{"path": "cms", "display_name": "RENAMED", "meta": None}]
-        seed_module.seed("probe", renamed, key=["path"])
+        renamed: list[ProbeRow] = [{"slug": "cms", "display_name": "RENAMED", "meta": None}]
+        seed_module.seed("probe", renamed, key=["slug"])
         assert conn.execute(text("SELECT count(*) FROM probe")).scalar() == 2
         assert (
-            conn.execute(text("SELECT display_name FROM probe WHERE path = 'cms'")).scalar()
+            conn.execute(text("SELECT display_name FROM probe WHERE slug = 'cms'")).scalar()
             == "RENAMED"
         )
 
-        # round-tripped as a real ltree, not text
-        assert conn.execute(text("SELECT count(*) FROM probe WHERE path <@ 'cms'")).scalar() == 2
         conn.execute(text("DROP TABLE probe"))
 
 

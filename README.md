@@ -33,7 +33,7 @@ Run the migrations:
 POSTGRES_USER=keytree POSTGRES_PASSWORD=keytree uv run alembic upgrade heads
 ```
 
-The API connects as `keytree_api`, which only holds lowest-privilege grants (e.g., can't edit the key hierarchy). The role is needed again after any `docker compose down -v`.
+The API connects as `keytree_api`, which only holds lowest-privilege grants (e.g., can't edit the slot hierarchy). The role is needed again after any `docker compose down -v`.
 
 Install the frontend dependencies for editor tooling:
 ```bash
@@ -62,19 +62,19 @@ cd web && npm run test:unit
 
 There are two independent migration branches:
 1. `schema` defines the data structure and the grants. 
-2. `tree` defines key hierarchy data as new subsystems are added.
+2. `data` seeds catalog rows (subsystems, slots, ...) as they're added.
 
-The idea was to store the key hierarchy as data, not tables - makes it more dynamic. This is because as of writing this README, the exact key hierarchy is not known. Note that `tree` depends on `schema`, so data should never apply before the tables it needs. Here are some examples:
+Note that `data` depends on `schema`, so data should never apply before the tables it needs. Here are some examples:
 
 ```bash
-uv run alembic revision -m "add key table"      --head=schema@head  # schema definition
-uv run alembic revision -m "seed cms root keys" --head=tree@head    # key hierarchy only
+uv run alembic revision -m "add slot table"         --head=schema@head  # schema definition
+uv run alembic revision -m "seed cms subsystems"    --head=data@head   # catalog rows
 uv run alembic upgrade heads                                        # apply both
 uv run alembic heads                                                # where the branches end
 uv run alembic downgrade schema@-1                                  # one branch only
 ```
 
-The branches are otherwise unordered, so a tree revision that seeds a table must declare `depends_on` against the schema revision that creates it, if need be. Nothing else enforces that order.
+The branches are otherwise unordered, so a data revision that seeds a table must declare `depends_on` against the schema revision that creates it, if need be. Nothing else enforces that order.
 
 ### Grants
 
@@ -82,36 +82,9 @@ Every revision that creates a table grants its own privileges. A table whose rev
 
 `keytree_app` is a `NOLOGIN` privilege bundle (role). Column-level grants should be assigned to it, to enable read/write access for the API, for example:
 ```sql
-GRANT SELECT ON key TO keytree_app;                  -- read-only
-GRANT UPDATE (display_name) ON key TO keytree_app;   -- if its mutable
+GRANT SELECT ON slot TO keytree_app;                 -- read-only
+GRANT UPDATE (display_name) ON mode TO keytree_app;  -- if its mutable
 ```
-
-### Seeding
-
-Rows for tables the API cannot write (e.g. `KEY`) are typed `TypedDict` literals declared in the revision.
-
-```python
-from typing import TypedDict
-
-from migrations.seed import seed
-
-
-class KeyRow(TypedDict):
-    path: str
-    display_name: str
-    category: str
-
-
-ROOT_KEYS: list[KeyRow] = [
-    {"path": "cms", "display_name": "CMS", "category": "base"},
-]
-
-
-def upgrade() -> None:
-    seed("key", ROOT_KEYS, key=["path"])
-```
-
-`seed()` inserts or updates existing rows and does not import the app's ORM models as not to break migrations.
 
 ## Deployment
 
@@ -124,7 +97,6 @@ CREATE DATABASE keytree;
 CREATE USER keytree_owner PASSWORD '...';                   -- database owner for running migrations
 GRANT keytree_owner TO admin;                               -- admin needs the role to hand ownership over
 ALTER DATABASE keytree OWNER TO keytree_owner;
-REVOKE keytree_owner FROM admin;                            -- optional cleanup
 GRANT ALL ON SCHEMA public TO keytree_owner;                -- the owner can create tables, etc.
 CREATE ROLE keytree_app NOLOGIN;                            -- the privilege bundle migrations grant to
 CREATE USER keytree_api PASSWORD '...' IN ROLE keytree_app; -- API's user, lowest-privilege

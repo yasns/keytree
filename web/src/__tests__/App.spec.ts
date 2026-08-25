@@ -25,7 +25,7 @@ describe('App', () => {
       json: async () =>
         url.endsWith('/live')
           ? { status: 'ok', environment: 'test', commit: 'abc123' }
-          : { status: 'ok', ltree: true, applied_revisions: ['tree_base'] },
+          : { status: 'ok', applied_revisions: ['tree_base'] },
     }))
     vi.stubGlobal('fetch', fetchMock)
 

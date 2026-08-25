@@ -7,8 +7,6 @@ from alembic import op
 from sqlalchemy import MetaData, Table
 from sqlalchemy.dialects.postgresql import insert
 
-import app.db  # noqa: F401  / registers ltree before reflection
-
 
 def seed(table: str, rows: Sequence[Mapping[str, Any]], key: list[str]) -> None:
     """

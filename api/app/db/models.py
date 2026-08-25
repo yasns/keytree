@@ -1,0 +1,273 @@
+from datetime import datetime
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.schema import SchemaItem
+
+from app.db.base import Base
+
+
+class Subsystem(Base):
+    __tablename__: str = "subsystem"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
+        CheckConstraint("category IN ('top_level', 'subsystem')", name="category_enum"),
+    )
+
+
+class Slot(Base):
+    __tablename__: str = "slot"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    subsystem_id: Mapped[int] = mapped_column(ForeignKey("subsystem.id"), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    format: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        UniqueConstraint("subsystem_id", "name"),
+        CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
+        CheckConstraint(
+            "category IN ('config', 'algo', 'infra', 'rs', 'hw', 'tcds')",
+            name="category_enum",
+        ),
+        CheckConstraint("format IN ('xml', 'yaml', 'plaintext')", name="format_enum"),
+    )
+
+
+class SlotEdge(Base):
+    __tablename__: str = "slot_edge"
+
+    parent_slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), primary_key=True)
+
+    child_slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), primary_key=True)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        CheckConstraint("parent_slot_id <> child_slot_id", name="no_self_loop"),
+    )
+
+
+class Mode(Base):
+    __tablename__: str = "mode"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    description: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    forked_from_key_id: Mapped[int | None] = mapped_column(nullable=True)
+
+    created_by: Mapped[str] = mapped_column(ForeignKey("app_user.cern_login"), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    decommissioned_by: Mapped[str | None] = mapped_column(
+        ForeignKey("app_user.cern_login"), nullable=True
+    )
+
+    decommissioned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        ForeignKeyConstraint(
+            ["forked_from_key_id", "slot_id"], ["key.id", "key.slot_id"], use_alter=True
+        ),
+        UniqueConstraint("id", "slot_id"),
+        UniqueConstraint("slot_id", "name"),
+        CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
+        CheckConstraint(
+            "(decommissioned_at IS NULL) = (decommissioned_by IS NULL)",
+            name="decommission_complete",
+        ),
+    )
+
+
+class Key(Base):
+    __tablename__: str = "key"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    mode_id: Mapped[int] = mapped_column(nullable=False)
+
+    slot_id: Mapped[int] = mapped_column(nullable=False)
+
+    version: Mapped[int] = mapped_column(nullable=False)
+
+    label: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    staged_edit_id: Mapped[int] = mapped_column(
+        ForeignKey("staged_edit.id"), unique=True, nullable=False
+    )
+
+    created_by: Mapped[str] = mapped_column(ForeignKey("app_user.cern_login"), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        ForeignKeyConstraint(["mode_id", "slot_id"], ["mode.id", "mode.slot_id"]),
+        UniqueConstraint("mode_id", "version"),
+        UniqueConstraint("id", "mode_id"),
+        UniqueConstraint("id", "slot_id"),
+        CheckConstraint(
+            "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name="label_format"
+        ),
+        CheckConstraint("version > 0", name="version_positive"),
+    )
+
+
+class KeyChild(Base):
+    __tablename__: str = "key_child"
+
+    parent_key_id: Mapped[int] = mapped_column(primary_key=True)
+
+    child_key_id: Mapped[int] = mapped_column(primary_key=True)
+
+    parent_slot_id: Mapped[int] = mapped_column(nullable=False)
+
+    child_slot_id: Mapped[int] = mapped_column(nullable=False)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        ForeignKeyConstraint(["parent_key_id", "parent_slot_id"], ["key.id", "key.slot_id"]),
+        ForeignKeyConstraint(["child_key_id", "child_slot_id"], ["key.id", "key.slot_id"]),
+        ForeignKeyConstraint(
+            ["parent_slot_id", "child_slot_id"],
+            ["slot_edge.parent_slot_id", "slot_edge.child_slot_id"],
+        ),
+        UniqueConstraint("parent_key_id", "child_slot_id"),
+    )
+
+
+class Changeset(Base):
+    __tablename__: str = "changeset"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    created_by: Mapped[str] = mapped_column(ForeignKey("app_user.cern_login"), nullable=False)
+
+    comment: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    committed_with_roles: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        CheckConstraint(
+            "(committed_at IS NULL) = (committed_with_roles IS NULL)", name="commit_complete"
+        ),
+        Index(
+            "uq_changeset_created_by_open",
+            "created_by",
+            unique=True,
+            postgresql_where=text("committed_at IS NULL"),
+        ),
+    )
+
+
+class StagedEdit(Base):
+    __tablename__: str = "staged_edit"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    changeset_id: Mapped[int] = mapped_column(
+        ForeignKey("changeset.id", ondelete="CASCADE"), nullable=False
+    )
+
+    mode_id: Mapped[int] = mapped_column(ForeignKey("mode.id"), nullable=False)
+
+    base_key_id: Mapped[int | None] = mapped_column(nullable=True)
+
+    copied_from_key_id: Mapped[int | None] = mapped_column(
+        ForeignKey("key.id", use_alter=True), nullable=True
+    )
+
+    proposed_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    proposed_children: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+
+    validation_status: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    __table_args__: tuple[SchemaItem, ...] = (
+        ForeignKeyConstraint(["base_key_id", "mode_id"], ["key.id", "key.mode_id"], use_alter=True),
+        CheckConstraint(
+            "validation_status IN ('skipped', 'passed', 'failed')", name="validation_status_enum"
+        ),
+        CheckConstraint(
+            "proposed_content IS NOT NULL OR proposed_children IS NOT NULL",
+            name="proposes_something",
+        ),
+    )
+
+
+class AppUser(Base):
+    __tablename__: str = "app_user"
+
+    cern_login: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    display_name: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class Role(Base):
+    __tablename__: str = "role"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+
+
+class RoleSubsystem(Base):
+    __tablename__: str = "role_subsystem"
+
+    role_id: Mapped[int] = mapped_column(ForeignKey("role.id"), primary_key=True)
+
+    subsystem_id: Mapped[int] = mapped_column(ForeignKey("subsystem.id"), primary_key=True)
