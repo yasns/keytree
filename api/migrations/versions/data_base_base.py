@@ -1,17 +1,17 @@
 """base
 
-Revision ID: tree_base
+Revision ID: data_base
 Revises:
-Create Date: 2026-08-19 12:00:00.000000
+Create Date: 2026-08-23 13:18:15.276945
 
 """
 
 from collections.abc import Sequence
 
 # revision identifiers, used by Alembic
-revision: str = "tree_base"
+revision: str = "data_base"
 down_revision: str | Sequence[str] | None = None
-branch_labels: str | Sequence[str] | None = ("tree",)
+branch_labels: str | Sequence[str] | None = ("data",)
 depends_on: str | Sequence[str] | None = None
 
 

@@ -7,6 +7,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
+from app.db import models  # noqa: F401
 from app.db.base import Base
 
 logging.basicConfig(level=logging.INFO)

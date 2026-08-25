@@ -31,7 +31,6 @@ async def ready(session: SessionDep) -> dict[str, object]:
     try:
         server_version = await session.scalar(text("SHOW server_version"))
         applied = list(await session.scalars(text("SELECT version_num FROM alembic_version")))
-        ltree = await session.scalar(text("SELECT true FROM pg_extension WHERE extname = 'ltree'"))
     except Exception:
         # We don't want to leak any sensitive information to an authenticated client, so log it.
         log.exception("readiness check failed")
@@ -41,5 +40,4 @@ async def ready(session: SessionDep) -> dict[str, object]:
         "status": "ok",
         "server_version": server_version,
         "applied_revisions": applied,
-        "ltree": bool(ltree),
     }
