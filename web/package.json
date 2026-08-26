@@ -10,6 +10,7 @@
     "test:unit": "vitest",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
+    "gen:api-types": "openapi-typescript http://localhost:8080/api/openapi.json -o src/api-types.ts",
     "format": "prettier --write --experimental-cli src/",
     "lint": "oxlint ."
   },
@@ -27,6 +28,7 @@
     "@vue/tsconfig": "^0.9.1",
     "jsdom": "^29.1.1",
     "npm-run-all2": "^9.0.2",
+    "openapi-typescript": "^7.13.0",
     "oxlint": "~1.78.0",
     "prettier": "3.9.5",
     "typescript": "~6.0.0",
