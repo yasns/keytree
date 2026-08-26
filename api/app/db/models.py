@@ -40,8 +40,8 @@ class Subsystem(Base):
     )
 
 
-class Slot(Base):
-    __tablename__: str = "slot"
+class Node(Base):
+    __tablename__: str = "node"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -49,11 +49,11 @@ class Slot(Base):
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     format: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -61,22 +61,27 @@ class Slot(Base):
         UniqueConstraint("subsystem_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
-            "category IN ('config', 'algo', 'infra', 'rs', 'hw', 'tcds')",
+            "category IN ('algo', 'infra', 'run_settings', 'hardware', 'tcds')",
             name="category_enum",
         ),
         CheckConstraint("format IN ('xml', 'yaml', 'plaintext')", name="format_enum"),
+        CheckConstraint("format IS NOT NULL OR category IS NULL", name="container_has_no_category"),
     )
 
 
-class SlotEdge(Base):
-    __tablename__: str = "slot_edge"
+class NodeEdge(Base):
+    __tablename__: str = "node_edge"
 
-    parent_slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), primary_key=True)
+    parent_node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), primary_key=True)
 
-    child_slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), primary_key=True)
+    child_node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), primary_key=True)
+
+    alias: Mapped[str] = mapped_column(String(64), primary_key=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        CheckConstraint("parent_slot_id <> child_slot_id", name="no_self_loop"),
+        UniqueConstraint("parent_node_id", "alias"),
+        CheckConstraint("parent_node_id <> child_node_id", name="no_self_loop"),
+        CheckConstraint("alias ~ '^[a-z0-9_]+$'", name="alias_slug"),
     )
 
 
@@ -85,7 +90,7 @@ class Mode(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    slot_id: Mapped[int] = mapped_column(ForeignKey("slot.id"), nullable=False)
+    node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), nullable=False)
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -109,10 +114,10 @@ class Mode(Base):
 
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(
-            ["forked_from_key_id", "slot_id"], ["key.id", "key.slot_id"], use_alter=True
+            ["forked_from_key_id", "node_id"], ["key.id", "key.node_id"], use_alter=True
         ),
-        UniqueConstraint("id", "slot_id"),
-        UniqueConstraint("slot_id", "name"),
+        UniqueConstraint("id", "node_id"),
+        UniqueConstraint("node_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
             "(decommissioned_at IS NULL) = (decommissioned_by IS NULL)",
@@ -128,13 +133,13 @@ class Key(Base):
 
     mode_id: Mapped[int] = mapped_column(nullable=False)
 
-    slot_id: Mapped[int] = mapped_column(nullable=False)
+    node_id: Mapped[int] = mapped_column(nullable=False)
 
     version: Mapped[int] = mapped_column(nullable=False)
 
     label: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
 
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     staged_edit_id: Mapped[int] = mapped_column(
         ForeignKey("staged_edit.id"), unique=True, nullable=False
@@ -149,10 +154,10 @@ class Key(Base):
     comment: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["mode_id", "slot_id"], ["mode.id", "mode.slot_id"]),
+        ForeignKeyConstraint(["mode_id", "node_id"], ["mode.id", "mode.node_id"]),
         UniqueConstraint("mode_id", "version"),
         UniqueConstraint("id", "mode_id"),
-        UniqueConstraint("id", "slot_id"),
+        UniqueConstraint("id", "node_id"),
         CheckConstraint(
             "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name="label_format"
         ),
@@ -165,20 +170,21 @@ class KeyChild(Base):
 
     parent_key_id: Mapped[int] = mapped_column(primary_key=True)
 
-    child_key_id: Mapped[int] = mapped_column(primary_key=True)
+    alias: Mapped[str] = mapped_column(String(64), primary_key=True)
 
-    parent_slot_id: Mapped[int] = mapped_column(nullable=False)
+    child_key_id: Mapped[int] = mapped_column(nullable=False)
 
-    child_slot_id: Mapped[int] = mapped_column(nullable=False)
+    parent_node_id: Mapped[int] = mapped_column(nullable=False)
+
+    child_node_id: Mapped[int] = mapped_column(nullable=False)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["parent_key_id", "parent_slot_id"], ["key.id", "key.slot_id"]),
-        ForeignKeyConstraint(["child_key_id", "child_slot_id"], ["key.id", "key.slot_id"]),
+        ForeignKeyConstraint(["parent_key_id", "parent_node_id"], ["key.id", "key.node_id"]),
+        ForeignKeyConstraint(["child_key_id", "child_node_id"], ["key.id", "key.node_id"]),
         ForeignKeyConstraint(
-            ["parent_slot_id", "child_slot_id"],
-            ["slot_edge.parent_slot_id", "slot_edge.child_slot_id"],
+            ["parent_node_id", "child_node_id", "alias"],
+            ["node_edge.parent_node_id", "node_edge.child_node_id", "node_edge.alias"],
         ),
-        UniqueConstraint("parent_key_id", "child_slot_id"),
     )
 
 
@@ -229,7 +235,7 @@ class StagedEdit(Base):
         ForeignKey("key.id", use_alter=True), nullable=True
     )
 
-    proposed_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    proposed_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     proposed_children: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
@@ -243,7 +249,7 @@ class StagedEdit(Base):
             "validation_status IN ('skipped', 'passed', 'failed')", name="validation_status_enum"
         ),
         CheckConstraint(
-            "proposed_content IS NOT NULL OR proposed_children IS NOT NULL",
+            "proposed_payload IS NOT NULL OR proposed_children IS NOT NULL",
             name="proposes_something",
         ),
     )
