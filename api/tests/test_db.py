@@ -20,8 +20,10 @@ def test_both_branches_applied(engine, alembic_config):
     script = ScriptDirectory.from_config(alembic_config)
     with engine.connect() as conn:
         stored = set(conn.scalars(text("SELECT version_num FROM alembic_version")))
-    # alembic stores one row per revision not subsumed by another via depends_on
-    assert stored == set(script.get_heads())
+
+    assert {rev.revision for rev in script.get_all_current(tuple(stored))} == set(
+        script.get_heads()
+    )
 
 
 def test_schema_branch_effects(engine):

@@ -18,4 +18,8 @@ def seed(table: str, rows: Sequence[Mapping[str, Any]], key: list[str]) -> None:
     bind = op.get_bind()
     stmt = insert(Table(table, MetaData(), autoload_with=bind)).values(list(rows))
     updates = {c: stmt.excluded[c] for c in rows[0] if c not in key}
+
+    if not updates:
+        bind.execute(stmt.on_conflict_do_nothing(index_elements=key))
+        return
     bind.execute(stmt.on_conflict_do_update(index_elements=key, set_=updates))
