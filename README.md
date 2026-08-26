@@ -1,7 +1,7 @@
 # Keytree
 **The CMS L1T+HLT configuration database editor for the Phase-2 upgrade.** Built on PostgreSQL, FastAPI, and Vue 3.
 
-## Local setup
+## First time setup
 
 > Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Node, and Docker.
 
@@ -33,7 +33,7 @@ Run the migrations:
 POSTGRES_USER=keytree POSTGRES_PASSWORD=keytree uv run alembic upgrade heads
 ```
 
-The API connects as `keytree_api`, which only holds lowest-privilege grants (e.g., can't edit the node hierarchy). The role is needed again after any `docker compose down -v`.
+The API connects as `keytree_api`, which only holds lowest-privilege grants. The role is needed again after any `docker compose down -v`.
 
 Install the frontend dependencies for editor tooling:
 ```bash
@@ -47,6 +47,7 @@ docker compose up
 ```
 Then: <http://localhost:5173/> for the app, <http://localhost:5173/api/docs> for the Swagger API docs.
 
+
 ## Tests
 The database fixtures use an ephemeral `postgres` via testcontainers.
 
@@ -56,6 +57,12 @@ cd api && uv run pytest tests
 
 ```bash
 cd web && npm run test:unit
+```
+
+## Regenerate frontend API types
+Run this after changing any API route or schema. With the API running:
+```bash
+cd web && npm run gen:api-types
 ```
 
 ## Database
