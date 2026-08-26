@@ -107,34 +107,38 @@ def upgrade() -> None:
     op.execute("GRANT SELECT ON role_subsystem TO keytree_app")
 
     _ = op.create_table(
-        "slot",
+        "node",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
-        sa.Column("category", sa.String(length=64), nullable=False),
+        sa.Column("display_name", sa.String(length=64), nullable=True),
+        sa.Column("category", sa.String(length=64), nullable=True),
         sa.Column("format", sa.String(length=64), nullable=True),
-        sa.Column("description", sa.String(length=255), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "category IN ('config', 'algo', 'infra', 'rs', 'hw', 'tcds')",
-            name=op.f("ck_slot_category_enum"),
+            "category IN ('algo', 'infra', 'run_settings', 'hardware', 'tcds')",
+            name=op.f("ck_node_category_enum"),
         ),
         sa.CheckConstraint(
-            "format IN ('xml', 'yaml', 'plaintext')", name=op.f("ck_slot_format_enum")
+            "format IN ('xml', 'yaml', 'plaintext')", name=op.f("ck_node_format_enum")
         ),
-        sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_slot_name_slug")),
+        sa.CheckConstraint(
+            "format IS NOT NULL OR category IS NULL",
+            name=op.f("ck_node_container_has_no_category"),
+        ),
+        sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_node_name_slug")),
         sa.ForeignKeyConstraint(
-            ["subsystem_id"], ["subsystem.id"], name=op.f("fk_slot_subsystem_id_subsystem")
+            ["subsystem_id"], ["subsystem.id"], name=op.f("fk_node_subsystem_id_subsystem")
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_slot")),
-        sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_slot_subsystem_id_name")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_node")),
+        sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_node_subsystem_id_name")),
     )
-    op.execute("GRANT SELECT ON slot TO keytree_app")
+    op.execute("GRANT SELECT ON node TO keytree_app")
 
     _ = op.create_table(
         "mode",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("slot_id", sa.Integer(), nullable=False),
+        sa.Column("node_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("description", sa.String(length=255), nullable=False),
         sa.Column("forked_from_key_id", sa.Integer(), nullable=True),
@@ -161,35 +165,42 @@ def upgrade() -> None:
             name=op.f("fk_mode_decommissioned_by_app_user"),
         ),
         sa.ForeignKeyConstraint(
-            ["forked_from_key_id", "slot_id"],
-            ["key.id", "key.slot_id"],
-            name=op.f("fk_mode_forked_from_key_id_slot_id_key"),
+            ["forked_from_key_id", "node_id"],
+            ["key.id", "key.node_id"],
+            name=op.f("fk_mode_forked_from_key_id_node_id_key"),
             use_alter=True,
         ),
-        sa.ForeignKeyConstraint(["slot_id"], ["slot.id"], name=op.f("fk_mode_slot_id_slot")),
+        sa.ForeignKeyConstraint(["node_id"], ["node.id"], name=op.f("fk_mode_node_id_node")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_mode")),
-        sa.UniqueConstraint("id", "slot_id", name=op.f("uq_mode_id_slot_id")),
-        sa.UniqueConstraint("slot_id", "name", name=op.f("uq_mode_slot_id_name")),
+        sa.UniqueConstraint("id", "node_id", name=op.f("uq_mode_id_node_id")),
+        sa.UniqueConstraint("node_id", "name", name=op.f("uq_mode_node_id_name")),
     )
     op.execute("GRANT SELECT, INSERT ON mode TO keytree_app")
     op.execute("GRANT UPDATE (decommissioned_by, decommissioned_at) ON mode TO keytree_app")
 
     _ = op.create_table(
-        "slot_edge",
-        sa.Column("parent_slot_id", sa.Integer(), nullable=False),
-        sa.Column("child_slot_id", sa.Integer(), nullable=False),
+        "node_edge",
+        sa.Column("parent_node_id", sa.Integer(), nullable=False),
+        sa.Column("child_node_id", sa.Integer(), nullable=False),
+        sa.Column("alias", sa.String(length=64), nullable=False),
+        sa.CheckConstraint("alias ~ '^[a-z0-9_]+$'", name=op.f("ck_node_edge_alias_slug")),
         sa.CheckConstraint(
-            "parent_slot_id <> child_slot_id", name=op.f("ck_slot_edge_no_self_loop")
+            "parent_node_id <> child_node_id", name=op.f("ck_node_edge_no_self_loop")
         ),
         sa.ForeignKeyConstraint(
-            ["child_slot_id"], ["slot.id"], name=op.f("fk_slot_edge_child_slot_id_slot")
+            ["child_node_id"], ["node.id"], name=op.f("fk_node_edge_child_node_id_node")
         ),
         sa.ForeignKeyConstraint(
-            ["parent_slot_id"], ["slot.id"], name=op.f("fk_slot_edge_parent_slot_id_slot")
+            ["parent_node_id"], ["node.id"], name=op.f("fk_node_edge_parent_node_id_node")
         ),
-        sa.PrimaryKeyConstraint("parent_slot_id", "child_slot_id", name=op.f("pk_slot_edge")),
+        sa.PrimaryKeyConstraint(
+            "parent_node_id", "child_node_id", "alias", name=op.f("pk_node_edge")
+        ),
+        sa.UniqueConstraint(
+            "parent_node_id", "alias", name=op.f("uq_node_edge_parent_node_id_alias")
+        ),
     )
-    op.execute("GRANT SELECT ON slot_edge TO keytree_app")
+    op.execute("GRANT SELECT ON node_edge TO keytree_app")
 
     _ = op.create_table(
         "staged_edit",
@@ -198,7 +209,7 @@ def upgrade() -> None:
         sa.Column("mode_id", sa.Integer(), nullable=False),
         sa.Column("base_key_id", sa.Integer(), nullable=True),
         sa.Column("copied_from_key_id", sa.Integer(), nullable=True),
-        sa.Column("proposed_content", sa.Text(), nullable=True),
+        sa.Column("proposed_payload", sa.Text(), nullable=True),
         sa.Column("proposed_children", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("comment", sa.Text(), nullable=False),
         sa.Column("validation_status", sa.String(length=255), nullable=False),
@@ -207,7 +218,7 @@ def upgrade() -> None:
             name=op.f("ck_staged_edit_validation_status_enum"),
         ),
         sa.CheckConstraint(
-            "proposed_content IS NOT NULL OR proposed_children IS NOT NULL",
+            "proposed_payload IS NOT NULL OR proposed_children IS NOT NULL",
             name=op.f("ck_staged_edit_proposes_something"),
         ),
         sa.ForeignKeyConstraint(
@@ -237,10 +248,10 @@ def upgrade() -> None:
         "key",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("mode_id", sa.Integer(), nullable=False),
-        sa.Column("slot_id", sa.Integer(), nullable=False),
+        sa.Column("node_id", sa.Integer(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("label", sa.String(length=255), nullable=False),
-        sa.Column("content", sa.Text(), nullable=True),
+        sa.Column("payload", sa.Text(), nullable=True),
         sa.Column("staged_edit_id", sa.Integer(), nullable=False),
         sa.Column("created_by", sa.String(length=64), nullable=False),
         sa.Column(
@@ -258,16 +269,16 @@ def upgrade() -> None:
             ["created_by"], ["app_user.cern_login"], name=op.f("fk_key_created_by_app_user")
         ),
         sa.ForeignKeyConstraint(
-            ["mode_id", "slot_id"],
-            ["mode.id", "mode.slot_id"],
-            name=op.f("fk_key_mode_id_slot_id_mode"),
+            ["mode_id", "node_id"],
+            ["mode.id", "mode.node_id"],
+            name=op.f("fk_key_mode_id_node_id_mode"),
         ),
         sa.ForeignKeyConstraint(
             ["staged_edit_id"], ["staged_edit.id"], name=op.f("fk_key_staged_edit_id_staged_edit")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_key")),
         sa.UniqueConstraint("id", "mode_id", name=op.f("uq_key_id_mode_id")),
-        sa.UniqueConstraint("id", "slot_id", name=op.f("uq_key_id_slot_id")),
+        sa.UniqueConstraint("id", "node_id", name=op.f("uq_key_id_node_id")),
         sa.UniqueConstraint("label", name=op.f("uq_key_label")),
         sa.UniqueConstraint("mode_id", "version", name=op.f("uq_key_mode_id_version")),
         sa.UniqueConstraint("staged_edit_id", name=op.f("uq_key_staged_edit_id")),
@@ -277,28 +288,26 @@ def upgrade() -> None:
     _ = op.create_table(
         "key_child",
         sa.Column("parent_key_id", sa.Integer(), nullable=False),
+        sa.Column("alias", sa.String(length=64), nullable=False),
         sa.Column("child_key_id", sa.Integer(), nullable=False),
-        sa.Column("parent_slot_id", sa.Integer(), nullable=False),
-        sa.Column("child_slot_id", sa.Integer(), nullable=False),
+        sa.Column("parent_node_id", sa.Integer(), nullable=False),
+        sa.Column("child_node_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["child_key_id", "child_slot_id"],
-            ["key.id", "key.slot_id"],
-            name=op.f("fk_key_child_child_key_id_child_slot_id_key"),
-        ),
-        sa.ForeignKeyConstraint(
-            ["parent_key_id", "parent_slot_id"],
-            ["key.id", "key.slot_id"],
-            name=op.f("fk_key_child_parent_key_id_parent_slot_id_key"),
+            ["child_key_id", "child_node_id"],
+            ["key.id", "key.node_id"],
+            name=op.f("fk_key_child_child_key_id_child_node_id_key"),
         ),
         sa.ForeignKeyConstraint(
-            ["parent_slot_id", "child_slot_id"],
-            ["slot_edge.parent_slot_id", "slot_edge.child_slot_id"],
-            name=op.f("fk_key_child_parent_slot_id_child_slot_id_slot_edge"),
+            ["parent_key_id", "parent_node_id"],
+            ["key.id", "key.node_id"],
+            name=op.f("fk_key_child_parent_key_id_parent_node_id_key"),
         ),
-        sa.PrimaryKeyConstraint("parent_key_id", "child_key_id", name=op.f("pk_key_child")),
-        sa.UniqueConstraint(
-            "parent_key_id", "child_slot_id", name=op.f("uq_key_child_parent_key_id_child_slot_id")
+        sa.ForeignKeyConstraint(
+            ["parent_node_id", "child_node_id", "alias"],
+            ["node_edge.parent_node_id", "node_edge.child_node_id", "node_edge.alias"],
+            name=op.f("fk_key_child_parent_node_id_child_node_id_alias_node_edge"),
         ),
+        sa.PrimaryKeyConstraint("parent_key_id", "alias", name=op.f("pk_key_child")),
     )
     op.execute("GRANT SELECT, INSERT ON key_child TO keytree_app")
     # ### end Alembic commands ###
@@ -309,9 +318,9 @@ def downgrade() -> None:
     op.drop_table("key_child")
     op.drop_table("key")
     op.drop_table("staged_edit")
-    op.drop_table("slot_edge")
+    op.drop_table("node_edge")
     op.drop_table("mode")
-    op.drop_table("slot")
+    op.drop_table("node")
     op.drop_table("role_subsystem")
     op.drop_index(
         "uq_changeset_created_by_open",

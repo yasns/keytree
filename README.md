@@ -33,7 +33,7 @@ Run the migrations:
 POSTGRES_USER=keytree POSTGRES_PASSWORD=keytree uv run alembic upgrade heads
 ```
 
-The API connects as `keytree_api`, which only holds lowest-privilege grants (e.g., can't edit the slot hierarchy). The role is needed again after any `docker compose down -v`.
+The API connects as `keytree_api`, which only holds lowest-privilege grants (e.g., can't edit the node hierarchy). The role is needed again after any `docker compose down -v`.
 
 Install the frontend dependencies for editor tooling:
 ```bash
@@ -62,12 +62,12 @@ cd web && npm run test:unit
 
 There are two independent migration branches:
 1. `schema` defines the data structure and the grants. 
-2. `data` seeds catalog rows (subsystems, slots, ...) as they're added.
+2. `data` seeds catalog rows (subsystems, nodes, ...) as they're added.
 
 Note that `data` depends on `schema`, so data should never apply before the tables it needs. Here are some examples:
 
 ```bash
-uv run alembic revision -m "add slot table"         --head=schema@head  # schema definition
+uv run alembic revision -m "add node table"         --head=schema@head  # schema definition
 uv run alembic revision -m "seed cms subsystems"    --head=data@head   # catalog rows
 uv run alembic upgrade heads                                        # apply both
 uv run alembic heads                                                # where the branches end
@@ -82,7 +82,7 @@ Every revision that creates a table grants its own privileges. A table whose rev
 
 `keytree_app` is a `NOLOGIN` privilege bundle (role). Column-level grants should be assigned to it, to enable read/write access for the API, for example:
 ```sql
-GRANT SELECT ON slot TO keytree_app;                 -- read-only
+GRANT SELECT ON node TO keytree_app;                 -- read-only
 GRANT UPDATE (display_name) ON mode TO keytree_app;  -- if its mutable
 ```
 

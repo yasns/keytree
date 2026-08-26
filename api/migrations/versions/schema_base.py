@@ -1,4 +1,4 @@
-"""base
+"""base for schema branch
 
 Revision ID: schema_base
 Revises:
