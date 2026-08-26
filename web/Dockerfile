@@ -1,7 +1,7 @@
 FROM registry.cern.ch/docker.io/library/node:24-slim AS development
 
 WORKDIR /src
-COPY web/package.json web/package-lock.json ./
+COPY web/package.json web/package-lock.json web/.npmrc ./
 RUN npm ci
 COPY web/ ./
 
@@ -13,7 +13,7 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 FROM registry.cern.ch/docker.io/library/node:24-slim AS builder
 
 WORKDIR /src
-COPY web/package.json web/package-lock.json ./
+COPY web/package.json web/package-lock.json web/.npmrc ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build-only
