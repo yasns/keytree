@@ -14,7 +14,7 @@ Then set up the API:
 ```bash
 cd api
 uv sync
-cp .env.example .env  # fill in the required environment variables
+cp .env.example .env  # fill in the required environment variables, remember POSTGRES_PASSWORD
 ```
 
 Connect as the owner, create the app privilege bundle:
