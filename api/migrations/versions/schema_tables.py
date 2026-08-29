@@ -111,7 +111,6 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
-        sa.Column("display_name", sa.String(length=64), nullable=True),
         sa.Column("category", sa.String(length=64), nullable=True),
         sa.Column("format", sa.String(length=64), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
