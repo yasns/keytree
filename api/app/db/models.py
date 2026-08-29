@@ -49,8 +49,6 @@ class Node(Base):
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    display_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     format: Mapped[str | None] = mapped_column(String(64), nullable=True)

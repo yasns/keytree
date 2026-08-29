@@ -26,7 +26,6 @@ class _NodeSpecRequired(TypedDict):
 
 
 class NodeSpec(_NodeSpecRequired, total=False):
-    display_name: str
     category: str
     format: str
     children: list[str]
@@ -46,16 +45,6 @@ class SubsystemSpec(TypedDict):
 # The root node for a subsystem key.
 # A leaf directly under it keeps its original name. Anywhere else the parent's name is prefixed.
 ROOT_NODE = "conf"
-
-NODE_DISPLAY: dict[str, str] = {
-    "conf": "Configuration",
-    "rs": "Run Settings",
-    "algo": "Algo",
-    "infra": "Infra",
-    "hw": "Hardware",
-    "l1_menu": "L1 Menu",
-    "tcds": "TCDS",
-}
 
 CATALOG: dict[str, SubsystemSpec] = {
     "l1_hlt": {
@@ -364,7 +353,6 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                 {
                     "subsystem_id": subsystem_id,
                     "name": node["name"],
-                    "display_name": node.get("display_name") or NODE_DISPLAY.get(node["name"]),
                     # Category and format is reserved for leaves.
                     "category": None if leaves else node.get("category"),
                     "format": None if leaves else node.get("format"),
@@ -374,7 +362,6 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                 {
                     "subsystem_id": subsystem_id,
                     "name": _leaf_name(node["name"], leaf),
-                    "display_name": None,
                     "category": node.get("category"),
                     "format": node.get("format"),
                 }
