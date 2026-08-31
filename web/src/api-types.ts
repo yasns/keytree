@@ -144,6 +144,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/subsystems/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Subsystems */
+        get: operations["list_subsystems_api_subsystems__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/subsystems/{subsystem_id}/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Subsystem Tree */
+        get: operations["get_subsystem_tree_api_subsystems__subsystem_id__tree_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user/claims": {
         parameters: {
             query?: never;
@@ -169,6 +203,39 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** NodeOut */
+        NodeOut: {
+            /** Id */
+            id: number;
+            /** Alias */
+            alias: string;
+            /** Name */
+            name: string;
+            /** Subsystem Id */
+            subsystem_id: number;
+            /** Category */
+            category: string | null;
+            /** Format */
+            format: string | null;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["NodeOut"][];
+        };
+        /** SubsystemOut */
+        SubsystemOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Category */
+            category: string;
+            /** Description */
+            description: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -438,6 +505,57 @@ export interface operations {
             };
         };
     };
+    list_subsystems_api_subsystems__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubsystemOut"][];
+                };
+            };
+        };
+    };
+    get_subsystem_tree_api_subsystems__subsystem_id__tree_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subsystem_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     who_am_i_api_user_claims_get: {
         parameters: {
             query?: never;
@@ -453,7 +571,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

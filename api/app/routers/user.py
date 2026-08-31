@@ -9,5 +9,5 @@ router = APIRouter(
 
 
 @router.get("/claims")
-def who_am_i(request: Request):
-    return {"claims": request.state.claims}
+def who_am_i(request: Request) -> dict[str, object]:
+    return request.state.claims

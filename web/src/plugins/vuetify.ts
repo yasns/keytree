@@ -11,7 +11,6 @@ import 'vuetify/styles'
 export default createVuetify({
   theme: {
     defaultTheme: 'system',
-    utilities: false,
   },
   display: {
     mobileBreakpoint: 'md',
