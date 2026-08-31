@@ -19,7 +19,6 @@ class SubsystemOut(BaseModel):
     name: str
     display_name: str | None
     category: str
-    description: str | None
 
     model_config = {"from_attributes": True}
 
@@ -32,7 +31,6 @@ class NodeOut(BaseModel):
     subsystem_id: int
     """The node's owning subsystem."""
     category: str | None
-    format: str | None
     """None means this node is a bundle that holds no payload."""
     children: list["NodeOut"] = []
 
@@ -65,7 +63,6 @@ def _build_tree(
             name=node.name,
             subsystem_id=node.subsystem_id,
             category=node.category,
-            format=node.format,
         )
         if node.subsystem_id == subsystem_id:
             out.children = [
