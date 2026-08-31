@@ -45,7 +45,6 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("display_name", sa.String(length=64), nullable=True),
         sa.Column("category", sa.String(length=64), nullable=False),
-        sa.Column("description", sa.String(length=255), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "category IN ('top_level', 'subsystem')", name=op.f("ck_subsystem_category_enum")
@@ -112,18 +111,11 @@ def upgrade() -> None:
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
-        sa.Column("format", sa.String(length=64), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "category IN ('algo', 'infra', 'run_settings', 'hardware', 'tcds')",
+            "category IN "
+            "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
             name=op.f("ck_node_category_enum"),
-        ),
-        sa.CheckConstraint(
-            "format IN ('xml', 'yaml', 'plaintext')", name=op.f("ck_node_format_enum")
-        ),
-        sa.CheckConstraint(
-            "format IS NOT NULL OR category IS NULL",
-            name=op.f("ck_node_container_has_no_category"),
         ),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_node_name_slug")),
         sa.ForeignKeyConstraint(

@@ -50,8 +50,7 @@ class Node(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    format: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    """None means this node is a bundle that holds no payload."""
 
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -59,11 +58,10 @@ class Node(Base):
         UniqueConstraint("subsystem_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
-            "category IN ('algo', 'infra', 'run_settings', 'hardware', 'tcds')",
+            "category IN "
+            "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
             name="category_enum",
         ),
-        CheckConstraint("format IN ('xml', 'yaml', 'plaintext')", name="format_enum"),
-        CheckConstraint("format IS NOT NULL OR category IS NULL", name="container_has_no_category"),
     )
 
 

@@ -3,7 +3,7 @@ from app.routers.subsystems import _build_tree
 
 
 def _node(id: int, subsystem_id: int, name: str) -> Node:
-    return Node(id=id, subsystem_id=subsystem_id, name=name, category=None, format=None)
+    return Node(id=id, subsystem_id=subsystem_id, name=name, category=None)
 
 
 def test_build_tree_roots_aliases_and_subsystem_boundary():

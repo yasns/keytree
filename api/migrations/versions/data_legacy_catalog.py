@@ -27,7 +27,6 @@ class _NodeSpecRequired(TypedDict):
 
 class NodeSpec(_NodeSpecRequired, total=False):
     category: str
-    format: str
     children: list[str]
     """Sibling nodes of the same subsystem, which this node bundles."""
     leaves: list[str]
@@ -38,7 +37,6 @@ class NodeSpec(_NodeSpecRequired, total=False):
 class SubsystemSpec(TypedDict):
     display_name: str
     category: str
-    description: str
     nodes: list[NodeSpec]
 
 
@@ -50,19 +48,17 @@ CATALOG: dict[str, SubsystemSpec] = {
     "l1_hlt": {
         "display_name": "L1 + HLT",
         "category": "top_level",
-        "description": "Combined L1 Trigger + HLT run point.",
         "nodes": [
-            NodeSpec(name="conf", format="plaintext", leaves=["hlt_key", "hlt_sw_arch"]),
+            NodeSpec(name="conf", category="scalar", leaves=["hlt_key", "hlt_sw_arch"]),
         ],
     },
     "cms_run": {
         "display_name": "CMS",
         "category": "top_level",
-        "description": "Top-level CMS run configuration, aggregated from every detector.",
         "nodes": [
             NodeSpec(
                 name="conf",
-                format="plaintext",
+                category="scalar",
                 leaves=[
                     "l1_hlt_mode",
                     "clock_source",
@@ -87,7 +83,6 @@ CATALOG: dict[str, SubsystemSpec] = {
     "l1_trg": {
         "display_name": "L1 Trigger",
         "category": "top_level",
-        "description": "Aggregates config and run settings from all L1 trigger subsystems.",
         "nodes": [
             NodeSpec(name="conf", children=["tcds"]),
             NodeSpec(name="rs"),
@@ -97,21 +92,18 @@ CATALOG: dict[str, SubsystemSpec] = {
     "tcds": {
         "display_name": "TCDS",
         "category": "top_level",
-        "description": "Distributes the clock and L1 accept signal to every subsystem.",
         "nodes": [
-            NodeSpec(name="conf", category="tcds", format="xml", leaves=["pi", "ici"]),
+            NodeSpec(name="conf", category="tcds", leaves=["pi", "ici"]),
         ],
     },
     "ugt": {
         "display_name": "uGT",
         "category": "subsystem",
-        "description": "Global Trigger",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo", "l1_menu"]),
             NodeSpec(
                 name="rs",
                 category="run_settings",
-                format="xml",
                 leaves=[
                     "mp7",
                     "amc502_extcond",
@@ -122,131 +114,116 @@ CATALOG: dict[str, SubsystemSpec] = {
                     "algo_prescale",
                 ],
             ),
-            NodeSpec(name="algo", category="algo", format="xml"),
+            NodeSpec(name="algo", category="algo"),
             NodeSpec(
                 name="infra",
                 category="infra",
-                format="xml",
                 leaves=["mp7", "amc502_extcond", "amc502_finor"],
             ),
-            NodeSpec(name="hw", category="hardware", format="xml"),
-            NodeSpec(name="l1_menu", format="xml"),
+            NodeSpec(name="hw", category="hardware"),
+            NodeSpec(name="l1_menu", category="l1_menu"),
         ],
     },
     "ugmt": {
         "display_name": "uGMT",
         "category": "subsystem",
-        "description": "Global Muon Trigger",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
             NodeSpec(
                 name="rs",
                 category="run_settings",
-                format="xml",
                 leaves=["mp7", "mp7_moni", "amc13_moni"],
             ),
-            NodeSpec(name="algo", category="algo", format="xml", leaves=["mp7", "luts"]),
+            NodeSpec(name="algo", category="algo", leaves=["mp7", "luts"]),
             NodeSpec(
                 name="infra",
                 category="infra",
-                format="xml",
                 leaves=["amc13", "readoutmenu", "techparams"],
             ),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "calol1": {
         "display_name": "CaloL1",
         "category": "subsystem",
-        "description": "Calorimeter Trigger Layer 1",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
             NodeSpec(
                 name="rs",
                 category="run_settings",
-                format="xml",
                 leaves=["link_masks", "tower_masks", "monitor_settings", "tmt_cycle_config"],
             ),
-            NodeSpec(name="algo", category="algo", format="xml"),
-            NodeSpec(name="infra", category="infra", format="xml"),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="algo", category="algo"),
+            NodeSpec(name="infra", category="infra"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "calol2": {
         "display_name": "CaloL2",
         "category": "subsystem",
-        "description": "Calorimeter Trigger Layer 2",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
             NodeSpec(
                 name="rs",
                 category="run_settings",
-                format="xml",
                 leaves=["monitoring_and_masks", "tmt_redundancy_mode"],
             ),
             NodeSpec(
                 name="algo",
                 category="algo",
-                format="xml",
                 leaves=["demux", "mps_common", "mps_jet", "mp_egamma", "mp_sum", "mp_tau"],
             ),
             NodeSpec(
                 name="infra",
                 category="infra",
-                format="xml",
                 leaves=["amc13", "mp7", "mps", "demux"],
             ),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "bmtf": {
         "display_name": "BMTF",
         "category": "subsystem",
-        "description": "Barrel Muon Track Finder",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
-            NodeSpec(name="rs", category="run_settings", format="xml", leaves=["amc13", "mp7"]),
-            NodeSpec(name="algo", category="algo", format="xml"),
-            NodeSpec(name="infra", category="infra", format="xml", leaves=["amc13", "mp7"]),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="rs", category="run_settings", leaves=["amc13", "mp7"]),
+            NodeSpec(name="algo", category="algo"),
+            NodeSpec(name="infra", category="infra", leaves=["amc13", "mp7"]),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "omtf": {
         "display_name": "OMTF",
         "category": "subsystem",
-        "description": "Overlap Muon Track Finder",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
-            NodeSpec(name="rs", category="run_settings", format="xml"),
-            NodeSpec(name="algo", category="algo", format="xml"),
-            NodeSpec(name="infra", category="infra", format="xml"),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="rs", category="run_settings"),
+            NodeSpec(name="algo", category="algo"),
+            NodeSpec(name="infra", category="infra"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "emtf": {
         "display_name": "EMTF",
         "category": "subsystem",
-        "description": "Endcap Muon Track Finder",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
-            NodeSpec(name="rs", category="run_settings", format="xml"),
-            NodeSpec(name="algo", category="algo", format="xml"),
-            NodeSpec(name="infra", category="infra", format="xml", leaves=["amc13", "mtf7"]),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="rs", category="run_settings"),
+            NodeSpec(name="algo", category="algo"),
+            NodeSpec(name="infra", category="infra", leaves=["amc13", "mtf7"]),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "twinmux": {
         "display_name": "TwinMux",
         "category": "subsystem",
-        "description": "Adaptive layer for the track finder in the barrel region.",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
-            NodeSpec(name="rs", category="run_settings", format="xml"),
-            NodeSpec(name="algo", category="algo", format="xml"),
+            NodeSpec(name="rs", category="run_settings"),
+            NodeSpec(name="algo", category="algo"),
             NodeSpec(
                 name="infra",
                 category="infra",
-                format="xml",
                 leaves=[
                     "amc13",
                     "tm7_common",
@@ -257,27 +234,25 @@ CATALOG: dict[str, SubsystemSpec] = {
                     "tm7_wheel_p2",
                 ],
             ),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
     "spare_ugt": {
         "display_name": "Spare uGT",
         "category": "subsystem",
-        "description": "Standby Global Trigger board",
         "nodes": [
-            NodeSpec(name="conf", category="hardware", format="xml", leaves=["hw"]),
+            NodeSpec(name="conf", category="hardware", leaves=["hw"]),
         ],
     },
     "cppf": {
         "display_name": "CPPF",
         "category": "subsystem",
-        "description": "Concentration Pre-Processing and Fan-out",
         "nodes": [
             NodeSpec(name="conf", children=["hw", "infra", "algo"]),
-            NodeSpec(name="rs", category="run_settings", format="xml"),
-            NodeSpec(name="algo", category="algo", format="xml"),
-            NodeSpec(name="infra", category="infra", format="xml"),
-            NodeSpec(name="hw", category="hardware", format="xml"),
+            NodeSpec(name="rs", category="run_settings"),
+            NodeSpec(name="algo", category="algo"),
+            NodeSpec(name="infra", category="infra"),
+            NodeSpec(name="hw", category="hardware"),
         ],
     },
 }
@@ -337,7 +312,6 @@ def _subsystem_rows() -> list[dict[str, object]]:
             "name": name,
             "display_name": spec["display_name"],
             "category": spec["category"],
-            "description": spec["description"],
         }
         for name, spec in CATALOG.items()
     ]
@@ -353,9 +327,8 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                 {
                     "subsystem_id": subsystem_id,
                     "name": node["name"],
-                    # Category and format is reserved for leaves.
+                    # Category is reserved for leaves.
                     "category": None if leaves else node.get("category"),
-                    "format": None if leaves else node.get("format"),
                 }
             )
             rows.extend(
@@ -363,7 +336,6 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                     "subsystem_id": subsystem_id,
                     "name": _leaf_name(node["name"], leaf),
                     "category": node.get("category"),
-                    "format": node.get("format"),
                 }
                 for leaf in leaves
             )
