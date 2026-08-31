@@ -30,8 +30,6 @@ class Subsystem(Base):
 
     category: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
@@ -50,7 +48,6 @@ class Node(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    """None means this node is a bundle that holds no payload."""
 
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
