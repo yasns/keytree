@@ -1,7 +1,19 @@
-import createClient from 'openapi-fetch'
+import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './api-types'
 
-export const api = createClient<paths>({ baseUrl: '/' })
+// Stop at the same-origin redirect hop instead of letting fetch follow into the SSO's cross-origin one, which CORS blocks.
+const reauth: Middleware = {
+  onResponse({ response }) {
+    if (response.type === 'opaqueredirect') {
+      const returnTo = encodeURIComponent(window.location.href)
+      window.location.href = `/api/auth/token_request?redirect_uri=${returnTo}`
+      return new Promise<Response>(() => {})
+    }
+  },
+}
+
+export const api = createClient<paths>({ baseUrl: '/', redirect: 'manual' })
+api.use(reauth)
 
 export type ApiError = { detail: unknown; status: number }
 

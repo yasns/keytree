@@ -121,7 +121,7 @@ export const useNavStore = defineStore('nav', () => {
   }
 
   const rows = computed<Row[]>(() =>
-    selectedSubsystemId.value ? buildRows(tree.value, [], selectedSubsystemId.value) : [],
+    treeSubsystemId.value !== null ? buildRows(tree.value, [], treeSubsystemId.value) : [],
   )
 
   function findRow(predicate: (row: Row) => boolean): Row | undefined {

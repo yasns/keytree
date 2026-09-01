@@ -12,13 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
   const initials = computed(() => (firstName.value?.[0] ?? '') + (lastName.value?.[0] ?? ''))
 
   async function checkAuth() {
-    const result = await api.GET('/api/user/claims', { redirect: 'manual' })
-    if (result.response.type === 'opaqueredirect') {
-      const returnTo = encodeURIComponent(window.location.href)
-      window.location.href = `/api/auth/token_request?redirect_uri=${returnTo}`
-      return
-    }
-    claims.value = unwrap(result)
+    claims.value = unwrap(await api.GET('/api/user/claims'))
   }
 
   function logout() {
