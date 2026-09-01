@@ -12,6 +12,8 @@ from fastapi.responses import RedirectResponse
 from .config import settings
 from .db.base import engine
 from .routers.health import router as health_router
+from .routers.keys import router as keys_router
+from .routers.nodes import router as nodes_router
 from .routers.subsystems import router as subsystems_router
 from .routers.user import router as user_router
 
@@ -65,5 +67,7 @@ def root() -> RedirectResponse:
 
 
 app.include_router(health_router, prefix="/api")
+app.include_router(keys_router, prefix="/api")
+app.include_router(nodes_router, prefix="/api")
 app.include_router(subsystems_router, prefix="/api")
 app.include_router(user_router, prefix="/api")

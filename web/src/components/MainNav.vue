@@ -22,26 +22,23 @@
           <template v-slot:activator="{ props: menuProps }">
             <v-tooltip text="Account" location="end">
               <template v-slot:activator="{ props: tooltipProps }">
-                <v-list-item
-                  class="d-flex justify-center min-w-10 min-h-10 overflow-visible px-1"
-                  v-bind="{ ...menuProps, ...tooltipProps }"
-                >
-                  <v-avatar color="secondary" class="min-w-8 min-h-8">
-                    <span class="text-headline-small">{{ auth.firstName?.[0] }}</span>
+                <v-list-item v-bind="{ ...menuProps, ...tooltipProps }" class="pa-0 text-center">
+                  <v-avatar color="secondary" style="width: 32px; height: 32px">
+                    {{ auth.firstName?.[0] }}
                   </v-avatar>
                 </v-list-item>
               </template>
             </v-tooltip>
           </template>
-          <v-card class="min-w-52">
+          <v-card>
             <v-card-text>
               <div class="mx-auto text-center">
                 <v-avatar color="secondary" size="large">
                   <span class="text-headline-small">{{ auth.initials }}</span>
                 </v-avatar>
-                <h3 class="font-bold mt-1">{{ auth.firstName }} {{ auth.lastName }}</h3>
+                <h3 class="font-weight-bold mt-1">{{ auth.firstName }} {{ auth.lastName }}</h3>
                 <p class="text-body-small mt-1">
-                  <span class="text-gray-400">@</span>{{ auth.username }}
+                  <span class="text-medium-emphasis">@</span>{{ auth.username }}
                 </p>
                 <v-divider class="my-3"></v-divider>
                 <v-btn variant="text" prepend-icon="mdi-logout" @click="auth.logout">Log Out</v-btn>
@@ -62,11 +59,11 @@
           </template>
 
           <v-list>
-            <v-list-item v-for="item in settingsItems" :key="item.title" @click="item.click">
+            <v-list-item @click="theme.cycle()">
               <template v-slot:prepend>
-                <v-icon :icon="item.icon"></v-icon>
+                <v-icon :icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"></v-icon>
               </template>
-              <v-list-item-title>{{ item.title }}</v-list-item-title>
+              <v-list-item-title>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</v-list-item-title>
             </v-list-item>
           </v-list>
         </v-menu>
@@ -101,11 +98,4 @@ function togglePanel(component: Component) {
 }
 
 const isDark = computed(() => theme.current.value.dark)
-const settingsItems = computed(() => [
-  {
-    icon: isDark.value ? 'mdi-white-balance-sunny' : 'mdi-weather-night',
-    title: isDark.value ? 'Light Mode' : 'Dark Mode',
-    click: () => theme.cycle(),
-  },
-])
 </script>

@@ -144,6 +144,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Key
+         * @description Resolves a key by (subsystem, node, mode, version) locator.
+         */
+        get: operations["get_key_api_keys__subsystem_name___node_name___mode_name___version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/by-path/{subsystem_name}/{node_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Node By Path
+         * @description Resolves the node by (subsystem, name) locator
+         */
+        get: operations["get_node_by_path_api_nodes_by_path__subsystem_name___node_name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Node */
+        get: operations["get_node_api_nodes__node_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/subsystems/": {
         parameters: {
             query?: never;
@@ -204,6 +261,54 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** KeyOut */
+        KeyOut: {
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /** Version */
+            version: number;
+            /** Payload */
+            payload: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Comment */
+            comment: string;
+        };
+        /** ModeOut */
+        ModeOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Decommissioned At */
+            decommissioned_at: string | null;
+            /** Versions */
+            versions: number[];
+        };
+        /** NodeDetailOut */
+        NodeDetailOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string | null;
+            /** Subsystem Id */
+            subsystem_id: number;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Modes */
+            modes: components["schemas"]["ModeOut"][];
+        };
         /** NodeOut */
         NodeOut: {
             /** Id */
@@ -216,8 +321,6 @@ export interface components {
             subsystem_id: number;
             /** Category */
             category: string | null;
-            /** Format */
-            format: string | null;
             /**
              * Children
              * @default []
@@ -234,8 +337,6 @@ export interface components {
             display_name: string | null;
             /** Category */
             category: string;
-            /** Description */
-            description: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -501,6 +602,103 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    get_key_api_keys__subsystem_name___node_name___mode_name___version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subsystem_name: string;
+                node_name: string;
+                mode_name: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_node_by_path_api_nodes_by_path__subsystem_name___node_name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subsystem_name: string;
+                node_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_node_api_nodes__node_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

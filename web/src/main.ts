@@ -6,7 +6,6 @@ import router from './router'
 import vuetify from './plugins/vuetify'
 
 import 'unfonts.css'
-import './styles/tailwind.css'
 import './styles/main.scss'
 
 const app = createApp(App)

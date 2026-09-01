@@ -36,7 +36,7 @@ def upgrade() -> None:
         """)
     )
 
-    # One staged edit per (node, default mode). A container node gets a placeholder
+    # One staged edit per (node, default mode). A bundle node gets a placeholder
     # `proposed_children`, corrected below once the child keys it should reference exist.
     bind.execute(
         text("""
@@ -83,7 +83,7 @@ def upgrade() -> None:
         """)
     )
 
-    # Backfill the container staged_edits' proposed_children now that the child keys exist,
+    # Backfill the bundle staged_edits' proposed_children now that the child keys exist,
     # so each staged edit matches the key it produced.
     bind.execute(
         text("""

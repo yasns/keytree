@@ -6,6 +6,4 @@
 @layer vuetify-overrides;
 @layer vuetify-utilities;
 
-@layer tailwind-utilities;
-
 @layer vuetify-final;
