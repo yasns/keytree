@@ -30,7 +30,7 @@ class NodeSpec(_NodeSpecRequired, total=False):
     children: list[str]
     """Sibling nodes of the same subsystem, which this node bundles."""
     leaves: list[str]
-    """Payload nodes owned by this one. If specified, this node becomes a container.
+    """Payload nodes owned by this one. If specified, this node becomes a bundle.
     """
 
 

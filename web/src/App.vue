@@ -3,14 +3,16 @@
     <v-layout v-if="auth.claims">
       <MainNav />
 
-      <v-main>
+      <v-main scrollable>
         <router-view />
       </v-main>
     </v-layout>
 
-    <v-container v-else class="h-full items-center justify-center flex">
-      <v-progress-circular indeterminate color="primary" size="50" width="5" />
-    </v-container>
+    <template v-else>
+      <div class="d-flex justify-center align-center h-100">
+        <v-progress-circular indeterminate color="primary" size="50" width="5" />
+      </div>
+    </template>
   </v-app>
 </template>
 

@@ -1,13 +1,13 @@
 <template>
   <v-autocomplete
-    v-model="nav.selectedSubsystemId"
+    :model-value="nav.selectedSubsystemId"
     :items="autocompleteItems"
     item-title="title"
     item-value="id"
     label="Subsystem"
-    density="comfortable"
-    :menu-props="{ maxHeight: undefined }"
+    hide-details
     v-model:menu="menuOpen"
+    @update:model-value="onSubsystemSelect"
   ></v-autocomplete>
 
   <v-chip-group v-if="chips.length" column class="px-2">
@@ -16,14 +16,14 @@
       :key="chip.name"
       size="small"
       variant="outlined"
-      @click="goToName(chip.name)"
+      @click="nav.goToName(chip.name)"
     >
       {{ chip.label }}
     </v-chip>
   </v-chip-group>
 
   <v-treeview
-    :items="rows"
+    :items="nav.rows"
     item-value="path"
     item-title="title"
     activatable
@@ -43,13 +43,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useNavStore } from '@/stores/nav'
+import { useRoute, useRouter } from 'vue-router'
+import { useNavStore, walk } from '@/stores/nav'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']
-type NodeOut = components['schemas']['NodeOut']
 
 const nav = useNavStore()
+const route = useRoute()
+const router = useRouter()
 
 //
 // Subsystem selector
@@ -67,7 +69,6 @@ const menuOpen = ref(false)
 
 onMounted(() => nav.fetchSubsystems())
 
-// Unfocus the autocomplete after menu close
 watch(menuOpen, (open) => {
   if (!open) (document.activeElement as HTMLElement | null)?.blur()
 })
@@ -93,108 +94,39 @@ const autocompleteItems = computed<SelectItem[]>(() => {
   return items
 })
 
+function onSubsystemSelect(id: number | null) {
+  nav.selectedSubsystemId = id
+  if (id === null) return
+  const subsystem = nav.subsystemName(id)
+  if (subsystem) router.push({ name: 'subsystem', params: { subsystem } })
+}
+
 //
-// Tree
+// Tree navigation
 //
 
-type Row = {
-  path: string
-  title: string
-  icon: string
-  node: NodeOut
-  isAlias: boolean
-  ancestors: string[] // paths of this row's parents
-  children?: Row[]
+function routeModeParams(target: { subsystem: string; name: string }) {
+  if (route.params.subsystem !== target.subsystem || route.params.name !== target.name) return {}
+  return { mode: route.params.mode, version: route.params.version }
 }
 
-let pendingName: string | null = null // name to jump to once the newly selected subsystem's tree has loaded
-
-// fetch tree on subsystem selection, jump to a certain path if pending
-watch(
-  () => nav.selectedSubsystemId,
-  async (id) => {
-    if (id === null) {
-      nav.tree = []
-      nav.treeSubsystemId = null
-      nav.openedRow = []
-      nav.activatedRow = []
-      return
-    }
-    if (id === nav.treeSubsystemId) return // skip wipe & fetch if we're already there
-    nav.openedRow = []
-    nav.activatedRow = []
-    await nav.fetchTree(id)
-    if (pendingName) {
-      goToName(pendingName)
-      pendingName = null
-    }
-  },
-  { immediate: true },
-)
-
-function iconFor(node: NodeOut, isAlias: boolean): string {
-  if (isAlias) return 'mdi-link-variant'
-  if (node.format === null) return 'mdi-folder-outline'
-  switch (node.category) {
-    case 'run_settings':
-      return 'mdi-tune-variant'
-    case 'algo':
-      return 'mdi-function-variant'
-    case 'infra':
-      return 'mdi-server-network'
-    case 'hardware':
-      return 'mdi-memory'
-    case 'tcds':
-      return 'mdi-clock-outline'
-    default:
-      return 'mdi-file-outline'
-  }
-}
-
-function buildRows(nodes: NodeOut[], ancestors: string[], subsystemId: number): Row[] {
-  return nodes.map((node) => {
-    const path = `${ancestors.at(-1) ?? ''}/${node.alias}`
-    const isAlias = node.subsystem_id !== subsystemId
-    return {
-      path,
-      title: node.alias,
-      icon: iconFor(node, isAlias),
-      node,
-      isAlias,
-      ancestors,
-      children:
-        !isAlias && node.children.length
-          ? buildRows(node.children, [...ancestors, path], subsystemId)
-          : undefined,
-    }
-  })
-}
-
-const rows = computed<Row[]>(() =>
-  nav.selectedSubsystemId ? buildRows(nav.tree, [], nav.selectedSubsystemId) : [],
-)
-
-function* walk(list: Row[]): Generator<Row> {
-  for (const row of list) {
-    yield row
-    if (row.children) yield* walk(row.children)
-  }
-}
-
-function findRow(predicate: (row: Row) => boolean): Row | undefined {
-  for (const row of walk(rows.value)) if (predicate(row)) return row
-}
-
-// alias switches the subsystem selector and opens the tree to the real node
 watch(
   () => nav.activatedRow,
   (keys) => {
-    const path = keys[0]
-    const row = path ? findRow((r) => r.path === path) : undefined
-    if (row?.isAlias) {
-      pendingName = row.node.name
-      nav.selectedSubsystemId = row.node.subsystem_id
-    }
+    const row = keys[0] ? nav.findRow((r) => r.path === keys[0]) : undefined
+    const target = row && nav.routeForRow(row)
+    if (!target) return
+    if (
+      route.params.subsystem === target.subsystem &&
+      route.params.name === target.name &&
+      route.hash === (target.hash ?? '')
+    )
+      return
+    router.push({
+      name: 'node',
+      params: { subsystem: target.subsystem, name: target.name, ...routeModeParams(target) },
+      hash: target.hash,
+    })
   },
 )
 
@@ -214,18 +146,9 @@ const nodeLabels: Record<string, string> = {
 }
 
 const chips = computed(() => {
-  const names = new Set([...walk(rows.value)].filter((r) => !r.isAlias).map((r) => r.node.name))
+  const names = new Set([...walk(nav.rows)].filter((r) => !r.isAlias).map((r) => r.node.name))
   return Object.entries(nodeLabels)
     .filter(([name]) => names.has(name))
     .map(([name, label]) => ({ name, label }))
 })
-
-function goToName(name: string) {
-  const row = findRow((r) => !r.isAlias && r.node.name === name)
-  if (!row) return
-  const opened = [...row.ancestors] // copy because v-treeview mutates `opened`
-  if (row.children) opened.push(row.path) // reveal the target's own children too
-  nav.openedRow = opened
-  nav.activatedRow = [row.path]
-}
 </script>

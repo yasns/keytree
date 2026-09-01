@@ -12,7 +12,6 @@ export const useAuthStore = defineStore('auth', () => {
   const initials = computed(() => (firstName.value?.[0] ?? '') + (lastName.value?.[0] ?? ''))
 
   async function checkAuth() {
-    // 'manual' prevents following the SSO redirect, which is cross-origin and would fail
     const { data, error, response } = await api.GET('/api/user/claims', { redirect: 'manual' })
     if (response.type === 'opaqueredirect') {
       const returnTo = encodeURIComponent(window.location.href)
