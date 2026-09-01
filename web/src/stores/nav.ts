@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { api } from '@/api'
+import { api, unwrap } from '@/api'
 import { CATEGORY } from '@/category'
 import type { components } from '@/api-types'
 
@@ -66,9 +66,7 @@ export const useNavStore = defineStore('nav', () => {
 
   async function fetchSubsystems() {
     if (subsystems.value.length) return
-    const { data, error } = await api.GET('/api/subsystems/')
-    if (error) throw error
-    subsystems.value = data
+    subsystems.value = unwrap(await api.GET('/api/subsystems/'))
   }
 
   function subsystemName(subsystemId: number): string | undefined {
@@ -77,19 +75,20 @@ export const useNavStore = defineStore('nav', () => {
 
   async function fetchTree(subsystemId: number) {
     if (subsystemId === treeSubsystemId.value) return
-    const { data, error } = await api.GET('/api/subsystems/{subsystem_id}/tree', {
-      params: { path: { subsystem_id: subsystemId } },
-    })
-    if (error) throw error
-    tree.value = data
+    tree.value = unwrap(
+      await api.GET('/api/subsystems/{subsystem_id}/tree', {
+        params: { path: { subsystem_id: subsystemId } },
+      }),
+    )
     treeSubsystemId.value = subsystemId
   }
 
   async function fetchNodeByPath(subsystem: string, name: string) {
-    const { data, error } = await api.GET('/api/nodes/by-path/{subsystem_name}/{node_name}', {
-      params: { path: { subsystem_name: subsystem, node_name: name } },
-    })
-    if (error) throw error
+    const data = unwrap(
+      await api.GET('/api/nodes/by-path/{subsystem_name}/{node_name}', {
+        params: { path: { subsystem_name: subsystem, node_name: name } },
+      }),
+    )
     nodeDetail.value = data
     nodeDetailCache.value.set(data.id, data)
   }
@@ -97,10 +96,11 @@ export const useNavStore = defineStore('nav', () => {
   async function fetchNodeDetail(nodeId: number): Promise<NodeDetailOut | undefined> {
     const cached = nodeDetailCache.value.get(nodeId)
     if (cached) return cached
-    const { data, error } = await api.GET('/api/nodes/{node_id}', {
-      params: { path: { node_id: nodeId } },
-    })
-    if (error) throw error
+    const data = unwrap(
+      await api.GET('/api/nodes/{node_id}', {
+        params: { path: { node_id: nodeId } },
+      }),
+    )
     nodeDetailCache.value.set(nodeId, data)
     return data
   }
@@ -111,16 +111,13 @@ export const useNavStore = defineStore('nav', () => {
     mode: string,
     version: number,
   ): Promise<KeyOut | undefined> {
-    const { data, error } = await api.GET(
-      '/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}',
-      {
+    return unwrap(
+      await api.GET('/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}', {
         params: {
           path: { subsystem_name: subsystem, node_name: name, mode_name: mode, version },
         },
-      },
+      }),
     )
-    if (error) throw error
-    return data
   }
 
   const rows = computed<Row[]>(() =>

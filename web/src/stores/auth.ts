@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { api } from '@/api'
+import { api, unwrap } from '@/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const claims = ref<Record<string, unknown> | null>(null)
@@ -12,14 +12,13 @@ export const useAuthStore = defineStore('auth', () => {
   const initials = computed(() => (firstName.value?.[0] ?? '') + (lastName.value?.[0] ?? ''))
 
   async function checkAuth() {
-    const { data, error, response } = await api.GET('/api/user/claims', { redirect: 'manual' })
-    if (response.type === 'opaqueredirect') {
+    const result = await api.GET('/api/user/claims', { redirect: 'manual' })
+    if (result.response.type === 'opaqueredirect') {
       const returnTo = encodeURIComponent(window.location.href)
       window.location.href = `/api/auth/token_request?redirect_uri=${returnTo}`
       return
     }
-    if (error) throw error
-    claims.value = data
+    claims.value = unwrap(result)
   }
 
   function logout() {
