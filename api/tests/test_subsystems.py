@@ -7,10 +7,8 @@ def _node(id: int, subsystem_id: int, name: str) -> Node:
 
 
 def test_build_tree_roots_aliases_and_subsystem_boundary():
-    # Subsystem 1 (like l1_trg)
-    # conf -> tcds (intra) -> [alias]x2 -> tcds subsystem's conf.
-    # rs is a separate root reaching the same foreign node under two aliases, like
-    # l1_trg/rs -> ugt/rs via both "ugt_rs" and "spare_ugt_rs".
+    # Subsystem 1: conf -> tcds -> [alias]x2 -> tcds subsystem's conf.
+    # rs is a separate root reaching the same foreign node under two aliases.
     conf = _node(10, 1, "conf")
     rs = _node(11, 1, "rs")
     tcds = _node(12, 1, "tcds")

@@ -10,4 +10,5 @@ router = APIRouter(
 
 @router.get("/claims")
 def who_am_i(request: Request) -> dict[str, object]:
+    """Returns the caller's JWT claims."""
     return request.state.claims

@@ -9,6 +9,8 @@ from sqlalchemy.exc import ProgrammingError
 
 import migrations.seed as seed_module
 
+pytestmark = pytest.mark.docker
+
 
 class ProbeRow(TypedDict):
     slug: str
