@@ -41,7 +41,7 @@ test-api:
     ENVIRONMENT: test
     GIT_SHA: $CI_COMMIT_SHA
   script:
-    - uv run --project api pytest api/tests -v --ignore=api/tests/test_db.py # Skip DB integration tests in CI
+    - uv run --project api pytest api/tests -v -m "not docker"  # Skip DinD tests in CI
 
 test-web:
   stage: test

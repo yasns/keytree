@@ -19,22 +19,25 @@ class ModeOut(BaseModel):
     id: int
     name: str
     description: str
+    created_by: str
+    created_at: datetime
+    decommissioned_by: str | None
+    """None while active."""
     decommissioned_at: datetime | None
-    """None while active. A decommissioned mode is still returned, just flagged."""
+    """None while active."""
     versions: list[int]
     """Newest first."""
 
     model_config = {"from_attributes": True}
 
 
-class NodeDetailOut(BaseModel):
+class NodeOut(BaseModel):
     id: int
     name: str
     category: str | None
-    """None means this node is a bundle that holds no payload."""
+    """None for bundles."""
     subsystem_id: int
     subsystem_name: str
-    """The key label's first token."""
     modes: list[ModeOut]
 
     model_config = {"from_attributes": True}
@@ -45,7 +48,7 @@ def _build_node_detail(
     subsystem_name: str,
     modes: list[Mode],
     keys: list[Key],
-) -> NodeDetailOut:
+) -> NodeOut:
     """Assemble a node's modes and their versions (newest first) from flat rows."""
     versions_by_mode: dict[int, list[int]] = {}
     for key in keys:
@@ -53,7 +56,7 @@ def _build_node_detail(
     for versions in versions_by_mode.values():
         versions.sort(reverse=True)
 
-    return NodeDetailOut(
+    return NodeOut(
         id=node.id,
         name=node.name,
         category=node.category,
@@ -64,6 +67,9 @@ def _build_node_detail(
                 id=mode.id,
                 name=mode.name,
                 description=mode.description,
+                created_by=mode.created_by,
+                created_at=mode.created_at,
+                decommissioned_by=mode.decommissioned_by,
                 decommissioned_at=mode.decommissioned_at,
                 versions=versions_by_mode.get(mode.id, []),
             )
@@ -72,7 +78,7 @@ def _build_node_detail(
     )
 
 
-async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeDetailOut:
+async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut:
     if node is None or node.retired_at is not None:
         raise HTTPException(status_code=404, detail="node not found")
 
@@ -88,12 +94,8 @@ async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeDet
 
 
 @router.get("/by-path/{subsystem_name}/{node_name}")
-async def get_node_by_path(
-    subsystem_name: str, node_name: str, session: SessionDep
-) -> NodeDetailOut:
-    """
-    Resolves the node by (subsystem, name) locator
-    """
+async def get_node_by_path(subsystem_name: str, node_name: str, session: SessionDep) -> NodeOut:
+    """Fetches a node by (subsystem, name)."""
     node = await session.scalar(
         select(Node)
         .join(Subsystem, Subsystem.id == Node.subsystem_id)
@@ -103,6 +105,7 @@ async def get_node_by_path(
 
 
 @router.get("/{node_id}")
-async def get_node(node_id: int, session: SessionDep) -> NodeDetailOut:
+async def get_node(node_id: int, session: SessionDep) -> NodeOut:
+    """Fetches a single node by numeric id."""
     node = await session.get(Node, node_id)
     return await _node_detail_or_404(node, session)

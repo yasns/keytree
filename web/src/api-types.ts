@@ -153,9 +153,29 @@ export interface paths {
         };
         /**
          * Get Key
-         * @description Resolves a key by (subsystem, node, mode, version) locator.
+         * @description Fetches a single key by (subsystem, node, mode, version).
          */
         get: operations["get_key_api_keys__subsystem_name___node_name___mode_name___version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Key Children
+         * @description Returns one level of a bundle's key_child info. Crosses subsystem boundaries freely.
+         */
+        get: operations["get_key_children_api_keys__subsystem_name___node_name___mode_name___version__children_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -173,7 +193,7 @@ export interface paths {
         };
         /**
          * Get Node By Path
-         * @description Resolves the node by (subsystem, name) locator
+         * @description Fetches a node by (subsystem, name).
          */
         get: operations["get_node_by_path_api_nodes_by_path__subsystem_name___node_name__get"];
         put?: never;
@@ -191,7 +211,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Node */
+        /**
+         * Get Node
+         * @description Fetches a single node by numeric id.
+         */
         get: operations["get_node_api_nodes__node_id__get"];
         put?: never;
         post?: never;
@@ -208,7 +231,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Subsystems */
+        /**
+         * List Subsystems
+         * @description Lists all active subsystems.
+         */
         get: operations["list_subsystems_api_subsystems__get"];
         put?: never;
         post?: never;
@@ -225,7 +251,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Subsystem Tree */
+        /**
+         * Get Subsystem Tree
+         * @description Returns a subsystem's node hierarchy as a forest. Does not cross subsystem boundaries.
+         */
         get: operations["get_subsystem_tree_api_subsystems__subsystem_id__tree_get"];
         put?: never;
         post?: never;
@@ -242,7 +271,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Who Am I */
+        /**
+         * Who Am I
+         * @description Returns the caller's JWT claims.
+         */
         get: operations["who_am_i_api_user_claims_get"];
         put?: never;
         post?: never;
@@ -260,6 +292,34 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** KeyChildMetaOut */
+        KeyChildMetaOut: {
+            /** Alias */
+            alias: string;
+            /** Label */
+            label: string;
+            /** Node Id */
+            node_id: number;
+            /** Node Name */
+            node_name: string;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Category */
+            category: string | null;
+            /** Mode Name */
+            mode_name: string;
+            /** Version */
+            version: number;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Comment */
+            comment: string;
         };
         /** KeyOut */
         KeyOut: {
@@ -289,13 +349,22 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decommissioned By */
+            decommissioned_by: string | null;
             /** Decommissioned At */
             decommissioned_at: string | null;
             /** Versions */
             versions: number[];
         };
-        /** NodeDetailOut */
-        NodeDetailOut: {
+        /** NodeOut */
+        NodeOut: {
             /** Id */
             id: number;
             /** Name */
@@ -309,8 +378,19 @@ export interface components {
             /** Modes */
             modes: components["schemas"]["ModeOut"][];
         };
-        /** NodeOut */
-        NodeOut: {
+        /** SubsystemOut */
+        SubsystemOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Category */
+            category: string;
+        };
+        /** TreeOut */
+        TreeOut: {
             /** Id */
             id: number;
             /** Alias */
@@ -325,18 +405,7 @@ export interface components {
              * Children
              * @default []
              */
-            children: components["schemas"]["NodeOut"][];
-        };
-        /** SubsystemOut */
-        SubsystemOut: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Display Name */
-            display_name: string | null;
-            /** Category */
-            category: string;
+            children: components["schemas"]["TreeOut"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -640,6 +709,40 @@ export interface operations {
             };
         };
     };
+    get_key_children_api_keys__subsystem_name___node_name___mode_name___version__children_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subsystem_name: string;
+                node_name: string;
+                mode_name: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyChildMetaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_node_by_path_api_nodes_by_path__subsystem_name___node_name__get: {
         parameters: {
             query?: never;
@@ -658,7 +761,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NodeDetailOut"];
+                    "application/json": components["schemas"]["NodeOut"];
                 };
             };
             /** @description Validation Error */
@@ -689,7 +792,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NodeDetailOut"];
+                    "application/json": components["schemas"]["NodeOut"];
                 };
             };
             /** @description Validation Error */
@@ -740,7 +843,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NodeOut"][];
+                    "application/json": components["schemas"]["TreeOut"][];
                 };
             };
             /** @description Validation Error */

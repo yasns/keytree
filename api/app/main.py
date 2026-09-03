@@ -63,6 +63,7 @@ async def access_log(request: Request, call_next):
 
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
+    """Redirects the API root to the Swagger docs."""
     return RedirectResponse("/api/docs")
 
 

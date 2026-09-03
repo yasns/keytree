@@ -20,12 +20,21 @@ def _key(id: int, mode_id: int, version: int) -> Key:
 def test_build_node_detail_versions_and_decommissioned_modes():
     node = Node(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
 
-    active = Mode(id=118, node_id=42, name="default", description="Starter mode seed.")
+    active = Mode(
+        id=118,
+        node_id=42,
+        name="default",
+        description="Starter mode seed.",
+        created_by="keytree_app",
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
+    )
     decommissioned = Mode(
         id=119,
         node_id=42,
         name="retired_line",
         description="Old line.",
+        created_by="keytree_app",
+        created_at=datetime(2025, 1, 1, tzinfo=UTC),
         decommissioned_by="alice",
         decommissioned_at=datetime(2026, 1, 1, tzinfo=UTC),
     )

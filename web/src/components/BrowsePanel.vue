@@ -1,57 +1,174 @@
 <template>
-  <v-autocomplete
-    :model-value="nav.selectedSubsystemId"
-    :items="autocompleteItems"
-    item-title="title"
-    item-value="id"
-    label="Subsystem"
-    hide-details
-    v-model:menu="menuOpen"
-    @update:model-value="onSubsystemSelect"
-  ></v-autocomplete>
+  <div class="d-flex flex-column h-100">
+    <div class="d-flex flex-column" style="flex: 1 1 0; min-height: 0">
+      <div>
+        <v-autocomplete
+          :model-value="nav.selectedSubsystemId"
+          :items="autocompleteItems"
+          item-title="title"
+          item-value="id"
+          label="Subsystem"
+          hide-details
+          :disabled="locked"
+          v-model:menu="menuOpen"
+          @update:model-value="onSubsystemSelect"
+        ></v-autocomplete>
 
-  <v-chip-group v-if="chips.length" column class="px-2">
-    <v-chip
-      v-for="chip in chips"
-      :key="chip.name"
-      size="small"
-      variant="outlined"
-      @click="nav.goToName(chip.name)"
-    >
-      {{ chip.label }}
-    </v-chip>
-  </v-chip-group>
+        <v-chip-group v-if="chips.length" column class="px-2 align-center">
+          <v-chip
+            v-for="chip in chips"
+            :key="chip.name"
+            size="small"
+            variant="outlined"
+            :disabled="locked"
+            @click="nav.goToName(chip.name)"
+          >
+            {{ chip.label }}
+          </v-chip>
+        </v-chip-group>
+      </div>
 
-  <v-treeview
-    :items="nav.rows"
-    item-value="path"
-    item-title="title"
-    activatable
-    slim
-    density="compact"
-    v-model:opened="nav.openedRow"
-    v-model:activated="nav.activatedRow"
-  >
-    <template v-slot:prepend="{ item, isOpen }">
-      <v-icon
-        :icon="item.icon == 'mdi-folder-outline' && isOpen ? 'mdi-folder-open-outline' : item.icon"
-        size="small"
-      ></v-icon>
-    </template>
-  </v-treeview>
+      <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
+        <v-treeview
+          :items="nav.rows"
+          item-value="path"
+          activatable
+          slim
+          density="compact"
+          class=""
+          indent-lines="default"
+          :item-props="itemProps"
+          v-model:opened="nav.openedRow"
+          v-model:activated="nav.activatedRow"
+        >
+          <template v-slot:prepend="{ item, isOpen }">
+            <v-icon
+              :icon="
+                item.icon == 'mdi-folder-outline' && isOpen ? 'mdi-folder-open-outline' : item.icon
+              "
+              size="small"
+            ></v-icon>
+          </template>
+
+          <template v-slot:append="{ item }">
+            <v-btn
+              v-if="locked && item.path === pendingPath"
+              icon="mdi-close"
+              size="small"
+              variant="text"
+              density="compact"
+              @click.stop="clearPending"
+            ></v-btn>
+          </template>
+        </v-treeview>
+      </div>
+    </div>
+
+    <div v-if="detail" class="d-flex flex-column border-t-sm" style="flex: 1 1 0; min-height: 0">
+      <div class="d-flex align-center px-4 ga-1">
+        <h5>Select mode</h5>
+
+        <v-spacer></v-spacer>
+
+        <v-btn prepend-icon="mdi-close" size="small" variant="plain" @click="clearPending"
+          >Cancel</v-btn
+        >
+      </div>
+
+      <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
+        <v-list v-if="filteredModes.length" density="compact">
+          <v-list-item
+            v-for="mode in filteredModes"
+            :key="mode.id"
+            :active="isSelected(mode)"
+            @click="activate(mode, mode.versions[0])"
+          >
+            <v-list-item-title class="d-flex align-center">
+              {{ mode.name }}
+              <v-tooltip location="top">
+                <template v-slot:activator="{ props }">
+                  <v-icon
+                    icon="mdi-information-outline"
+                    size="x-small"
+                    class="ml-1 text-medium-emphasis"
+                    v-bind="props"
+                    @click.stop
+                  ></v-icon>
+                </template>
+                <div>{{ mode.description || 'No description.' }}</div>
+                <div>Created by {{ mode.created_by }} on {{ formatDate(mode.created_at) }}</div>
+                <div v-if="mode.decommissioned_at">
+                  Decommissioned by {{ mode.decommissioned_by }} on
+                  {{ formatDate(mode.decommissioned_at) }}
+                </div>
+              </v-tooltip>
+            </v-list-item-title>
+            <template v-slot:append>
+              <v-menu>
+                <template v-slot:activator="{ props }">
+                  <v-chip
+                    size="small"
+                    variant="outlined"
+                    append-icon="mdi-chevron-down"
+                    @click.stop
+                    v-bind="props"
+                  >
+                    v{{ mode.versions[0] }}
+                  </v-chip>
+                </template>
+                <v-list density="compact">
+                  <v-list-item
+                    v-for="v in mode.versions"
+                    :key="v"
+                    :title="`v${v}`"
+                    @click="activate(mode, v)"
+                  ></v-list-item>
+                </v-list>
+              </v-menu>
+            </template>
+          </v-list-item>
+        </v-list>
+        <p v-else class="text-medium-emphasis px-4">No {{ filter }} modes.</p>
+      </div>
+
+      <v-chip-group v-model="filter" mandatory class="px-2">
+        <v-chip value="active" size="small" variant="outlined">Active</v-chip>
+        <v-chip value="decommissioned" size="small" variant="outlined">Decommissioned</v-chip>
+      </v-chip-group>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useNavStore, walk } from '@/stores/nav'
+import { useRouter } from 'vue-router'
+import { keyRoute } from '@/router'
+import { useNavStore, walk, type Row } from '@/stores/nav'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']
 
 const nav = useNavStore()
-const route = useRoute()
 const router = useRouter()
+
+//
+// Lock: once a row is activated, browsing freezes on it until the X is clicked.
+//
+
+const locked = computed(() => nav.pendingNodeId !== null)
+const pendingPath = computed(() => nav.activatedRow[0])
+
+function itemProps(item: Record<string, unknown>) {
+  return { disabled: locked.value && (item as Row).path !== pendingPath.value }
+}
+
+function clearPending() {
+  nav.pendingNodeId = null
+  nav.bundleRoot = null
+  nav.bundlePath = []
+  nav.activatedRow = []
+  router.push('/')
+}
 
 //
 // Subsystem selector
@@ -96,37 +213,29 @@ const autocompleteItems = computed<SelectItem[]>(() => {
 
 function onSubsystemSelect(id: number | null) {
   nav.selectedSubsystemId = id
-  if (id === null) return
-  const subsystem = nav.subsystemName(id)
-  if (subsystem) router.push({ name: 'subsystem', params: { subsystem } })
 }
 
 //
 // Tree navigation
 //
 
-function routeModeParams(target: { subsystem: string; name: string }) {
-  if (route.params.subsystem !== target.subsystem || route.params.name !== target.name) return {}
-  return { mode: route.params.mode, version: route.params.version }
-}
-
 watch(
   () => nav.activatedRow,
   (keys) => {
-    const row = keys[0] ? nav.findRow((r) => r.path === keys[0]) : undefined
-    const target = row && nav.routeForRow(row)
-    if (!target) return
-    if (
-      route.params.subsystem === target.subsystem &&
-      route.params.name === target.name &&
-      route.hash === (target.hash ?? '')
-    )
+    if (!keys[0]) {
+      if (locked.value) clearPending()
       return
-    router.push({
-      name: 'node',
-      params: { subsystem: target.subsystem, name: target.name, ...routeModeParams(target) },
-      hash: target.hash,
-    })
+    }
+    const row = nav.findRow((r) => r.path === keys[0])
+    if (!row) return
+    if (row.isAlias) {
+      nav.goToAlias(row.node)
+      return
+    }
+    if (row.children && !nav.openedRow.includes(row.path)) {
+      nav.openedRow = [...nav.openedRow, row.path]
+    }
+    nav.pendingNodeId = row.node.id
   },
 )
 
@@ -151,4 +260,44 @@ const chips = computed(() => {
     .filter(([name]) => names.has(name))
     .map(([name, label]) => ({ name, label }))
 })
+
+//
+// Mode list
+//
+type ModeOut = components['schemas']['ModeOut']
+type NodeOut = components['schemas']['NodeOut']
+
+const filter = ref<'active' | 'decommissioned'>('active')
+const detail = ref<NodeOut | undefined>(undefined)
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString()
+}
+
+watch(
+  () => nav.pendingNodeId,
+  async (id) => {
+    detail.value = id !== null ? await nav.fetchNodeDetail(id) : undefined
+  },
+  { immediate: true },
+)
+
+const filteredModes = computed(() =>
+  (detail.value?.modes ?? []).filter(
+    (m) => (m.decommissioned_at === null) === (filter.value === 'active'),
+  ),
+)
+
+function isSelected(mode: ModeOut) {
+  const root = nav.bundleRoot
+  return root !== null && root.name === detail.value?.name && root.mode === mode.name
+}
+
+function activate(mode: ModeOut, version: number | undefined) {
+  const d = detail.value
+  if (!d || version === undefined) return
+
+  nav.bundleRoot = { subsystem: d.subsystem_name, name: d.name, mode: mode.name, version }
+  router.push(keyRoute(d.subsystem_name, d.name, mode.name, version))
+}
 </script>

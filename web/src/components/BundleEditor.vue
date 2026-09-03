@@ -1,125 +1,137 @@
 <template>
-  <v-list v-if="children.length" density="compact">
-    <v-list-item
-      v-for="child in children"
-      :key="child.path"
-      :data-row-name="child.title"
-      :class="{ 'bg-highlight': isHighlighted(child) }"
-    >
-      <template v-slot:prepend>
-        <v-icon :icon="child.icon" size="small"></v-icon>
-      </template>
+  <div class="d-flex h-100">
+    <template v-if="nav.bundleRoot">
+      <div
+        v-show="!collapsed"
+        ref="scroller"
+        class="d-flex h-100 flex-grow-1"
+        style="min-width: 0; overflow-x: auto"
+      >
+        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 340px">
+          <BundleColumn
+            :subsystem="nav.bundleRoot.subsystem"
+            :name="nav.bundleRoot.name"
+            :mode="nav.bundleRoot.mode"
+            :version="nav.bundleRoot.version"
+            :selected-alias="nav.bundlePath[0]?.alias"
+            @select="(child) => onSelect(0, child)"
+          ></BundleColumn>
+        </div>
 
-      <v-list-item-title>{{ child.title }}</v-list-item-title>
+        <template v-for="(entry, i) in nav.bundlePath" :key="i">
+          <div
+            v-if="entry.category === null"
+            class="h-100 border-e-sm"
+            style="flex: 0 0 auto; width: 340px"
+          >
+            <BundleColumn
+              :subsystem="entry.subsystem_name"
+              :name="entry.node_name"
+              :mode="entry.mode_name"
+              :version="entry.version"
+              :selected-alias="nav.bundlePath[i + 1]?.alias"
+              @select="(child) => onSelect(i + 1, child)"
+            ></BundleColumn>
+          </div>
+        </template>
+      </div>
 
-      <template v-slot:append>
-        <div class="d-flex align-center ga-2" style="min-width: 480px">
-          <v-autocomplete
-            :model-value="child.node.category !== 'scalar' && enabled ? childLabel(child) : undefined"
-            :items="child.node.category !== 'scalar' && childLabel(child) ? [childLabel(child)] : []"
-            :disabled="!enabled"
-            :label="child.node.category === 'scalar' ? undefined : 'key'"
-            :placeholder="child.node.category === 'scalar' ? 'key' : undefined"
-            density="compact"
-            hide-details
-          ></v-autocomplete>
-          <CopyButton :text="enabled ? (childLabel(child) ?? '') : ''"></CopyButton>
-          <v-btn
-            v-if="child.node.category !== 'scalar'"
-            icon="mdi-pencil-outline"
-            size="small"
-            density="comfortable"
-            variant="tonal"
-            :disabled="!enabled || !childRoute(child)"
-            :to="enabled ? childRoute(child) : undefined"
-          ></v-btn>
+      <template v-if="leafEntry">
+        <v-tooltip :text="collapsed ? 'Collapse editor' : 'Expand editor'" location="end">
+          <template v-slot:activator="{ props: tooltipProps }">
+            <div
+              v-ripple
+              v-bind="tooltipProps"
+              class="collapse-strip h-100 border-e-sm d-flex align-center justify-center cursor-pointer"
+              style="flex: 0 0 auto; width: 1rem"
+              @click="collapsed = !collapsed"
+            >
+              <v-icon
+                icon="mdi-chevron-left"
+                size="small"
+                :style="{
+                  transform: collapsed ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }"
+              ></v-icon>
+            </div>
+          </template>
+        </v-tooltip>
+
+        <div class="h-100" style="flex: 1 1 auto; min-width: 33.3333vw">
+          <PayloadEditor
+            :subsystem="leafEntry.subsystem_name"
+            :name="leafEntry.node_name"
+            :mode="leafEntry.mode_name"
+            :version="leafEntry.version"
+          ></PayloadEditor>
         </div>
       </template>
-    </v-list-item>
-  </v-list>
-  <v-container fluid v-else>
-    <p class="text-medium-emphasis">No children.</p>
-  </v-container>
+    </template>
+
+    <Spinner v-else></Spinner>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { useNavStore, type Row } from '@/stores/nav'
+import { computed, nextTick, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useNavStore, encodeBundlePath, parseBundlePath } from '@/stores/nav'
 import type { components } from '@/api-types'
-import CopyButton from './CopyButton.vue'
+import BundleColumn from './BundleColumn.vue'
+import PayloadEditor from './PayloadEditor.vue'
+import Spinner from './Spinner.vue'
 
-type NodeDetailOut = components['schemas']['NodeDetailOut']
-
-const { enabled } = defineProps<{
-  enabled: boolean
-}>()
+type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 
 const nav = useNavStore()
 const route = useRoute()
+const router = useRouter()
+const collapsed = ref(false)
 
-const children = computed<Row[]>(() => {
-  const detail = nav.nodeDetail
-  if (!detail) return []
-  return nav.findRowByNodeId(detail.id)?.children ?? []
+const leafEntry = computed(() => {
+  const last = nav.bundlePath.at(-1)
+  return last && last.category !== null ? last : undefined
 })
 
-// Non-scalar children need their own modes/versions, fetched lazily and cached per node id.
-const childDetails = reactive(new Map<number, NodeDetailOut>())
+function pushPath() {
+  const query = { ...route.query } as Record<string, string>
+  const at = encodeBundlePath(nav.bundlePath)
+  if (at) query.at = at
+  else delete query.at
+  router.replace({ name: 'editor', params: route.params, query })
+}
 
+function onSelect(i: number, child: KeyChildMetaOut) {
+  nav.bundlePath.splice(i, Infinity, child)
+  pushPath()
+}
+
+// Rebuilds the column stack from the URL: covers direct navigation, a shared deep
+// link, and the bundle root itself resolving after this component has mounted.
 watch(
-  children,
-  (rows) => {
-    for (const row of rows) {
-      if (row.node.category === 'scalar' || childDetails.has(row.node.id)) continue
-      nav.fetchNodeDetail(row.node.id).then((detail) => {
-        if (detail) childDetails.set(row.node.id, detail)
-      })
-    }
+  () => [nav.bundleRoot, route.query.at as string | undefined] as const,
+  async ([root, at]) => {
+    if (!root) return
+    if (encodeBundlePath(nav.bundlePath) === (at ?? '')) return
+    nav.bundlePath = await nav.resolveBundlePath(root, parseBundlePath(at))
   },
   { immediate: true },
 )
 
-function defaultModeAndVersion(child: Row): { mode: string; version: number } | undefined {
-  const detail = childDetails.get(child.node.id)
-  const mode = detail?.modes[0]
-  const version = mode?.versions[0]
-  return mode && version !== undefined ? { mode: mode.name, version } : undefined
-}
-
-function childLabel(child: Row): string | undefined {
-  const subsystem = nav.subsystemName(child.node.subsystem_id)
-  const mv = defaultModeAndVersion(child)
-  return mv && subsystem ? `${subsystem}/${child.node.name}/${mv.mode}/v${mv.version}` : undefined
-}
-
-function childRoute(child: Row) {
-  const subsystem = nav.subsystemName(child.node.subsystem_id)
-  const mv = defaultModeAndVersion(child)
-  return mv && subsystem
-    ? { name: 'node', params: { subsystem, name: child.node.name, mode: mv.mode, version: `v${mv.version}` } }
-    : undefined
-}
-
-function isHighlighted(child: Row): boolean {
-  return route.hash === `#${child.title}`
-}
+const scroller = ref<HTMLDivElement>()
 
 watch(
-  () => route.hash,
-  async (hash) => {
-    if (!hash) return
+  () => nav.bundlePath.length,
+  async () => {
     await nextTick()
-    document
-      .querySelector(`[data-row-name="${CSS.escape(hash.slice(1))}"]`)
-      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (scroller.value) scroller.value.scrollLeft = scroller.value.scrollWidth
   },
-  { immediate: true },
 )
 </script>
 
 <style scoped>
-.bg-highlight {
-  background-color: rgba(var(--v-theme-primary), 0.12);
+.collapse-strip:hover {
+  background: rgba(var(--v-theme-on-surface), 0.08);
 }
 </style>

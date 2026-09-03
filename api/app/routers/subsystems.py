@@ -23,16 +23,15 @@ class SubsystemOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class NodeOut(BaseModel):
+class TreeOut(BaseModel):
     id: int
     alias: str
-    """This row's label. The edge alias, or the node's own name for a root."""
     name: str
     subsystem_id: int
-    """The node's owning subsystem."""
+    """True owner of a node."""
     category: str | None
-    """None means this node is a bundle that holds no payload."""
-    children: list["NodeOut"] = []
+    """None for bundles."""
+    children: list["TreeOut"] = []
 
     model_config = {"from_attributes": True}
 
@@ -41,11 +40,11 @@ def _build_tree(
     subsystem_id: int,
     nodes: list[Node],
     edges: list[tuple[int, str, Node]],
-) -> list[NodeOut]:
+) -> list[TreeOut]:
     """
-    Assemble a subsystem's node_edge rows into a forest of NodeOut.
-    Roots are the nodes with no parent inside this subsystem's boundary.
-    Recursion stops at any child belonging to a different subsystem, renders as a leaf (alias).
+    Assemble a subsystem's node_edge rows into a forest of TreeOut.
+    Root trees are the nodes with no parent inside this subsystem's boundary.
+    Recursion does not cross the subsystem boundary, in that case renders as a leaf.
     """
     children_by_parent: dict[int, list[tuple[str, Node]]] = {}
     for parent_id, alias, child in edges:
@@ -56,8 +55,8 @@ def _build_tree(
     }
     roots = sorted((n for n in nodes if n.id not in has_parent_in_subsystem), key=lambda n: n.id)
 
-    def build(alias: str, node: Node) -> NodeOut:
-        out = NodeOut(
+    def build(alias: str, node: Node) -> TreeOut:
+        out = TreeOut(
             id=node.id,
             alias=alias,
             name=node.name,
@@ -78,6 +77,7 @@ def _build_tree(
 
 @router.get("/")
 async def list_subsystems(session: SessionDep) -> list[SubsystemOut]:
+    """Lists all active subsystems."""
     subsystems = await session.scalars(
         select(Subsystem).where(Subsystem.retired_at.is_(None)).order_by(Subsystem.name)
     )
@@ -85,7 +85,8 @@ async def list_subsystems(session: SessionDep) -> list[SubsystemOut]:
 
 
 @router.get("/{subsystem_id}/tree")
-async def get_subsystem_tree(subsystem_id: int, session: SessionDep) -> list[NodeOut]:
+async def get_subsystem_tree(subsystem_id: int, session: SessionDep) -> list[TreeOut]:
+    """Returns a subsystem's node hierarchy as a forest. Does not cross subsystem boundaries."""
     nodes = list(
         await session.scalars(
             select(Node).where(Node.subsystem_id == subsystem_id, Node.retired_at.is_(None))

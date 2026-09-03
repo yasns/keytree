@@ -91,7 +91,7 @@ const menuItems = [
   { icon: 'mdi-source-branch', title: 'Version Control', component: VersionControlPanel },
 ]
 
-const activePanel = shallowRef<Component | null>(null)
+const activePanel = shallowRef<Component | null>(BrowsePanel)
 const panelOpen = computed(() => activePanel.value !== null)
 function togglePanel(component: Component) {
   activePanel.value = activePanel.value === component ? null : component

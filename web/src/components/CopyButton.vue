@@ -1,4 +1,5 @@
 <template>
+  <v-tooltip activator="parent" :text="copied ? 'Copied!' : 'Copy'" location="top"></v-tooltip>
   <v-btn
     :icon="copied ? 'mdi-check' : 'mdi-content-copy'"
     size="small"

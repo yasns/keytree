@@ -1,8 +1,8 @@
 <template>
   <EmptyState
     icon="mdi-file-tree-outline"
-    title="Select a node to view its key."
-    text="Use the Browse panel on the left to navigate through the tree and select a node."
+    title="Use the Browse panel to explore keys"
+    text="Pick a subsystem, expand the tree to a field, then choose a mode and version below to open its keys."
   ></EmptyState>
 </template>
 

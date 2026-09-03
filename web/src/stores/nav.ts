@@ -1,31 +1,36 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { api, unwrap } from '@/api'
-import { CATEGORY } from '@/category'
+import { iconFor } from '@/category'
+import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']
+type TreeOut = components['schemas']['TreeOut']
 type NodeOut = components['schemas']['NodeOut']
-type NodeDetailOut = components['schemas']['NodeDetailOut']
 type KeyOut = components['schemas']['KeyOut']
+type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
+
+export type BundleRoot = {
+  subsystem: string
+  name: string
+  mode: string
+  version: number
+}
 
 export type Row = {
   path: string
   title: string
   icon: string
-  node: NodeOut
+  node: TreeOut
   isAlias: boolean
   ancestors: string[]
   children?: Row[]
 }
 
-function iconFor(node: NodeOut, isAlias: boolean): string {
-  if (isAlias) return 'mdi-link-variant'
-  if (node.category === null) return 'mdi-folder-outline'
-  return CATEGORY[node.category]?.icon ?? 'mdi-file-outline'
-}
 
-function buildRows(nodes: NodeOut[], ancestors: string[], subsystemId: number): Row[] {
+
+function buildRows(nodes: TreeOut[], ancestors: string[], subsystemId: number): Row[] {
   return nodes.map((node) => {
     const path = `${ancestors.at(-1) ?? ''}/${node.alias}`
     const isAlias = node.subsystem_id !== subsystemId
@@ -51,18 +56,36 @@ export function* walk(list: Row[]): Generator<Row> {
   }
 }
 
+export function encodeBundlePath(path: KeyChildMetaOut[]): string {
+  return path.map((c) => encodeURIComponent(c.alias)).join('/')
+}
+
+export function parseBundlePath(at: string | undefined): string[] {
+  return at ? at.split('/').map((s) => decodeURIComponent(s)) : []
+}
+
 export const useNavStore = defineStore('nav', () => {
+  const snackbar = useSnackbarStore()
   const subsystems = ref<Subsystem[]>([])
   const selectedSubsystemId = ref<number | null>(null)
 
-  const tree = ref<NodeOut[]>([])
+  const tree = ref<TreeOut[]>([])
   const treeSubsystemId = ref<number | null>(null)
 
   const openedRow = ref<string[]>([])
   const activatedRow = ref<string[]>([])
 
-  const nodeDetail = ref<NodeDetailOut | null>(null)
-  const nodeDetailCache = ref<Map<number, NodeDetailOut>>(new Map())
+  const nodeDetail = ref<NodeOut | null>(null)
+  const nodeDetailCache = ref<Map<number, NodeOut>>(new Map())
+
+  // Browse-session state the URL can't hold.
+  const pendingNodeId = ref<number | null>(null)
+  const bundleRoot = ref<BundleRoot | null>(null)
+  const bundlePath = ref<KeyChildMetaOut[]>([])
+
+  watch(bundleRoot, () => {
+    bundlePath.value = []
+  })
 
   async function fetchSubsystems() {
     if (subsystems.value.length) return
@@ -71,6 +94,11 @@ export const useNavStore = defineStore('nav', () => {
 
   function subsystemName(subsystemId: number): string | undefined {
     return subsystems.value.find((s) => s.id === subsystemId)?.name
+  }
+
+  function subsystemDisplayName(name: string): string {
+    const s = subsystems.value.find((s) => s.name === name)
+    return s?.display_name ?? s?.name ?? name
   }
 
   async function fetchTree(subsystemId: number) {
@@ -93,7 +121,7 @@ export const useNavStore = defineStore('nav', () => {
     nodeDetailCache.value.set(data.id, data)
   }
 
-  async function fetchNodeDetail(nodeId: number): Promise<NodeDetailOut | undefined> {
+  async function fetchNodeDetail(nodeId: number): Promise<NodeOut | undefined> {
     const cached = nodeDetailCache.value.get(nodeId)
     if (cached) return cached
     const data = unwrap(
@@ -118,6 +146,50 @@ export const useNavStore = defineStore('nav', () => {
         },
       }),
     )
+  }
+
+  async function fetchKeyChildren(
+    subsystem: string,
+    name: string,
+    mode: string,
+    version: number,
+  ): Promise<KeyChildMetaOut[]> {
+    return unwrap(
+      await api.GET('/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}/children', {
+        params: {
+          path: { subsystem_name: subsystem, node_name: name, mode_name: mode, version },
+        },
+      }),
+    )
+  }
+
+  // Walks one level at a time, matching each alias against that level's edges. Stops
+  // early and returns what resolved so far if an alias is missing (e.g. a stale link).
+  async function resolveBundlePath(
+    root: BundleRoot,
+    aliases: string[],
+  ): Promise<KeyChildMetaOut[]> {
+    const path: KeyChildMetaOut[] = []
+    let locator: BundleRoot = root
+    for (const alias of aliases) {
+      const children = await fetchKeyChildren(
+        locator.subsystem,
+        locator.name,
+        locator.mode,
+        locator.version,
+      )
+      const child = children.find((c) => c.alias === alias)
+      if (!child) break
+      path.push(child)
+      if (child.category !== null) break // leaf: nothing further to descend into
+      locator = {
+        subsystem: child.subsystem_name,
+        name: child.node_name,
+        mode: child.mode_name,
+        version: child.version,
+      }
+    }
+    return path
   }
 
   const rows = computed<Row[]>(() =>
@@ -148,18 +220,6 @@ export const useNavStore = defineStore('nav', () => {
     { immediate: true },
   )
 
-  // Where a row lives in the URL: scalars are addressed via their parent + a #hash.
-  function routeForRow(row: Row): { subsystem: string; name: string; hash?: string } | undefined {
-    if (row.node.category !== 'scalar') {
-      const subsystem = subsystemName(row.node.subsystem_id)
-      return subsystem ? { subsystem, name: row.node.name } : undefined
-    }
-    const parentPath = row.ancestors.at(-1)
-    const parent = parentPath ? findRow((r) => r.path === parentPath) : undefined
-    const subsystem = parent && subsystemName(parent.node.subsystem_id)
-    return parent && subsystem ? { subsystem, name: parent.node.name, hash: `#${row.title}` } : undefined
-  }
-
   function goToName(name: string) {
     const row = findRow((r) => !r.isAlias && r.node.name === name)
     if (!row) return
@@ -169,22 +229,36 @@ export const useNavStore = defineStore('nav', () => {
     activatedRow.value = [row.path]
   }
 
+  // Switch the tree to an alias target's own subsystem and select it there.
+  async function goToAlias(node: TreeOut) {
+    await fetchTree(node.subsystem_id)
+    selectedSubsystemId.value = node.subsystem_id
+    goToName(node.name)
+    const name = subsystemName(node.subsystem_id)
+    snackbar.notify(`Jumped to ${name ? subsystemDisplayName(name) : 'another subsystem'}`, 'info')
+  }
+
   return {
     subsystems,
     selectedSubsystemId,
     openedRow,
     activatedRow,
     nodeDetail,
+    pendingNodeId,
+    bundleRoot,
+    bundlePath,
     rows,
     fetchSubsystems,
-    subsystemName,
+    subsystemDisplayName,
     fetchTree,
     fetchNodeByPath,
     fetchNodeDetail,
     fetchKeyPayload,
+    fetchKeyChildren,
+    resolveBundlePath,
     findRow,
     findRowByNodeId,
-    routeForRow,
     goToName,
+    goToAlias,
   }
 })
