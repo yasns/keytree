@@ -6,7 +6,7 @@
           <v-list-item
             :prepend-icon="item.icon"
             :value="item"
-            :active="activePanel === item.component"
+            :active="nav.activePanel === item.component"
             @click="togglePanel(item.component)"
             v-bind="activatorProps"
           ></v-list-item>
@@ -72,29 +72,31 @@
   </v-navigation-drawer>
 
   <v-navigation-drawer v-model="panelOpen" permanent width="340">
-    <component :is="activePanel" v-if="activePanel" />
+    <component :is="nav.activePanel" v-if="nav.activePanel" />
   </v-navigation-drawer>
 </template>
 
 <script setup lang="ts">
 import { useTheme } from 'vuetify'
 import { useAuthStore } from '@/stores/auth'
-import { computed, shallowRef, type Component } from 'vue'
+import { useNavStore } from '@/stores/nav'
+import { computed, type Component } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
 import VersionControlPanel from './VersionControlPanel.vue'
 
 const auth = useAuthStore()
 const theme = useTheme()
+const nav = useNavStore()
 
 const menuItems = [
-  { icon: 'mdi-file-multiple', title: 'Browse', component: BrowsePanel },
+  { icon: 'mdi-script-text-key', title: 'Browse', component: BrowsePanel },
   { icon: 'mdi-source-branch', title: 'Version Control', component: VersionControlPanel },
 ]
 
-const activePanel = shallowRef<Component | null>(BrowsePanel)
-const panelOpen = computed(() => activePanel.value !== null)
+nav.activePanel ??= BrowsePanel
+const panelOpen = computed(() => nav.activePanel !== null)
 function togglePanel(component: Component) {
-  activePanel.value = activePanel.value === component ? null : component
+  nav.activePanel = nav.activePanel === component ? null : component
 }
 
 const isDark = computed(() => theme.current.value.dark)

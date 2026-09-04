@@ -1,7 +1,7 @@
 <template>
   <div class="d-flex flex-column h-100">
     <div class="flex-grow-1" style="min-width: 0; min-height: 0">
-      <BundleEditor v-if="nav.nodeDetail?.category === null"></BundleEditor>
+      <BundleBrowser v-if="nav.nodeDetail?.category === null"></BundleBrowser>
 
       <template v-else-if="nav.nodeDetail && selectedMode && selectedVersion !== undefined">
         <PayloadEditor
@@ -24,7 +24,7 @@ import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import PayloadEditor from '@/components/PayloadEditor.vue'
-import BundleEditor from '@/components/BundleEditor.vue'
+import BundleBrowser from '@/components/BundleBrowser.vue'
 
 const { subsystem, name, mode, version } = defineProps<{
   subsystem: string
@@ -51,8 +51,7 @@ const selectedVersion = computed(() => {
   return requested !== undefined && m.versions.includes(requested) ? requested : m.versions[0]
 })
 
-// The URL named a version that doesn't exist for this mode. Stop lying and point it at
-// the version actually being rendered.
+// Point invalid URL at the version actually being rendered
 watch(selectedVersion, (v) => {
   const requested = parseVersion(version)
   if (v !== undefined && requested !== undefined && requested !== v) {
@@ -82,8 +81,7 @@ async function syncToRoute() {
     nav.activatedRow = [row.path]
   }
 
-  // Reloading a bundle URL directly (mode/version already in the route) bypasses
-  // ModeSelector.activate()
+  // Bypass mode selection if mode/version are already in the route
   if (detail.category === null && selectedMode.value && selectedVersion.value !== undefined) {
     nav.bundleRoot = {
       subsystem: detail.subsystem_name,

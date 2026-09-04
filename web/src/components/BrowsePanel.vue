@@ -10,7 +10,7 @@
           label="Subsystem"
           hide-details
           :disabled="locked"
-          v-model:menu="menuOpen"
+          v-model:menu="nav.subsystemMenuOpen"
           @update:model-value="onSubsystemSelect"
         ></v-autocomplete>
 
@@ -44,7 +44,9 @@
           <template v-slot:prepend="{ item, isOpen }">
             <v-icon
               :icon="
-                item.icon == 'mdi-folder-outline' && isOpen ? 'mdi-folder-open-outline' : item.icon
+                item.icon == 'mdi-folder-key-outline' && isOpen
+                  ? 'mdi-folder-open-outline'
+                  : item.icon
               "
               size="small"
             ></v-icon>
@@ -182,13 +184,14 @@ const categoryLabels: Record<string, string> = {
 
 type SelectItem = { type: 'subheader'; title: string } | { title: string; id: number }
 
-const menuOpen = ref(false)
-
 onMounted(() => nav.fetchSubsystems())
 
-watch(menuOpen, (open) => {
-  if (!open) (document.activeElement as HTMLElement | null)?.blur()
-})
+watch(
+  () => nav.subsystemMenuOpen,
+  (open) => {
+    if (!open) (document.activeElement as HTMLElement | null)?.blur()
+  },
+)
 
 const autocompleteItems = computed<SelectItem[]>(() => {
   const groups = new Map<string, Subsystem[]>()

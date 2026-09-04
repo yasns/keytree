@@ -1,7 +1,7 @@
 import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './api-types'
 
-// Stop at the same-origin redirect hop instead of letting fetch follow into the SSO's cross-origin one, which CORS blocks.
+// Stop at the same-origin redirect to avoid CORS issues
 const reauth: Middleware = {
   onResponse({ response }) {
     if (response.type === 'opaqueredirect') {
