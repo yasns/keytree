@@ -73,7 +73,7 @@ const nav = useNavStore()
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
 
-// Per-node mode/version options for the row pickers, fetched once per node id.
+// Mode/version options for each row
 const modesCache = reactive(new Map<number, ModeOut[]>())
 const modesRequested = new Set<number>()
 

@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch, type Component } from 'vue'
 import { defineStore } from 'pinia'
 import { api, unwrap } from '@/api'
 import { iconFor } from '@/category'
@@ -56,14 +56,6 @@ export function* walk(list: Row[]): Generator<Row> {
   }
 }
 
-export function encodeBundlePath(path: KeyChildMetaOut[]): string {
-  return path.map((c) => encodeURIComponent(c.alias)).join('/')
-}
-
-export function parseBundlePath(at: string | undefined): string[] {
-  return at ? at.split('/').map((s) => decodeURIComponent(s)) : []
-}
-
 export const useNavStore = defineStore('nav', () => {
   const snackbar = useSnackbarStore()
   const subsystems = ref<Subsystem[]>([])
@@ -75,10 +67,13 @@ export const useNavStore = defineStore('nav', () => {
   const openedRow = ref<string[]>([])
   const activatedRow = ref<string[]>([])
 
+  const activePanel = shallowRef<Component | null>(null)
+  const subsystemMenuOpen = ref(false)
+
   const nodeDetail = ref<NodeOut | null>(null)
   const nodeDetailCache = ref<Map<number, NodeOut>>(new Map())
 
-  // Browse-session state the URL can't hold.
+  // Browse-session state
   const pendingNodeId = ref<number | null>(null)
   const bundleRoot = ref<BundleRoot | null>(null)
   const bundlePath = ref<KeyChildMetaOut[]>([])
@@ -163,8 +158,7 @@ export const useNavStore = defineStore('nav', () => {
     )
   }
 
-  // Walks one level at a time, matching each alias against that level's edges. Stops
-  // early and returns what resolved so far if an alias is missing (e.g. a stale link).
+  // Walks one level at a time, matching each alias against that level's edges
   async function resolveBundlePath(
     root: BundleRoot,
     aliases: string[],
@@ -243,6 +237,8 @@ export const useNavStore = defineStore('nav', () => {
     selectedSubsystemId,
     openedRow,
     activatedRow,
+    activePanel,
+    subsystemMenuOpen,
     nodeDetail,
     pendingNodeId,
     bundleRoot,

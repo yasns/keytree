@@ -1,11 +1,7 @@
 <template>
-  <EmptyState
-    icon="mdi-alert-circle-outline"
-    title="404 Not Found"
-    text="The page you are looking for does not exist."
-  ></EmptyState>
+  <v-empty-state
+    headline="Whoops, 404"
+    text="The page you were looking for does not exist."
+    icon="mdi-emoticon-dead-outline"
+  ></v-empty-state>
 </template>
-
-<script setup lang="ts">
-import EmptyState from '@/components/EmptyState.vue'
-</script>

@@ -73,16 +73,27 @@
   </div>
 </template>
 
+<script lang="ts">
+import type { components } from '@/api-types'
+
+type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
+
+export function encodeBundlePath(path: KeyChildMetaOut[]): string {
+  return path.map((c) => encodeURIComponent(c.alias)).join('/')
+}
+
+export function parseBundlePath(at: string | undefined): string[] {
+  return at ? at.split('/').map((s) => decodeURIComponent(s)) : []
+}
+</script>
+
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNavStore, encodeBundlePath, parseBundlePath } from '@/stores/nav'
-import type { components } from '@/api-types'
+import { useNavStore } from '@/stores/nav'
 import BundleColumn from './BundleColumn.vue'
 import PayloadEditor from './PayloadEditor.vue'
 import Spinner from './Spinner.vue'
-
-type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 
 const nav = useNavStore()
 const route = useRoute()
@@ -107,8 +118,7 @@ function onSelect(i: number, child: KeyChildMetaOut) {
   pushPath()
 }
 
-// Rebuilds the column stack from the URL: covers direct navigation, a shared deep
-// link, and the bundle root itself resolving after this component has mounted.
+// Rebuild the column stack from the URL
 watch(
   () => [nav.bundleRoot, route.query.at as string | undefined] as const,
   async ([root, at]) => {
