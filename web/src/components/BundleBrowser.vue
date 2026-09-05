@@ -64,6 +64,7 @@
             :name="leafEntry.node_name"
             :mode="leafEntry.mode_name"
             :version="leafEntry.version"
+            :category="leafEntry.category"
           ></PayloadEditor>
         </div>
       </template>
@@ -119,12 +120,17 @@ function onSelect(i: number, child: KeyChildMetaOut) {
 }
 
 // Rebuild the column stack from the URL
+let resolveToken = 0
+
 watch(
   () => [nav.bundleRoot, route.query.at as string | undefined] as const,
   async ([root, at]) => {
     if (!root) return
     if (encodeBundlePath(nav.bundlePath) === (at ?? '')) return
-    nav.bundlePath = await nav.resolveBundlePath(root, parseBundlePath(at))
+    const token = ++resolveToken
+    const path = await nav.resolveBundlePath(root, parseBundlePath(at))
+    if (token !== resolveToken) return
+    nav.bundlePath = path
   },
   { immediate: true },
 )

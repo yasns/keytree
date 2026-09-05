@@ -22,19 +22,14 @@ def live() -> dict[str, str]:
 
 
 @router.get("/ready")
-async def ready(session: SessionDep) -> dict[str, object]:
+async def ready(session: SessionDep) -> dict[str, str]:
     """Database is reachable and migrated."""
     try:
-        server_version = await session.scalar(text("SHOW server_version"))
-        applied = list(await session.scalars(text("SELECT version_num FROM alembic_version")))
+        await session.scalar(text("SELECT version_num FROM alembic_version"))
     except Exception:
-        # We don't want to leak any sensitive information to an authenticated client,
+        # We don't want to leak any sensitive information to an unauthenticated client,
         # so log it instead.
         log.exception("readiness check failed")
         raise HTTPException(status_code=503, detail="database not ready") from None
 
-    return {
-        "status": "ok",
-        "server_version": server_version,
-        "applied_revisions": applied,
-    }
+    return {"status": "ok"}

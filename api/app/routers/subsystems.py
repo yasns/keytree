@@ -55,7 +55,7 @@ def _build_tree(
     }
     roots = sorted((n for n in nodes if n.id not in has_parent_in_subsystem), key=lambda n: n.id)
 
-    def build(alias: str, node: Node) -> TreeOut:
+    def build(alias: str, node: Node, ancestors: frozenset[int]) -> TreeOut:
         out = TreeOut(
             id=node.id,
             alias=alias,
@@ -63,16 +63,16 @@ def _build_tree(
             subsystem_id=node.subsystem_id,
             category=node.category,
         )
-        if node.subsystem_id == subsystem_id:
+        if node.subsystem_id == subsystem_id and node.id not in ancestors:
             out.children = [
-                build(child_alias, child)
+                build(child_alias, child, ancestors | {node.id})
                 for child_alias, child in sorted(
                     children_by_parent.get(node.id, []), key=lambda pair: (pair[1].id, pair[0])
                 )
             ]
         return out
 
-    return [build(root.name, root) for root in roots]
+    return [build(root.name, root, frozenset()) for root in roots]
 
 
 @router.get("/")

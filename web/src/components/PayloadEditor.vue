@@ -25,11 +25,12 @@ import KeyMetadata from './KeyMetadata.vue'
   getWorker: () => new EditorWorker(),
 }
 
-const { subsystem, name, mode, version } = defineProps<{
+const { subsystem, name, mode, version, category } = defineProps<{
   subsystem: string
   name: string
   mode: string
   version: number
+  category?: string | null
 }>()
 
 const nav = useNavStore()
@@ -39,12 +40,15 @@ const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 
+function languageFor(category: string | null | undefined): string {
+  return (category ? CATEGORY[category]?.format : undefined) ?? 'plaintext'
+}
+
 onMounted(() => {
   if (!editorElem.value) return
-  const category = nav.nodeDetail?.category
   editor = monaco.editor.create(editorElem.value, {
     value: '',
-    language: category ? CATEGORY[category]?.format : undefined,
+    language: languageFor(category),
     automaticLayout: true,
     theme: theme.current.value.dark ? 'vs-dark' : 'vs',
     readOnly: true,
@@ -56,6 +60,8 @@ async function loadPayload() {
   if (!editor) return
   key.value = await nav.fetchKeyPayload(subsystem, name, mode, version)
   editor.setValue(key.value?.payload ?? '')
+  const model = editor.getModel()
+  if (model) monaco.editor.setModelLanguage(model, languageFor(category))
 }
 
 watch(() => [subsystem, name, mode, version], loadPayload)

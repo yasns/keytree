@@ -35,13 +35,10 @@ def test_schema_branch_effects(engine):
         ), "keytree_app must be a privilege bundle, not a login"
 
 
-def test_ready_reports_the_applied_revision(client, engine):
-    with engine.connect() as conn:
-        stored = sorted(conn.scalars(text("SELECT version_num FROM alembic_version")))
-    body = client.get("/api/health/ready").json()
-    assert body["status"] == "ok"
-    assert sorted(body["applied_revisions"]) == stored
-    assert body["server_version"].startswith("17.")
+def test_ready_reports_ok(client):
+    response = client.get("/api/health/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 def test_seed_inserts_then_upserts(engine, monkeypatch):
