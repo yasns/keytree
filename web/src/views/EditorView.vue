@@ -23,6 +23,7 @@ import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
 import { useNavStore } from '@/stores/nav'
+import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import BundleBrowser from '@/components/BundleBrowser.vue'
 
@@ -35,6 +36,7 @@ const { subsystem, name, mode, version } = defineProps<{
 
 const nav = useNavStore()
 const router = useRouter()
+const snackbar = useSnackbarStore()
 
 function parseVersion(v: string | undefined): number | undefined {
   if (!v || v[0] !== 'v') return undefined
@@ -75,6 +77,14 @@ async function syncToRoute() {
   await nav.fetchTree(detail.subsystem_id)
 
   const row = nav.findRowByNodeId(detail.id)
+
+  if (detail.category === 'scalar') {
+    const parent = row && nav.findRow((r) => r.path === row.ancestors.at(-1))
+    snackbar.notify(`${detail.name} is selected inside its parent key`, 'info')
+    return router.replace(
+      parent ? { name: 'editor', params: { subsystem, name: parent.node.name } } : '/',
+    )
+  }
 
   if (row) {
     nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]

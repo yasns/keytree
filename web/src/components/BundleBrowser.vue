@@ -102,7 +102,7 @@ const collapsed = ref(false)
 
 const leafEntry = computed(() => {
   const last = nav.bundlePath.at(-1)
-  return last && last.category !== null ? last : undefined
+  return last && last.category !== null && last.category !== 'scalar' ? last : undefined
 })
 
 function pushPath() {
