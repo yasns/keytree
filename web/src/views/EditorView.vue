@@ -10,6 +10,7 @@
           :name="nav.nodeDetail.name"
           :mode="selectedMode.name"
           :version="selectedVersion"
+          :category="nav.nodeDetail.category"
         ></PayloadEditor>
       </template>
 
@@ -22,10 +23,11 @@
 import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
-import { useNavStore } from '@/stores/nav'
+import { useNavStore, type BundleRoot } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import BundleBrowser from '@/components/BundleBrowser.vue'
+import BrowsePanel from '@/components/BrowsePanel.vue'
 
 const { subsystem, name, mode, version } = defineProps<{
   subsystem: string
@@ -53,10 +55,24 @@ const selectedVersion = computed(() => {
   return requested !== undefined && m.versions.includes(requested) ? requested : m.versions[0]
 })
 
-// Point invalid URL at the version actually being rendered
+// Redirect to 404 when the routed mode doesn't match one of the node's modes
+watch(
+  () => [nav.nodeDetail, mode] as const,
+  ([detail, mode]) => {
+    if (!detail || detail.name !== name || !mode) return
+    if (!detail.modes.some((m) => m.name === mode)) {
+      nav.nodeDetail = null
+      snackbar.notify(`"${mode}" is not a mode of ${name}`, 'error')
+      router.replace('/404')
+    }
+  },
+  { immediate: true },
+)
+
+// Point a missing or invalid version at the version actually being rendered
 watch(selectedVersion, (v) => {
   const requested = parseVersion(version)
-  if (v !== undefined && requested !== undefined && requested !== v) {
+  if (v !== undefined && requested !== v) {
     router.replace(keyRoute(subsystem, name, mode, v))
   }
 })
@@ -67,7 +83,14 @@ watch(selectedVersion, (v) => {
 
 async function syncToRoute() {
   await nav.fetchSubsystems()
-  await nav.fetchNodeByPath(subsystem, name)
+  try {
+    await nav.fetchNodeByPath(subsystem, name)
+  } catch (err) {
+    nav.nodeDetail = null
+    snackbar.notifyError(err)
+    router.replace('/404')
+    return
+  }
   const detail = nav.nodeDetail
   if (!detail || detail.name !== name) return
 
@@ -91,16 +114,38 @@ async function syncToRoute() {
     nav.activatedRow = [row.path]
   }
 
-  // Bypass mode selection if mode/version are already in the route
-  if (detail.category === null && selectedMode.value && selectedVersion.value !== undefined) {
-    nav.bundleRoot = {
-      subsystem: detail.subsystem_name,
-      name: detail.name,
-      mode: selectedMode.value.name,
-      version: selectedVersion.value,
-    }
+  // No mode in the URL: send the user home with mode picker for this node
+  if (!mode) {
+    nav.activePanel = BrowsePanel
+    router.replace('/')
   }
 }
 
 watch(() => [subsystem, name], syncToRoute, { immediate: true })
+
+function sameBundleRoot(a: BundleRoot | null, b: BundleRoot): boolean {
+  return (
+    a !== null &&
+    a.subsystem === b.subsystem &&
+    a.name === b.name &&
+    a.mode === b.mode &&
+    a.version === b.version
+  )
+}
+
+// Keep bundleRoot in sync with the route whenever mode/version are already present in it
+watch(
+  [() => nav.nodeDetail, selectedMode, selectedVersion],
+  ([detail, mode, version]) => {
+    if (!detail || detail.category !== null || !mode || version === undefined) return
+    const root: BundleRoot = {
+      subsystem: detail.subsystem_name,
+      name: detail.name,
+      mode: mode.name,
+      version,
+    }
+    if (!sameBundleRoot(nav.bundleRoot, root)) nav.bundleRoot = root
+  },
+  { immediate: true },
+)
 </script>

@@ -124,14 +124,18 @@ function modeOptions(child: KeyChildMetaOut): ModeOut[] {
   return modesCache.get(child.node_id) ?? []
 }
 
+let loadToken = 0
+
 async function load() {
   payload.value = undefined
   children.value = undefined
   scalarValues.clear()
+  const token = ++loadToken
   const [p, c] = await Promise.all([
     nav.fetchKeyPayload(props.subsystem, props.name, props.mode, props.version),
     nav.fetchKeyChildren(props.subsystem, props.name, props.mode, props.version),
   ])
+  if (token !== loadToken) return
   payload.value = p
   children.value = c
   for (const child of c) {

@@ -129,8 +129,7 @@ export const useNavStore = defineStore('nav', () => {
     return data
   }
 
-  // Same cache as fetchNodeDetail but keyed by path.
-  // Skips nodeDetail on purpose to stay isolated from current state.
+  // Same cache as fetchNodeDetail but keyed by path
   async function fetchModesByPath(subsystem: string, name: string): Promise<ModeOut[]> {
     const cached = [...nodeDetailCache.value.values()].find(
       (n) => n.subsystem_name === subsystem && n.name === name,
