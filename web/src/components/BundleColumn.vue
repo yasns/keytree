@@ -25,6 +25,17 @@
             </div>
 
             <v-select
+              v-if="child.category === 'scalar'"
+              :model-value="scalarValues.get(child.alias)"
+              :items="scalarOptionsCache.get(scalarKey(child)) ?? []"
+              placeholder="Select value"
+              density="compact"
+              hide-details
+              @click.stop
+              @update:model-value="(v) => scalarValues.set(child.alias, v)"
+            ></v-select>
+            <v-select
+              v-else
               :model-value="child.mode_name"
               :items="
                 modeOptions(child).map((m) => ({
@@ -50,6 +61,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useNavStore } from '@/stores/nav'
 import { iconFor } from '@/category'
+import { resolveScalarOptions } from '@/scalar'
 import type { components } from '@/api-types'
 import KeyMetadata from './KeyMetadata.vue'
 import Spinner from './Spinner.vue'
@@ -73,6 +85,26 @@ const nav = useNavStore()
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
 
+// Scalar option lists for this column
+const scalarOptionsCache = reactive(new Map<string, string[]>())
+const scalarOptionsRequested = new Set<string>()
+
+// Selected scalar dropdown values for this column
+const scalarValues = reactive(new Map<string, string>())
+
+function scalarKey(child: KeyChildMetaOut): string {
+  return `${child.subsystem_name}/${child.node_name}`
+}
+
+function ensureScalarOptions(child: KeyChildMetaOut) {
+  const key = scalarKey(child)
+  if (scalarOptionsRequested.has(key)) return
+  scalarOptionsRequested.add(key)
+  resolveScalarOptions(child.subsystem_name, child.node_name)
+    .then((options) => scalarOptionsCache.set(key, options))
+    .catch(() => scalarOptionsRequested.delete(key))
+}
+
 // Mode/version options for each row
 const modesCache = reactive(new Map<number, ModeOut[]>())
 const modesRequested = new Set<number>()
@@ -80,9 +112,12 @@ const modesRequested = new Set<number>()
 function ensureModes(nodeId: number) {
   if (modesRequested.has(nodeId)) return
   modesRequested.add(nodeId)
-  nav.fetchNodeDetail(nodeId).then((detail) => {
-    if (detail) modesCache.set(nodeId, detail.modes)
-  })
+  nav
+    .fetchNodeDetail(nodeId)
+    .then((detail) => {
+      if (detail) modesCache.set(nodeId, detail.modes)
+    })
+    .catch(() => modesRequested.delete(nodeId))
 }
 
 function modeOptions(child: KeyChildMetaOut): ModeOut[] {
@@ -92,13 +127,17 @@ function modeOptions(child: KeyChildMetaOut): ModeOut[] {
 async function load() {
   payload.value = undefined
   children.value = undefined
+  scalarValues.clear()
   const [p, c] = await Promise.all([
     nav.fetchKeyPayload(props.subsystem, props.name, props.mode, props.version),
     nav.fetchKeyChildren(props.subsystem, props.name, props.mode, props.version),
   ])
   payload.value = p
   children.value = c
-  for (const child of c) ensureModes(child.node_id)
+  for (const child of c) {
+    if (child.category === 'scalar') ensureScalarOptions(child)
+    else ensureModes(child.node_id)
+  }
 }
 
 watch(() => [props.subsystem, props.name, props.mode, props.version], load, { immediate: true })

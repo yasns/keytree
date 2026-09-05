@@ -146,12 +146,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
 import { useNavStore, walk, type Row } from '@/stores/nav'
+import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']
 
 const nav = useNavStore()
 const router = useRouter()
+const snackbar = useSnackbarStore()
 
 //
 // Lock: once a row is activated, browsing freezes on it until the X is clicked.
@@ -233,6 +235,12 @@ watch(
     if (!row) return
     if (row.isAlias) {
       nav.goToAlias(row.node)
+      return
+    }
+    if (row.node.category === 'scalar') {
+      const parent = nav.findRow((r) => r.path === row.ancestors.at(-1))
+      snackbar.notify(`${row.title} is selected inside its parent key`, 'info')
+      nav.activatedRow = parent ? [parent.path] : []
       return
     }
     if (row.children && !nav.openedRow.includes(row.path)) {

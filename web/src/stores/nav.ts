@@ -8,6 +8,7 @@ import type { components } from '@/api-types'
 type Subsystem = components['schemas']['SubsystemOut']
 type TreeOut = components['schemas']['TreeOut']
 type NodeOut = components['schemas']['NodeOut']
+type ModeOut = components['schemas']['ModeOut']
 type KeyOut = components['schemas']['KeyOut']
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 
@@ -128,6 +129,22 @@ export const useNavStore = defineStore('nav', () => {
     return data
   }
 
+  // Same cache as fetchNodeDetail but keyed by path.
+  // Skips nodeDetail on purpose to stay isolated from current state.
+  async function fetchModesByPath(subsystem: string, name: string): Promise<ModeOut[]> {
+    const cached = [...nodeDetailCache.value.values()].find(
+      (n) => n.subsystem_name === subsystem && n.name === name,
+    )
+    if (cached) return cached.modes
+    const data = unwrap(
+      await api.GET('/api/nodes/by-path/{subsystem_name}/{node_name}', {
+        params: { path: { subsystem_name: subsystem, node_name: name } },
+      }),
+    )
+    nodeDetailCache.value.set(data.id, data)
+    return data.modes
+  }
+
   async function fetchKeyPayload(
     subsystem: string,
     name: string,
@@ -223,7 +240,7 @@ export const useNavStore = defineStore('nav', () => {
     activatedRow.value = [row.path]
   }
 
-  // Switch the tree to an alias target's own subsystem and select it there.
+  // Switch the tree to an alias target's own subsystem and select it there
   async function goToAlias(node: TreeOut) {
     await fetchTree(node.subsystem_id)
     selectedSubsystemId.value = node.subsystem_id
@@ -249,6 +266,7 @@ export const useNavStore = defineStore('nav', () => {
     fetchTree,
     fetchNodeByPath,
     fetchNodeDetail,
+    fetchModesByPath,
     fetchKeyPayload,
     fetchKeyChildren,
     resolveBundlePath,
