@@ -51,14 +51,18 @@ class Node(Base):
 
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    mode_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     __table_args__: tuple[SchemaItem, ...] = (
         UniqueConstraint("subsystem_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
             "category IN "
-            "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
+            + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
             name="category_enum",
         ),
+        CheckConstraint("mode_group ~ '^[a-z0-9_]+$'", name="mode_group_slug"),
+        Index("ix_node_mode_group", "mode_group"),
     )
 
 
@@ -97,13 +101,11 @@ class Mode(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    decommissioned_by: Mapped[str | None] = mapped_column(
+    archived_by: Mapped[str | None] = mapped_column(
         ForeignKey("app_user.cern_login"), nullable=True
     )
 
-    decommissioned_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(
@@ -113,8 +115,8 @@ class Mode(Base):
         UniqueConstraint("node_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
-            "(decommissioned_at IS NULL) = (decommissioned_by IS NULL)",
-            name="decommission_complete",
+            "(archived_at IS NULL) = (archived_by IS NULL)",
+            name="archival_complete",
         ),
     )
 

@@ -112,18 +112,21 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("mode_group", sa.String(length=64), nullable=True),
         sa.CheckConstraint(
             "category IN "
             "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
             name=op.f("ck_node_category_enum"),
         ),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_node_name_slug")),
+        sa.CheckConstraint("mode_group ~ '^[a-z0-9_]+$'", name=op.f("ck_node_mode_group_slug")),
         sa.ForeignKeyConstraint(
             ["subsystem_id"], ["subsystem.id"], name=op.f("fk_node_subsystem_id_subsystem")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_node")),
         sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_node_subsystem_id_name")),
     )
+    op.create_index(op.f("ix_node_mode_group"), "node", ["mode_group"], unique=False)
     op.execute("GRANT SELECT ON node TO keytree_app")
 
     _ = op.create_table(
@@ -140,20 +143,20 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.Column("decommissioned_by", sa.String(length=64), nullable=True),
-        sa.Column("decommissioned_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("archived_by", sa.String(length=64), nullable=True),
+        sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_mode_name_slug")),
         sa.CheckConstraint(
-            "(decommissioned_at IS NULL) = (decommissioned_by IS NULL)",
-            name=op.f("ck_mode_decommission_complete"),
+            "(archived_at IS NULL) = (archived_by IS NULL)",
+            name=op.f("ck_mode_archival_complete"),
         ),
         sa.ForeignKeyConstraint(
             ["created_by"], ["app_user.cern_login"], name=op.f("fk_mode_created_by_app_user")
         ),
         sa.ForeignKeyConstraint(
-            ["decommissioned_by"],
+            ["archived_by"],
             ["app_user.cern_login"],
-            name=op.f("fk_mode_decommissioned_by_app_user"),
+            name=op.f("fk_mode_archived_by_app_user"),
         ),
         sa.ForeignKeyConstraint(
             ["forked_from_key_id", "node_id"],
@@ -167,7 +170,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("node_id", "name", name=op.f("uq_mode_node_id_name")),
     )
     op.execute("GRANT SELECT, INSERT ON mode TO keytree_app")
-    op.execute("GRANT UPDATE (decommissioned_by, decommissioned_at) ON mode TO keytree_app")
+    op.execute("GRANT UPDATE (archived_by, archived_at) ON mode TO keytree_app")
 
     _ = op.create_table(
         "node_edge",
