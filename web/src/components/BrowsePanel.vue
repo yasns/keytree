@@ -99,9 +99,9 @@
                 </template>
                 <div>{{ mode.description || 'No description.' }}</div>
                 <div>Created by {{ mode.created_by }} on {{ formatDate(mode.created_at) }}</div>
-                <div v-if="mode.decommissioned_at">
-                  Decommissioned by {{ mode.decommissioned_by }} on
-                  {{ formatDate(mode.decommissioned_at) }}
+                <div v-if="mode.archived_at">
+                  archived by {{ mode.archived_by }} on
+                  {{ formatDate(mode.archived_at) }}
                 </div>
               </v-tooltip>
             </v-list-item-title>
@@ -135,7 +135,7 @@
 
       <v-chip-group v-model="filter" mandatory class="px-2">
         <v-chip value="active" size="small" variant="outlined">Active</v-chip>
-        <v-chip value="decommissioned" size="small" variant="outlined">Decommissioned</v-chip>
+        <v-chip value="archived" size="small" variant="outlined">Archived</v-chip>
       </v-chip-group>
     </div>
   </div>
@@ -278,7 +278,7 @@ const chips = computed(() => {
 type ModeOut = components['schemas']['ModeOut']
 type NodeOut = components['schemas']['NodeOut']
 
-const filter = ref<'active' | 'decommissioned'>('active')
+const filter = ref<'active' | 'archived'>('active')
 const detail = ref<NodeOut | undefined>(undefined)
 
 function formatDate(iso: string) {
@@ -295,7 +295,7 @@ watch(
 
 const filteredModes = computed(() =>
   (detail.value?.modes ?? []).filter(
-    (m) => (m.decommissioned_at === null) === (filter.value === 'active'),
+    (m) => (m.archived_at === null) === (filter.value === 'active'),
   ),
 )
 

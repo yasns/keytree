@@ -356,10 +356,10 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Decommissioned By */
-            decommissioned_by: string | null;
-            /** Decommissioned At */
-            decommissioned_at: string | null;
+            /** Archived By */
+            archived_by: string | null;
+            /** Archived At */
+            archived_at: string | null;
             /** Versions */
             versions: number[];
         };
@@ -669,7 +669,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: unknown;
+                        [key: string]: string;
                     };
                 };
             };

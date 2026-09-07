@@ -17,7 +17,7 @@ def _key(id: int, mode_id: int, version: int) -> Key:
     )
 
 
-def test_build_node_detail_versions_and_decommissioned_modes():
+def test_build_node_detail_versions_and_archived_modes():
     node = Node(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
 
     active = Mode(
@@ -28,20 +28,20 @@ def test_build_node_detail_versions_and_decommissioned_modes():
         created_by="keytree_app",
         created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
-    decommissioned = Mode(
+    archived = Mode(
         id=119,
         node_id=42,
         name="retired_line",
         description="Old line.",
         created_by="keytree_app",
         created_at=datetime(2025, 1, 1, tzinfo=UTC),
-        decommissioned_by="alice",
-        decommissioned_at=datetime(2026, 1, 1, tzinfo=UTC),
+        archived_by="alice",
+        archived_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
     keys = [_key(1, mode_id=118, version=1), _key(2, mode_id=118, version=2)]
 
-    out = _build_node_detail(node, "ugt", [decommissioned, active], keys)
+    out = _build_node_detail(node, "ugt", [archived, active], keys)
 
     assert out.id == 42
     assert out.category == "run_settings"
@@ -53,4 +53,4 @@ def test_build_node_detail_versions_and_decommissioned_modes():
     default_mode, retired_mode = out.modes
     assert default_mode.versions == [2, 1]  # newest first
     assert retired_mode.versions == []
-    assert retired_mode.decommissioned_at == datetime(2026, 1, 1, tzinfo=UTC)
+    assert retired_mode.archived_at == datetime(2026, 1, 1, tzinfo=UTC)

@@ -120,7 +120,7 @@ function scalarOptions(key: string): string[] {
 async function fetchL1HltModes(): Promise<string[]> {
   return useNavStore()
     .fetchModesByPath('l1_hlt', 'conf')
-    .then((modes) => modes.filter((m) => m.decommissioned_at === null).map((m) => m.name))
+    .then((modes) => modes.filter((m) => m.archived_at === null).map((m) => m.name))
 }
 
 // Subsystem+node keys whose option list must be fetched rather than read from SCALAR_OPTIONS

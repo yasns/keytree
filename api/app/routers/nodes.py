@@ -21,9 +21,9 @@ class ModeOut(BaseModel):
     description: str
     created_by: str
     created_at: datetime
-    decommissioned_by: str | None
+    archived_by: str | None
     """None while active."""
-    decommissioned_at: datetime | None
+    archived_at: datetime | None
     """None while active."""
     versions: list[int]
     """Newest first."""
@@ -69,8 +69,8 @@ def _build_node_detail(
                 description=mode.description,
                 created_by=mode.created_by,
                 created_at=mode.created_at,
-                decommissioned_by=mode.decommissioned_by,
-                decommissioned_at=mode.decommissioned_at,
+                archived_by=mode.archived_by,
+                archived_at=mode.archived_at,
                 versions=versions_by_mode.get(mode.id, []),
             )
             for mode in sorted(modes, key=lambda m: m.id)
