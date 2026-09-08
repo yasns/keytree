@@ -4,12 +4,27 @@
       <v-tooltip v-for="item in menuItems" :key="item.title" :text="item.title" location="end">
         <template v-slot:activator="{ props: activatorProps }">
           <v-list-item
-            :prepend-icon="item.icon"
             :value="item"
             :active="nav.activePanel === item.component"
             @click="togglePanel(item.component)"
             v-bind="activatorProps"
-          ></v-list-item>
+          >
+            <template v-slot:prepend>
+              <v-badge
+                v-if="item.badge"
+                :content="item.badge"
+                color="error"
+                floating
+                offset-x="10"
+                offset-y="10"
+                location="bottom right"
+                bordered
+              >
+                <v-icon :icon="item.icon"></v-icon>
+              </v-badge>
+              <v-icon v-else :icon="item.icon"></v-icon>
+            </template>
+          </v-list-item>
         </template>
       </v-tooltip>
     </v-list>
@@ -24,7 +39,7 @@
               <template v-slot:activator="{ props: tooltipProps }">
                 <v-list-item v-bind="{ ...menuProps, ...tooltipProps }" class="pa-0 text-center">
                   <v-avatar color="secondary" style="width: 32px; height: 32px">
-                    {{ auth.firstName?.[0] }}
+                    {{ auth.displayName?.[0] }}
                   </v-avatar>
                 </v-list-item>
               </template>
@@ -36,7 +51,7 @@
                 <v-avatar color="secondary" size="large">
                   <span class="text-headline-small">{{ auth.initials }}</span>
                 </v-avatar>
-                <h3 class="font-weight-bold mt-1">{{ auth.firstName }} {{ auth.lastName }}</h3>
+                <h3 class="font-weight-bold mt-1">{{ auth.displayName }}</h3>
                 <p class="text-body-small mt-1">
                   <span class="text-medium-emphasis">@</span>{{ auth.username }}
                 </p>
@@ -71,7 +86,7 @@
     </template>
   </v-navigation-drawer>
 
-  <v-navigation-drawer v-model="panelOpen" permanent width="340">
+  <v-navigation-drawer v-model="panelOpen" permanent width="400">
     <component :is="nav.activePanel" v-if="nav.activePanel" />
   </v-navigation-drawer>
 </template>
@@ -80,6 +95,7 @@
 import { useTheme } from 'vuetify'
 import { useAuthStore } from '@/stores/auth'
 import { useNavStore } from '@/stores/nav'
+import { useChangesStore } from '@/stores/changes'
 import { computed, type Component } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
 import VersionControlPanel from './VersionControlPanel.vue'
@@ -87,11 +103,19 @@ import VersionControlPanel from './VersionControlPanel.vue'
 const auth = useAuthStore()
 const theme = useTheme()
 const nav = useNavStore()
+const changes = useChangesStore()
 
-const menuItems = [
+const menuItems = computed(() => [
   { icon: 'mdi-script-text-key', title: 'Browse', component: BrowsePanel },
-  { icon: 'mdi-source-branch', title: 'Version Control', component: VersionControlPanel },
-]
+  {
+    icon: 'mdi-source-branch',
+    title:
+      'Version Control' +
+      (changes.visibleEdits.length > 0 ? ` – ${changes.visibleEdits.length} pending changes` : ''),
+    component: VersionControlPanel,
+    badge: changes.visibleEdits.length,
+  },
+])
 
 nav.activePanel ??= BrowsePanel
 const panelOpen = computed(() => nav.activePanel !== null)

@@ -72,7 +72,7 @@
 
         <v-spacer></v-spacer>
 
-        <v-btn prepend-icon="mdi-close" size="small" variant="plain" @click="clearPending"
+        <v-btn prepend-icon="mdi-close" size="small" variant="flat" @click="clearPending"
           >Cancel</v-btn
         >
       </div>
@@ -134,8 +134,8 @@
       </div>
 
       <v-chip-group v-model="filter" mandatory class="px-2">
-        <v-chip value="active" size="small" variant="outlined">Active</v-chip>
-        <v-chip value="archived" size="small" variant="outlined">Archived</v-chip>
+        <v-chip value="active" size="small" variant="outlined" filter>Active</v-chip>
+        <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
       </v-chip-group>
     </div>
   </div>
@@ -146,6 +146,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
 import { useNavStore, walk, type Row } from '@/stores/nav'
+import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
@@ -153,11 +154,8 @@ type Subsystem = components['schemas']['SubsystemOut']
 
 const nav = useNavStore()
 const router = useRouter()
+const changes = useChangesStore()
 const snackbar = useSnackbarStore()
-
-//
-// Lock: once a row is activated, browsing freezes on it until the X is clicked.
-//
 
 const locked = computed(() => nav.pendingNodeId !== null)
 const pendingPath = computed(() => nav.activatedRow[0])
@@ -166,17 +164,14 @@ function itemProps(item: Record<string, unknown>) {
   return { disabled: locked.value && (item as Row).path !== pendingPath.value }
 }
 
-function clearPending() {
+async function clearPending() {
+  if (!(await changes.confirmDiscard())) return
   nav.pendingNodeId = null
   nav.bundleRoot = null
   nav.bundlePath = []
   nav.activatedRow = []
   router.push('/')
 }
-
-//
-// Subsystem selector
-//
 
 // In category display order
 const categoryLabels: Record<string, string> = {
@@ -220,9 +215,16 @@ function onSubsystemSelect(id: number | null) {
   nav.selectedSubsystemId = id
 }
 
-//
-// Tree navigation
-//
+watch(
+  () => nav.rows,
+  (rows) => {
+    const root = rows.length === 1 ? rows[0] : undefined
+    if (root?.children && !nav.openedRow.includes(root.path)) {
+      nav.openedRow = [root.path]
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => nav.activatedRow,
@@ -237,7 +239,7 @@ watch(
       nav.goToAlias(row.node)
       return
     }
-    if (row.node.category === 'scalar') {
+    if (row.node.category === 'external') {
       const parent = nav.findRow((r) => r.path === row.ancestors.at(-1))
       snackbar.notify(`${row.title} is selected inside its parent key`, 'info')
       nav.activatedRow = parent ? [parent.path] : []
@@ -249,10 +251,6 @@ watch(
     nav.pendingNodeId = row.node.id
   },
 )
-
-//
-// Section chips
-//
 
 // In chip display order
 const nodeLabels: Record<string, string> = {
@@ -272,9 +270,6 @@ const chips = computed(() => {
     .map(([name, label]) => ({ name, label }))
 })
 
-//
-// Mode list
-//
 type ModeOut = components['schemas']['ModeOut']
 type NodeOut = components['schemas']['NodeOut']
 
@@ -304,9 +299,10 @@ function isSelected(mode: ModeOut) {
   return root !== null && root.name === detail.value?.name && root.mode === mode.name
 }
 
-function activate(mode: ModeOut, version: number | undefined) {
+async function activate(mode: ModeOut, version: number | undefined) {
   const d = detail.value
   if (!d || version === undefined) return
+  if (!(await changes.confirmDiscard())) return
 
   nav.bundleRoot = { subsystem: d.subsystem_name, name: d.name, mode: mode.name, version }
   router.push(keyRoute(d.subsystem_name, d.name, mode.name, version))

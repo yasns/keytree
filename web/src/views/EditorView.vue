@@ -101,7 +101,7 @@ async function syncToRoute() {
 
   const row = nav.findRowByNodeId(detail.id)
 
-  if (detail.category === 'scalar') {
+  if (detail.category === 'external') {
     const parent = row && nav.findRow((r) => r.path === row.ancestors.at(-1))
     snackbar.notify(`${detail.name} is selected inside its parent key`, 'info')
     return router.replace(
@@ -110,7 +110,9 @@ async function syncToRoute() {
   }
 
   if (row) {
-    nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]
+    nav.openedRow = [
+      ...new Set([...nav.openedRow, ...row.ancestors, ...(row.children ? [row.path] : [])]),
+    ]
     nav.activatedRow = [row.path]
   }
 

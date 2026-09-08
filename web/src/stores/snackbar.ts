@@ -32,7 +32,12 @@ function errorMessage(err: unknown): string {
   if (typeof err === 'string') return err
   if (err && typeof err === 'object' && 'detail' in err) {
     const { detail, status } = err as ApiError
-    const text = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d) => (d && typeof d === 'object' && 'msg' in d ? d.msg : d)).join(', ') : undefined
+    const text =
+      typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d) => (d && typeof d === 'object' && 'msg' in d ? d.msg : d)).join(', ')
+          : undefined
     if (text) return status ? `${status}: ${text}` : text
   }
   return 'Something went wrong'

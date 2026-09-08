@@ -7,7 +7,7 @@
         class="d-flex h-100 flex-grow-1"
         style="min-width: 0; overflow-x: auto"
       >
-        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 340px">
+        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
           <BundleColumn
             :subsystem="nav.bundleRoot.subsystem"
             :name="nav.bundleRoot.name"
@@ -22,7 +22,7 @@
           <div
             v-if="entry.category === null"
             class="h-100 border-e-sm"
-            style="flex: 0 0 auto; width: 340px"
+            style="flex: 0 0 auto; width: 400px"
           >
             <BundleColumn
               :subsystem="entry.subsystem_name"
@@ -103,7 +103,7 @@ const collapsed = ref(false)
 
 const leafEntry = computed(() => {
   const last = nav.bundlePath.at(-1)
-  return last && last.category !== null && last.category !== 'scalar' ? last : undefined
+  return last && last.category !== null && last.category !== 'external' ? last : undefined
 })
 
 function pushPath() {

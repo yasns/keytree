@@ -16,18 +16,30 @@
       total-visible="3"
       closable
     ></v-snackbar-queue>
+
+    <ConfirmDialog
+      v-model="changes.confirmOpen"
+      title="Unsaved changes"
+      text="You have unsaved changes. Leave without saving?"
+      confirm-text="Leave"
+      @confirm="changes.resolveConfirm(true)"
+      @cancel="changes.resolveConfirm(false)"
+    ></ConfirmDialog>
   </v-app>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
+import { useChangesStore } from './stores/changes'
 import { useSnackbarStore } from './stores/snackbar'
 import MainNav from './components/MainNav.vue'
 import Spinner from './components/Spinner.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 
 const auth = useAuthStore()
+const changes = useChangesStore()
 const snackbar = useSnackbarStore()
 
-onMounted(() => auth.checkAuth())
+onMounted(() => Promise.all([auth.checkAuth(), changes.load()]))
 </script>

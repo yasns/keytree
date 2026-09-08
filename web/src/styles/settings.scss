@@ -5,7 +5,6 @@
  */
 
 @use 'vuetify/settings' with (
-
   $grid-breakpoints: (
     'xs': 0,
     'sm': 600px,
@@ -19,5 +18,5 @@
     'lg': 1000px,
     'xl': 1400px,
     'xxl': 2000px,
-  ),
+  )
 );

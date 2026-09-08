@@ -26,7 +26,15 @@ function apiError(error: unknown, response: Response): ApiError {
   return { detail, status: response.status }
 }
 
-export function unwrap<T>({ data, error, response }: { data?: T; error?: unknown; response: Response }): T {
+export function unwrap<T>({
+  data,
+  error,
+  response,
+}: {
+  data?: T
+  error?: unknown
+  response: Response
+}): T {
   if (error || !response.ok) throw apiError(error, response)
   return data as T
 }

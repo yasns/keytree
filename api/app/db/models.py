@@ -58,7 +58,7 @@ class Node(Base):
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
             "category IN "
-            + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
+            + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name="category_enum",
         ),
         CheckConstraint("mode_group ~ '^[a-z0-9_]+$'", name="mode_group_slug"),
@@ -237,6 +237,10 @@ class StagedEdit(Base):
     comment: Mapped[str] = mapped_column(Text, nullable=False)
 
     validation_status: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(["base_key_id", "mode_id"], ["key.id", "key.mode_id"], use_alter=True),

@@ -30,6 +30,7 @@ class KeyOut(BaseModel):
 
 
 class KeyChildMetaOut(BaseModel):
+    id: int
     alias: str
     label: str
     node_id: int
@@ -37,6 +38,8 @@ class KeyChildMetaOut(BaseModel):
     subsystem_name: str
     category: str | None
     """None for bundles."""
+    payload: str | None
+    """Only populated for external children."""
     mode_name: str
     version: int
     created_by: str
@@ -44,7 +47,7 @@ class KeyChildMetaOut(BaseModel):
     comment: str
 
 
-async def _key_or_404(
+async def key_or_404(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
 ) -> Key:
     """Resolves a key by (subsystem, node, mode, version)."""
@@ -70,7 +73,7 @@ async def get_key(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
 ) -> KeyOut:
     """Fetches a single key by (subsystem, node, mode, version)."""
-    key = await _key_or_404(subsystem_name, node_name, mode_name, version, session)
+    key = await key_or_404(subsystem_name, node_name, mode_name, version, session)
     return KeyOut.model_validate(key)
 
 
@@ -79,7 +82,7 @@ async def get_key_children(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
 ) -> list[KeyChildMetaOut]:
     """Returns one level of a bundle's key_child info. Crosses subsystem boundaries freely."""
-    parent = await _key_or_404(subsystem_name, node_name, mode_name, version, session)
+    parent = await key_or_404(subsystem_name, node_name, mode_name, version, session)
 
     child = aliased(Key)
 
@@ -103,12 +106,14 @@ async def get_key_children(
 
     return [
         KeyChildMetaOut(
+            id=child_key.id,
             alias=alias,
             label=child_key.label,
             node_id=child_node_id,
             node_name=child_node_name,
             subsystem_name=child_subsystem_name,
             category=child_category,
+            payload=child_key.payload if child_category == "external" else None,
             mode_name=child_mode_name,
             version=child_key.version,
             created_by=child_key.created_by,

@@ -2,7 +2,7 @@
   <v-empty-state
     headline="Welcome"
     title="What would you like to do today?"
-    icon="mdi-nature-people"
+    icon="mdi-hand-wave-outline"
   >
     <v-container>
       <v-row>
@@ -37,7 +37,7 @@
         <v-col cols="12" md="6">
           <v-card
             href="mailto:keytree-admins@cern.ch"
-            prepend-icon="$warning"
+            prepend-icon="mdi-bug-outline"
             target="_blank"
             text="File a bug report for Keytree."
             title="Report a Bug"
