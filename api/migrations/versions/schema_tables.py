@@ -88,6 +88,7 @@ def upgrade() -> None:
     op.execute(
         "GRANT UPDATE (comment, committed_with_roles, committed_at) ON changeset TO keytree_app"
     )
+    op.execute("GRANT USAGE ON SEQUENCE changeset_id_seq TO keytree_app")
 
     _ = op.create_table(
         "role_subsystem",
@@ -115,7 +116,7 @@ def upgrade() -> None:
         sa.Column("mode_group", sa.String(length=64), nullable=True),
         sa.CheckConstraint(
             "category IN "
-            "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'scalar')",
+            + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name=op.f("ck_node_category_enum"),
         ),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_node_name_slug")),
@@ -171,6 +172,7 @@ def upgrade() -> None:
     )
     op.execute("GRANT SELECT, INSERT ON mode TO keytree_app")
     op.execute("GRANT UPDATE (archived_by, archived_at) ON mode TO keytree_app")
+    op.execute("GRANT USAGE ON SEQUENCE mode_id_seq TO keytree_app")
 
     _ = op.create_table(
         "node_edge",
@@ -207,6 +209,12 @@ def upgrade() -> None:
         sa.Column("proposed_children", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("comment", sa.Text(), nullable=False),
         sa.Column("validation_status", sa.String(length=255), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint(
             "validation_status IN ('skipped', 'passed', 'failed')",
             name=op.f("ck_staged_edit_validation_status_enum"),
@@ -237,6 +245,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_staged_edit")),
     )
     op.execute("GRANT SELECT, INSERT, DELETE ON staged_edit TO keytree_app")
+    op.execute("GRANT USAGE ON SEQUENCE staged_edit_id_seq TO keytree_app")
 
     _ = op.create_table(
         "key",
@@ -278,6 +287,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("staged_edit_id", name=op.f("uq_key_staged_edit_id")),
     )
     op.execute("GRANT SELECT, INSERT ON key TO keytree_app")
+    op.execute("GRANT USAGE ON SEQUENCE key_id_seq TO keytree_app")
 
     _ = op.create_table(
         "key_child",

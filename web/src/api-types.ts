@@ -104,6 +104,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/changeset/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Changeset
+         * @description Fetches the caller's open changeset and its staged edits, or null if none is open.
+         */
+        get: operations["get_changeset_api_changeset__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Discard Changeset
+         * @description Discards the caller's open changeset and all its staged edits.
+         */
+        delete: operations["discard_changeset_api_changeset__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/changeset/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Edits
+         * @description Stages (or re-stages) a set of edits in the caller's open changeset.
+         */
+        post: operations["stage_edits_api_changeset_edits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health/live": {
         parameters: {
             query?: never;
@@ -288,6 +332,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ChangesetOut */
+        ChangesetOut: {
+            /** Id */
+            id: number;
+            /** Comment */
+            comment: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Edits */
+            edits: components["schemas"]["StagedEditOut"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -295,6 +355,8 @@ export interface components {
         };
         /** KeyChildMetaOut */
         KeyChildMetaOut: {
+            /** Id */
+            id: number;
             /** Alias */
             alias: string;
             /** Label */
@@ -307,6 +369,8 @@ export interface components {
             subsystem_name: string;
             /** Category */
             category: string | null;
+            /** Payload */
+            payload: string | null;
             /** Mode Name */
             mode_name: string;
             /** Version */
@@ -377,6 +441,62 @@ export interface components {
             subsystem_name: string;
             /** Modes */
             modes: components["schemas"]["ModeOut"][];
+        };
+        /** ProposedChildOut */
+        ProposedChildOut: {
+            /** Key Id */
+            key_id: number;
+            /** Mode Name */
+            mode_name: string;
+        };
+        /** StagedEditIn */
+        StagedEditIn: {
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Base Version */
+            base_version: number;
+            /** Proposed Payload */
+            proposed_payload?: string | null;
+            /** Proposed Children */
+            proposed_children?: {
+                [key: string]: number | null;
+            } | null;
+            /** Comment */
+            comment: string;
+        };
+        /** StagedEditOut */
+        StagedEditOut: {
+            /** Id */
+            id: number;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Base Version */
+            base_version: number;
+            /** Category */
+            category: string | null;
+            /** Proposed Payload */
+            proposed_payload: string | null;
+            /** Proposed Children */
+            proposed_children: {
+                [key: string]: components["schemas"]["ProposedChildOut"] | null;
+            } | null;
+            /** Comment */
+            comment: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** SubsystemOut */
         SubsystemOut: {
@@ -618,6 +738,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_changeset_api_changeset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"] | null;
+                };
+            };
+        };
+    };
+    discard_changeset_api_changeset__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stage_edits_api_changeset_edits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StagedEditIn"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
                 };
             };
             /** @description Validation Error */

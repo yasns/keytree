@@ -8,7 +8,6 @@ from sqlalchemy import NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 
-# settings are read at import time, so the environment must exist first
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("GIT_SHA", "testsha")
 os.environ.setdefault("SECRET_KEY", "test-secret")
@@ -16,7 +15,6 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 API_DIR = Path(__file__).resolve().parent.parent
 APP_USER = "app_role_test"
 APP_PASSWORD = "app-role-test"
-# CI overrides to the CERN mirror
 POSTGRES_IMAGE = os.environ.get("POSTGRES_IMAGE", "postgres:17")
 
 
@@ -30,7 +28,6 @@ def postgres(alembic_config):
     """
     Ephemeral postgres:17 migrated with `alembic upgrade heads` to preserve grants.
     """
-    # PostgresContainer otherwise reads POSTGRES_* that app/__init__.py loaded from .env
     with PostgresContainer(
         POSTGRES_IMAGE,
         username="keytree",
@@ -68,17 +65,20 @@ def app_engine(postgres, engine):
 
 
 @pytest.fixture
-def client(app_engine):
+def session_factory(app_engine):
+    """Async sessionmaker bound to the app role, isolated per test."""
+    # NullPool: connections must not outlive the loop they're used on.
+    async_engine = create_async_engine(app_engine.url, poolclass=NullPool)
+    return async_sessionmaker(async_engine, expire_on_commit=False)
+
+
+@pytest.fixture
+def client(session_factory):
     """TestClient bound to the container as the app role the API runs as."""
-    # ruff would otherwise hoist these imports above the os.environ block they depend on
     from fastapi.testclient import TestClient
 
     from app.db.base import get_session
     from app.main import app
-
-    # NullPool: connections must not outlive the loop TestClient runs them on
-    async_engine = create_async_engine(app_engine.url, poolclass=NullPool)
-    session_factory = async_sessionmaker(async_engine, expire_on_commit=False)
 
     async def override():
         async with session_factory() as session:

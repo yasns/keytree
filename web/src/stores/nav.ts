@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef, watch, type Component } from 'vue'
 import { defineStore } from 'pinia'
 import { api, unwrap } from '@/api'
-import { iconFor } from '@/category'
+import { iconFor, sortByKind } from '@/category'
 import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
@@ -29,12 +29,14 @@ export type Row = {
   children?: Row[]
 }
 
-
-
 function buildRows(nodes: TreeOut[], ancestors: string[], subsystemId: number): Row[] {
-  return nodes.map((node) => {
+  const withAlias = nodes.map((node) => ({ node, isAlias: node.subsystem_id !== subsystemId }))
+  return sortByKind(withAlias, ({ node, isAlias }) => ({
+    alias: node.alias,
+    category: node.category,
+    isAlias,
+  })).map(({ node, isAlias }) => {
     const path = `${ancestors.at(-1) ?? ''}/${node.alias}`
-    const isAlias = node.subsystem_id !== subsystemId
     return {
       path,
       title: node.alias,
@@ -74,7 +76,6 @@ export const useNavStore = defineStore('nav', () => {
   const nodeDetail = ref<NodeOut | null>(null)
   const nodeDetailCache = ref<Map<number, NodeOut>>(new Map())
 
-  // Browse-session state
   const pendingNodeId = ref<number | null>(null)
   const bundleRoot = ref<BundleRoot | null>(null)
   const bundlePath = ref<KeyChildMetaOut[]>([])
@@ -129,7 +130,6 @@ export const useNavStore = defineStore('nav', () => {
     return data
   }
 
-  // Same cache as fetchNodeDetail but keyed by path
   async function fetchModesByPath(subsystem: string, name: string): Promise<ModeOut[]> {
     const cached = [...nodeDetailCache.value.values()].find(
       (n) => n.subsystem_name === subsystem && n.name === name,
@@ -165,16 +165,20 @@ export const useNavStore = defineStore('nav', () => {
     mode: string,
     version: number,
   ): Promise<KeyChildMetaOut[]> {
-    return unwrap(
+    const children = unwrap(
       await api.GET('/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}/children', {
         params: {
           path: { subsystem_name: subsystem, node_name: name, mode_name: mode, version },
         },
       }),
     )
+    return sortByKind(children, (child) => ({
+      alias: child.alias,
+      category: child.category,
+      isAlias: child.subsystem_name !== subsystem,
+    }))
   }
 
-  // Walks one level at a time, matching each alias against that level's edges
   async function resolveBundlePath(
     root: BundleRoot,
     aliases: string[],
@@ -239,7 +243,6 @@ export const useNavStore = defineStore('nav', () => {
     activatedRow.value = [row.path]
   }
 
-  // Switch the tree to an alias target's own subsystem and select it there
   async function goToAlias(node: TreeOut) {
     await fetchTree(node.subsystem_id)
     selectedSubsystemId.value = node.subsystem_id

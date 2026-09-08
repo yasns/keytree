@@ -1,7 +1,7 @@
 import { useNavStore } from '@/stores/nav'
 
 // Dummy values until the external DBs that own these lists are defined.
-const SCALAR_OPTIONS: Record<string, string[]> = {
+const EXTERNAL_OPTIONS: Record<string, string[]> = {
   'cms_run/clock_source': ['LHC', 'LOCAL'],
   'l1_hlt/hlt_key': [
     '/cdaq/circulating/2022/v1.0/HLT/V1',
@@ -111,10 +111,10 @@ const SCALAR_OPTIONS: Record<string, string[]> = {
   'cms_run/tcds_run_key': ['BxInfoFromDip', 'NoBxInfoFromDip'],
   'cms_run/use_primary_tcds': ['true', 'false'],
 }
-const SCALAR_FALLBACK = ['option_a', 'option_b', 'option_c']
+const EXTERNAL_FALLBACK = ['dummy']
 
-function scalarOptions(key: string): string[] {
-  return SCALAR_OPTIONS[key] ?? SCALAR_FALLBACK
+function externalOptions(key: string): string[] {
+  return EXTERNAL_OPTIONS[key] ?? EXTERNAL_FALLBACK
 }
 
 async function fetchL1HltModes(): Promise<string[]> {
@@ -123,12 +123,12 @@ async function fetchL1HltModes(): Promise<string[]> {
     .then((modes) => modes.filter((m) => m.archived_at === null).map((m) => m.name))
 }
 
-// Subsystem+node keys whose option list must be fetched rather than read from SCALAR_OPTIONS
-const DYNAMIC_SCALAR_OPTIONS: Record<string, () => Promise<string[]>> = {
+// Subsystem+node keys whose option list must be fetched rather than read from EXTERNAL_OPTIONS
+const DYNAMIC_EXTERNAL_OPTIONS: Record<string, () => Promise<string[]>> = {
   'cms_run/l1_hlt_mode': fetchL1HltModes,
 }
 
-export function resolveScalarOptions(subsystem: string, nodeName: string): Promise<string[]> {
+export function resolveExternalOptions(subsystem: string, nodeName: string): Promise<string[]> {
   const key = `${subsystem}/${nodeName}`
-  return (DYNAMIC_SCALAR_OPTIONS[key] ?? (() => Promise.resolve(scalarOptions(key))))()
+  return (DYNAMIC_EXTERNAL_OPTIONS[key] ?? (() => Promise.resolve(externalOptions(key))))()
 }

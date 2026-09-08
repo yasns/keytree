@@ -6,10 +6,11 @@ export const useAuthStore = defineStore('auth', () => {
   const claims = ref<Record<string, unknown> | null>(null)
 
   const username = computed(() => claims.value?.cern_upn as string | undefined)
-  const firstName = computed(() => claims.value?.given_name as string | undefined)
-  const lastName = computed(() => claims.value?.family_name as string | undefined)
-  const email = computed(() => claims.value?.email as string | undefined)
-  const initials = computed(() => (firstName.value?.[0] ?? '') + (lastName.value?.[0] ?? ''))
+  const displayName = computed(() => claims.value?.name as string | undefined)
+  const initials = computed(() => {
+    const parts = (displayName.value ?? '').trim().split(/\s+/).filter(Boolean)
+    return (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : '')
+  })
 
   async function checkAuth() {
     claims.value = unwrap(await api.GET('/api/user/claims'))
@@ -19,5 +20,5 @@ export const useAuthStore = defineStore('auth', () => {
     window.location.href = '/api/auth/logout'
   }
 
-  return { claims, username, firstName, lastName, email, initials, checkAuth, logout }
+  return { claims, username, displayName, initials, checkAuth, logout }
 })

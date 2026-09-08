@@ -6,20 +6,31 @@
       :mode="mode"
       :version="version"
       :payload="key"
+      :modified="dirty"
+      :staged="staged"
     ></KeyMetadata>
+
+    <EditorToolbar
+      :dirty="dirty"
+      :staged-comment="staged?.comment"
+      @save="save"
+      @discard="resetToBaseline"
+    ></EditorToolbar>
 
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from 'vuetify'
 import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { useNavStore } from '@/stores/nav'
+import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { CATEGORY } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
+import EditorToolbar from './EditorToolbar.vue'
 
 ;(self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -34,11 +45,24 @@ const { subsystem, name, mode, version, category } = defineProps<{
 }>()
 
 const nav = useNavStore()
+const changes = useChangesStore()
 const theme = useTheme()
 
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
+const dirty = ref(false)
+useDirtySource(dirty)
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
+let baseValue = ''
+
+const staged = computed(() => changes.stagedFor(subsystem, name, mode, version))
+
+function resetToBaseline() {
+  if (!editor) return
+  baseValue = staged.value?.proposed_payload ?? key.value?.payload ?? ''
+  if (editor.getValue() !== baseValue) editor.setValue(baseValue)
+  dirty.value = false
+}
 
 function languageFor(category: string | null | undefined): string {
   return (category ? CATEGORY[category]?.format : undefined) ?? 'plaintext'
@@ -51,7 +75,9 @@ onMounted(() => {
     language: languageFor(category),
     automaticLayout: true,
     theme: theme.current.value.dark ? 'vs-dark' : 'vs',
-    readOnly: true,
+  })
+  editor.onDidChangeModelContent(() => {
+    dirty.value = editor!.getValue() !== baseValue
   })
   loadPayload()
 })
@@ -59,12 +85,31 @@ onMounted(() => {
 async function loadPayload() {
   if (!editor) return
   key.value = await nav.fetchKeyPayload(subsystem, name, mode, version)
-  editor.setValue(key.value?.payload ?? '')
+  resetToBaseline()
   const model = editor.getModel()
   if (model) monaco.editor.setModelLanguage(model, languageFor(category))
 }
 
 watch(() => [subsystem, name, mode, version], loadPayload)
+
+watch(staged, () => {
+  if (!dirty.value) resetToBaseline()
+})
+
+async function save(comment: string) {
+  if (!editor) return
+  await changes.stage([
+    {
+      subsystem_name: subsystem,
+      node_name: name,
+      mode_name: mode,
+      base_version: version,
+      proposed_payload: editor.getValue(),
+      comment,
+    },
+  ])
+  resetToBaseline()
+}
 
 watch(
   () => theme.current.value.dark,

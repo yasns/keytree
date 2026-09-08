@@ -51,7 +51,7 @@ CATALOG: dict[str, SubsystemSpec] = {
         "display_name": "L1 + HLT",
         "category": "top_level",
         "nodes": [
-            NodeSpec(name="conf", category="scalar", leaves=["hlt_key", "hlt_sw_arch"]),
+            NodeSpec(name="conf", category="external", leaves=["hlt_key", "hlt_sw_arch"]),
         ],
     },
     "cms_run": {
@@ -60,7 +60,7 @@ CATALOG: dict[str, SubsystemSpec] = {
         "nodes": [
             NodeSpec(
                 name="conf",
-                category="scalar",
+                category="external",
                 leaves=[
                     "l1_hlt_mode",
                     "clock_source",
