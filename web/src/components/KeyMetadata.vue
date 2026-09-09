@@ -9,10 +9,9 @@
             <v-chip size="small" density="compact" label variant="outlined"
               >v{{ displayVersion }}</v-chip
             >
-            <v-chip v-if="staged" size="small" density="compact" label color="info">staged</v-chip>
-            <v-chip v-if="modified" size="small" density="compact" label color="warning">
-              modified
-            </v-chip>
+            <v-chip v-if="staged" size="small" density="compact" label variant="tonal"
+              >draft</v-chip
+            >
           </div>
           <div
             v-if="hasDetail"
@@ -85,7 +84,6 @@ const props = defineProps<{
   mode: string
   version: number
   payload?: KeyOut
-  modified?: boolean
   staged?: StagedEditOut
 }>()
 

@@ -230,6 +230,8 @@ class StagedEdit(Base):
         ForeignKey("key.id", use_alter=True), nullable=True
     )
 
+    expected_version: Mapped[int] = mapped_column(nullable=False)
+
     proposed_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     proposed_children: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
@@ -251,6 +253,7 @@ class StagedEdit(Base):
             "proposed_payload IS NOT NULL OR proposed_children IS NOT NULL",
             name="proposes_something",
         ),
+        CheckConstraint("expected_version > 0", name="expected_version_positive"),
     )
 
 

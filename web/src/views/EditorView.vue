@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { keyRoute } from '@/router'
+import { keyRoute, parseVersion } from '@/router'
 import { useNavStore, type BundleRoot } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
@@ -39,12 +39,6 @@ const { subsystem, name, mode, version } = defineProps<{
 const nav = useNavStore()
 const router = useRouter()
 const snackbar = useSnackbarStore()
-
-function parseVersion(v: string | undefined): number | undefined {
-  if (!v || v[0] !== 'v') return undefined
-  const n = Number(v.slice(1))
-  return Number.isFinite(n) ? n : undefined
-}
 
 const selectedMode = computed(() => nav.nodeDetail?.modes.find((m) => m.name === mode))
 
@@ -76,10 +70,6 @@ watch(selectedVersion, (v) => {
     router.replace(keyRoute(subsystem, name, mode, v))
   }
 })
-
-//
-// Route
-//
 
 async function syncToRoute() {
   await nav.fetchSubsystems()

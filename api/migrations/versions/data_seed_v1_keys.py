@@ -2,7 +2,7 @@
 
 Revision ID: data_seed_v1_keys
 Revises: data_default_modes
-Create Date: 2026-08-31 00:00:00.000000
+Create Date: 2026-08-31 16:57:10.44725
 
 """
 
@@ -31,19 +31,19 @@ def upgrade() -> None:
     changeset_id = bind.scalar(
         text("""
             INSERT INTO changeset (created_by, comment, committed_with_roles, committed_at)
-            VALUES ('keytree_app', 'Bootstrap v1 seed', '["keytree_superuser"]'::jsonb, now())
+            VALUES ('keytree_app', 'Bootstrap v1', '["keytree_superuser"]'::jsonb, now())
             RETURNING id
         """)
     )
 
     # One staged edit per (node, default mode). A bundle node gets a placeholder
     # `proposed_children`, corrected below once the child keys it should reference exist.
-    bind.execute(
+    _ = bind.execute(
         text("""
             INSERT INTO staged_edit
-                (changeset_id, mode_id, proposed_payload, proposed_children, comment,
-                 validation_status)
-            SELECT :changeset_id, m.id,
+                (changeset_id, mode_id, expected_version, proposed_payload, proposed_children,
+                 comment, validation_status)
+            SELECT :changeset_id, m.id, 1,
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
                    CASE WHEN n.category IS NULL THEN '{}'::jsonb ELSE NULL END,
                    'Bootstrap v1 seed', 'skipped'
@@ -53,7 +53,7 @@ def upgrade() -> None:
         {"changeset_id": changeset_id},
     )
 
-    bind.execute(
+    _ = bind.execute(
         text("""
             INSERT INTO key
                 (mode_id, node_id, version, label, payload, staged_edit_id, created_by, comment)
@@ -72,7 +72,7 @@ def upgrade() -> None:
 
     # Pin every node_edge to the two nodes' v1 keys. A node has exactly one v1 key (one
     # default mode, one version), so (node_id, version=1) resolves it unambiguously.
-    bind.execute(
+    _ = bind.execute(
         text("""
             INSERT INTO key_child
                 (parent_key_id, alias, child_key_id, parent_node_id, child_node_id)
@@ -85,7 +85,7 @@ def upgrade() -> None:
 
     # Backfill the bundle staged_edits' proposed_children now that the child keys exist,
     # so each staged edit matches the key it produced.
-    bind.execute(
+    _ = bind.execute(
         text("""
             UPDATE staged_edit se SET proposed_children = agg.children
             FROM (

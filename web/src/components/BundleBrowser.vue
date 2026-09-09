@@ -18,22 +18,21 @@
           ></BundleColumn>
         </div>
 
-        <template v-for="(entry, i) in nav.bundlePath" :key="i">
-          <div
-            v-if="entry.category === null"
-            class="h-100 border-e-sm"
-            style="flex: 0 0 auto; width: 400px"
-          >
-            <BundleColumn
-              :subsystem="entry.subsystem_name"
-              :name="entry.node_name"
-              :mode="entry.mode_name"
-              :version="entry.version"
-              :selected-alias="nav.bundlePath[i + 1]?.alias"
-              @select="(child) => onSelect(i + 1, child)"
-            ></BundleColumn>
-          </div>
-        </template>
+        <div
+          v-for="column in columns"
+          :key="column.index"
+          class="h-100 border-e-sm"
+          style="flex: 0 0 auto; width: 400px"
+        >
+          <BundleColumn
+            :subsystem="column.subsystem"
+            :name="column.name"
+            :mode="column.mode"
+            :version="column.version"
+            :selected-alias="nav.bundlePath[column.index + 1]?.alias"
+            @select="(child) => onSelect(column.index + 1, child)"
+          ></BundleColumn>
+        </div>
       </div>
 
       <template v-if="leafEntry">
@@ -60,9 +59,9 @@
 
         <div class="h-100" style="flex: 1 1 auto; min-width: 33.3333vw">
           <PayloadEditor
-            :subsystem="leafEntry.subsystem_name"
-            :name="leafEntry.node_name"
-            :mode="leafEntry.mode_name"
+            :subsystem="leafEntry.subsystem"
+            :name="leafEntry.name"
+            :mode="leafEntry.mode"
             :version="leafEntry.version"
             :category="leafEntry.category"
           ></PayloadEditor>
@@ -91,7 +90,7 @@ export function parseBundlePath(at: string | undefined): string[] {
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNavStore } from '@/stores/nav'
+import { childLocator, useNavStore } from '@/stores/nav'
 import BundleColumn from './BundleColumn.vue'
 import PayloadEditor from './PayloadEditor.vue'
 import Spinner from './Spinner.vue'
@@ -101,9 +100,19 @@ const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
 
+// A path entry only opens a column or an editor once the key actually fills its alias
+const columns = computed(() =>
+  nav.bundlePath.flatMap((entry, index) => {
+    const locator = entry.category === null ? childLocator(entry) : undefined
+    return locator ? [{ index, ...locator }] : []
+  }),
+)
+
 const leafEntry = computed(() => {
   const last = nav.bundlePath.at(-1)
-  return last && last.category !== null && last.category !== 'external' ? last : undefined
+  if (!last || last.category === null || last.category === 'external') return undefined
+  const locator = childLocator(last)
+  return locator && { ...locator, category: last.category }
 })
 
 function pushPath() {

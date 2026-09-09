@@ -37,7 +37,7 @@ def upgrade() -> None:
             {
                 "node_id": node_id,
                 "name": "default",
-                "description": "Starter mode seed.",
+                "description": "Bootstrap default mode",
                 "created_by": "keytree_app",
             }
             for node_id in node_ids
