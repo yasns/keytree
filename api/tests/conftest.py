@@ -25,9 +25,7 @@ def alembic_config():
 
 @pytest.fixture(scope="session")
 def postgres(alembic_config):
-    """
-    Ephemeral postgres:17 migrated with `alembic upgrade heads` to preserve grants.
-    """
+    """Ephemeral postgres:17 migrated with `alembic upgrade heads` to preserve grants."""
     with PostgresContainer(
         POSTGRES_IMAGE,
         username="keytree",

@@ -19,6 +19,17 @@ export type BundleRoot = {
   version: number
 }
 
+/** The key filling a child alias, or undefined when the alias is empty (KeyChildMetaOut nulls its key fields together). */
+export function childLocator(child: KeyChildMetaOut): BundleRoot | undefined {
+  if (child.id === null || child.mode_name === null || child.version === null) return undefined
+  return {
+    subsystem: child.subsystem_name,
+    name: child.node_name,
+    mode: child.mode_name,
+    version: child.version,
+  }
+}
+
 export type Row = {
   path: string
   title: string
@@ -118,16 +129,36 @@ export const useNavStore = defineStore('nav', () => {
     nodeDetailCache.value.set(data.id, data)
   }
 
+  /** In-flight requests, so columns sharing a child node don't each fire their own. */
+  const nodeDetailPending = new Map<number, Promise<NodeOut>>()
+
   async function fetchNodeDetail(nodeId: number): Promise<NodeOut | undefined> {
     const cached = nodeDetailCache.value.get(nodeId)
     if (cached) return cached
-    const data = unwrap(
-      await api.GET('/api/nodes/{node_id}', {
-        params: { path: { node_id: nodeId } },
-      }),
-    )
-    nodeDetailCache.value.set(nodeId, data)
-    return data
+    const pending = nodeDetailPending.get(nodeId)
+    if (pending) return pending
+    const request = api
+      .GET('/api/nodes/{node_id}', { params: { path: { node_id: nodeId } } })
+      .then((res) => {
+        const data = unwrap(res)
+        nodeDetailCache.value.set(nodeId, data)
+        return data
+      })
+      .finally(() => nodeDetailPending.delete(nodeId))
+    nodeDetailPending.set(nodeId, request)
+    return request
+  }
+
+  /** Bumped by refreshKeys so key-backed views reload; watch it alongside their own props. */
+  const keysToken = ref(0)
+
+  /** Drops cached node/mode data and reloads the current node, so freshly committed versions show up. */
+  async function refreshKeys() {
+    nodeDetailCache.value.clear()
+    nodeDetailPending.clear()
+    keysToken.value++
+    if (nodeDetail.value)
+      await fetchNodeByPath(nodeDetail.value.subsystem_name, nodeDetail.value.name)
   }
 
   async function fetchModesByPath(subsystem: string, name: string): Promise<ModeOut[]> {
@@ -196,12 +227,9 @@ export const useNavStore = defineStore('nav', () => {
       if (!child) break
       path.push(child)
       if (child.category !== null) break // leaf: nothing further to descend into
-      locator = {
-        subsystem: child.subsystem_name,
-        name: child.node_name,
-        mode: child.mode_name,
-        version: child.version,
-      }
+      const next = childLocator(child)
+      if (!next) break // alias left empty by this key: no child bundle to open
+      locator = next
     }
     return path
   }
@@ -259,15 +287,18 @@ export const useNavStore = defineStore('nav', () => {
     activePanel,
     subsystemMenuOpen,
     nodeDetail,
+    nodeDetailCache,
     pendingNodeId,
     bundleRoot,
     bundlePath,
+    keysToken,
     rows,
     fetchSubsystems,
     subsystemDisplayName,
     fetchTree,
     fetchNodeByPath,
     fetchNodeDetail,
+    refreshKeys,
     fetchModesByPath,
     fetchKeyPayload,
     fetchKeyChildren,

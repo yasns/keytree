@@ -205,6 +205,7 @@ def upgrade() -> None:
         sa.Column("mode_id", sa.Integer(), nullable=False),
         sa.Column("base_key_id", sa.Integer(), nullable=True),
         sa.Column("copied_from_key_id", sa.Integer(), nullable=True),
+        sa.Column("expected_version", sa.Integer(), nullable=True),
         sa.Column("proposed_payload", sa.Text(), nullable=True),
         sa.Column("proposed_children", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("comment", sa.Text(), nullable=False),
@@ -222,6 +223,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "proposed_payload IS NOT NULL OR proposed_children IS NOT NULL",
             name=op.f("ck_staged_edit_proposes_something"),
+        ),
+        sa.CheckConstraint(
+            "expected_version > 0",
+            name=op.f("ck_staged_edit_expected_version_positive"),
         ),
         sa.ForeignKeyConstraint(
             ["base_key_id", "mode_id"],

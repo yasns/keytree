@@ -17,7 +17,6 @@ api.use(reauth)
 
 export type ApiError = { detail: unknown; status: number }
 
-// Normalizes a failed response into `{ detail, status }`
 function apiError(error: unknown, response: Response): ApiError {
   const detail =
     error && typeof error === 'object' && 'detail' in error

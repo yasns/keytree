@@ -41,11 +41,8 @@ def _build_tree(
     nodes: list[Node],
     edges: list[tuple[int, str, Node]],
 ) -> list[TreeOut]:
-    """
-    Assemble a subsystem's node_edge rows into a forest of TreeOut.
-    Root trees are the nodes with no parent inside this subsystem's boundary.
-    Recursion does not cross the subsystem boundary, in that case renders as a leaf.
-    """
+    """Roots are nodes with no parent in this subsystem; recursion stops at the subsystem
+    boundary, rendering the far side as a leaf."""
     children_by_parent: dict[int, list[tuple[str, Node]]] = {}
     for parent_id, alias, child in edges:
         children_by_parent.setdefault(parent_id, []).append((alias, child))

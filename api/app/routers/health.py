@@ -27,8 +27,7 @@ async def ready(session: SessionDep) -> dict[str, str]:
     try:
         await session.scalar(text("SELECT version_num FROM alembic_version"))
     except Exception:
-        # We don't want to leak any sensitive information to an unauthenticated client,
-        # so log it instead.
+        # Log instead of returning it, so an unauthenticated client can't see why.
         log.exception("readiness check failed")
         raise HTTPException(status_code=503, detail="database not ready") from None
 

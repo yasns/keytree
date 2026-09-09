@@ -3,19 +3,19 @@ from typing import cast
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, model_validator
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
 from app.db.models import Changeset, Key, Mode, Node, StagedEdit, Subsystem
-from app.routers.keys import key_or_404
+from app.routers.keys import keys_or_404
 from app.routers.user import upsert_app_user
 
 router = APIRouter(
-    prefix="/changeset",
+    prefix="/staging",
     dependencies=[Depends(JWTBearerClaims())],
-    tags=["changeset"],
+    tags=["staging"],
 )
 
 
@@ -26,7 +26,7 @@ class StagedEditIn(BaseModel):
     base_version: int
     proposed_payload: str | None = None
     proposed_children: dict[str, int | None] | None = None
-    """alias -> child key id, or None if this changeset should create the key."""
+    """alias -> child key id, or None if this changeset should produce the key."""
     comment: str
 
     @model_validator(mode="after")
@@ -39,7 +39,7 @@ class StagedEditIn(BaseModel):
 class ProposedChildOut(BaseModel):
     key_id: int
     mode_name: str
-    """Child's mode can be rendered by the caller without a second lookup."""
+    version: int
 
 
 class StagedEditOut(BaseModel):
@@ -48,6 +48,9 @@ class StagedEditOut(BaseModel):
     node_name: str
     mode_name: str
     base_version: int
+    """Version whose content this edit started from, which need not be the mode's tip."""
+    expected_version: int
+    """Version the commit will create."""
     category: str | None
     proposed_payload: str | None
     proposed_children: dict[str, ProposedChildOut | None] | None
@@ -68,24 +71,19 @@ _EditRow = tuple[StagedEdit, str, str, str, int, str | None]
 
 
 def _build_children(
-    proposed_children: object, child_modes: dict[int, str]
+    proposed_children: object, child_modes: dict[int, ProposedChildOut]
 ) -> dict[str, ProposedChildOut | None] | None:
-    """Resolves an edit's stored alias -> key id map into alias -> (key id, mode name)."""
     if proposed_children is None:
         return None
     children = cast("dict[str, int | None]", proposed_children)
     return {
-        alias: None
-        if key_id is None
-        else ProposedChildOut(key_id=key_id, mode_name=child_modes[key_id])
-        for alias, key_id in children.items()
+        alias: None if key_id is None else child_modes[key_id] for alias, key_id in children.items()
     }
 
 
 def _build_changeset(
-    changeset: Changeset, rows: list[_EditRow], child_modes: dict[int, str]
+    changeset: Changeset, rows: list[_EditRow], child_modes: dict[int, ProposedChildOut]
 ) -> ChangesetOut:
-    """Assembles a changeset and its edits."""
     return ChangesetOut(
         id=changeset.id,
         comment=changeset.comment,
@@ -98,6 +96,7 @@ def _build_changeset(
                 node_name=node_name,
                 mode_name=mode_name,
                 base_version=base_version,
+                expected_version=edit.expected_version,
                 category=category,
                 proposed_payload=edit.proposed_payload,
                 proposed_children=_build_children(edit.proposed_children, child_modes),
@@ -110,7 +109,7 @@ def _build_changeset(
     )
 
 
-async def _open_changeset(cern_login: str, session: SessionDep) -> Changeset | None:
+async def open_changeset(cern_login: str, session: SessionDep) -> Changeset | None:
     return await session.scalar(
         select(Changeset).where(
             Changeset.created_by == cern_login, Changeset.committed_at.is_(None)
@@ -119,9 +118,7 @@ async def _open_changeset(cern_login: str, session: SessionDep) -> Changeset | N
 
 
 async def _get_or_create_open_changeset(cern_login: str, session: SessionDep) -> Changeset:
-    """Returns the caller's open changeset, creating one if absent."""
-
-    changeset = await _open_changeset(cern_login, session)
+    changeset = await open_changeset(cern_login, session)
     if changeset is not None:
         return changeset
 
@@ -131,7 +128,7 @@ async def _get_or_create_open_changeset(cern_login: str, session: SessionDep) ->
     )
     _ = await session.execute(stmt)
     await session.commit()
-    changeset = await _open_changeset(cern_login, session)
+    changeset = await open_changeset(cern_login, session)
     assert changeset is not None
     return changeset
 
@@ -148,8 +145,8 @@ async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
     return list(rows.tuples())
 
 
-async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, str]:
-    """Mode name for every child key the given edits point at, in one query."""
+async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, ProposedChildOut]:
+    """Mode name and version for every child key the given edits point at, in one query."""
     key_ids = {
         key_id
         for edit, *_ in rows
@@ -159,26 +156,41 @@ async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, s
     if not key_ids:
         return {}
     rows_ = await session.execute(
-        select(Key.id, Mode.name).join(Mode, Mode.id == Key.mode_id).where(Key.id.in_(key_ids))
+        select(Key.id, Mode.name, Key.version)
+        .join(Mode, Mode.id == Key.mode_id)
+        .where(Key.id.in_(key_ids))
     )
-    return dict(rows_.tuples().all())
+    return {
+        key_id: ProposedChildOut(key_id=key_id, mode_name=mode_name, version=version)
+        for key_id, mode_name, version in rows_.tuples()
+    }
 
 
-async def _changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetOut:
+async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetOut:
     rows = await _edit_rows(changeset.id, session)
     return _build_changeset(changeset, rows, await _child_modes(rows, session))
+
+
+async def _tip_versions(mode_ids: set[int], session: SessionDep) -> dict[int, int]:
+    """Newest committed version per mode. Every mode id must already have at least one key."""
+    rows = await session.execute(
+        select(Key.mode_id, func.max(Key.version))
+        .where(Key.mode_id.in_(mode_ids))
+        .group_by(Key.mode_id)
+    )
+    return dict(rows.tuples().all())
 
 
 @router.get("/")
 async def get_changeset(request: Request, session: SessionDep) -> ChangesetOut | None:
     """Fetches the caller's open changeset and its staged edits, or null if none is open."""
-    changeset = await _open_changeset(request.state.claims["cern_upn"], session)
+    changeset = await open_changeset(request.state.claims["cern_upn"], session)
     if changeset is None:
         return None
-    return await _changeset_out(changeset, session)
+    return await changeset_out(changeset, session)
 
 
-@router.post("/edits")
+@router.post("/")
 async def stage_edits(
     edits: list[StagedEditIn], request: Request, session: SessionDep
 ) -> ChangesetOut:
@@ -190,16 +202,13 @@ async def stage_edits(
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
-    base_keys = [
-        await key_or_404(
-            edit_in.subsystem_name,
-            edit_in.node_name,
-            edit_in.mode_name,
-            edit_in.base_version,
-            session,
-        )
-        for edit_in in edits
-    ]
+    base_keys = await keys_or_404(
+        [
+            (edit_in.subsystem_name, edit_in.node_name, edit_in.mode_name, edit_in.base_version)
+            for edit_in in edits
+        ],
+        session,
+    )
 
     # Staged edits are immutable, so re-staging deletes then inserts.
     _ = await session.execute(
@@ -209,12 +218,15 @@ async def stage_edits(
         )
     )
 
+    tips = await _tip_versions({key.mode_id for key in base_keys}, session)
+
     for edit_in, base_key in zip(edits, base_keys, strict=True):
         session.add(
             StagedEdit(
                 changeset_id=changeset.id,
                 mode_id=base_key.mode_id,
                 base_key_id=base_key.id,
+                expected_version=tips[base_key.mode_id] + 1,
                 proposed_payload=edit_in.proposed_payload,
                 proposed_children=edit_in.proposed_children,
                 comment=edit_in.comment,
@@ -223,7 +235,7 @@ async def stage_edits(
         )
 
     await session.commit()
-    return await _changeset_out(changeset, session)
+    return await changeset_out(changeset, session)
 
 
 @router.delete("/", status_code=204)

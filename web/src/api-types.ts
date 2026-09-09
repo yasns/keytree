@@ -104,7 +104,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/changeset/": {
+    "/api/staging/": {
         parameters: {
             query?: never;
             header?: never;
@@ -115,20 +115,24 @@ export interface paths {
          * Get Changeset
          * @description Fetches the caller's open changeset and its staged edits, or null if none is open.
          */
-        get: operations["get_changeset_api_changeset__get"];
+        get: operations["get_changeset_api_staging__get"];
         put?: never;
-        post?: never;
+        /**
+         * Stage Edits
+         * @description Stages (or re-stages) a set of edits in the caller's open changeset.
+         */
+        post: operations["stage_edits_api_staging__post"];
         /**
          * Discard Changeset
          * @description Discards the caller's open changeset and all its staged edits.
          */
-        delete: operations["discard_changeset_api_changeset__delete"];
+        delete: operations["discard_changeset_api_staging__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/changeset/edits": {
+    "/api/commit/rebase": {
         parameters: {
             query?: never;
             header?: never;
@@ -138,10 +142,31 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stage Edits
-         * @description Stages (or re-stages) a set of edits in the caller's open changeset.
+         * Rebase Changeset
+         * @description Moves every conflicting edit onto the version committed since it was staged. The proposed
+         *     payload and children are preserved.
          */
-        post: operations["stage_edits_api_changeset_edits_post"];
+        post: operations["rebase_changeset_api_commit_rebase_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/commit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Changeset
+         * @description Materialises every staged edit in the caller's open changeset as a key, then closes it.
+         */
+        post: operations["commit_changeset_api_commit__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -217,7 +242,8 @@ export interface paths {
         };
         /**
          * Get Key Children
-         * @description Returns one level of a bundle's key_child info. Crosses subsystem boundaries freely.
+         * @description Returns one level of a bundle. One row per alias, whether emptied or not. Crosses subsystem
+         *     boundaries freely.
          */
         get: operations["get_key_children_api_keys__subsystem_name___node_name___mode_name___version__children_get"];
         put?: never;
@@ -348,6 +374,34 @@ export interface components {
             /** Edits */
             edits: components["schemas"]["StagedEditOut"][];
         };
+        /** CommitIn */
+        CommitIn: {
+            /** Comment */
+            comment: string;
+            /**
+             * Overwrite Conflicts
+             * @default false
+             */
+            overwrite_conflicts: boolean;
+        };
+        /**
+         * ConflictOut
+         * @description A staged edit whose target version was taken while it sat in the changeset.
+         */
+        ConflictOut: {
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Base Version */
+            base_version: number;
+            /** Expected Version */
+            expected_version: number;
+            /** Tip Version */
+            tip_version: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -356,11 +410,11 @@ export interface components {
         /** KeyChildMetaOut */
         KeyChildMetaOut: {
             /** Id */
-            id: number;
+            id: number | null;
             /** Alias */
             alias: string;
             /** Label */
-            label: string;
+            label: string | null;
             /** Node Id */
             node_id: number;
             /** Node Name */
@@ -372,18 +426,15 @@ export interface components {
             /** Payload */
             payload: string | null;
             /** Mode Name */
-            mode_name: string;
+            mode_name: string | null;
             /** Version */
-            version: number;
+            version: number | null;
             /** Created By */
-            created_by: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            created_by: string | null;
+            /** Created At */
+            created_at: string | null;
             /** Comment */
-            comment: string;
+            comment: string | null;
         };
         /** KeyOut */
         KeyOut: {
@@ -448,6 +499,8 @@ export interface components {
             key_id: number;
             /** Mode Name */
             mode_name: string;
+            /** Version */
+            version: number;
         };
         /** StagedEditIn */
         StagedEditIn: {
@@ -480,6 +533,8 @@ export interface components {
             mode_name: string;
             /** Base Version */
             base_version: number;
+            /** Expected Version */
+            expected_version: number;
             /** Category */
             category: string | null;
             /** Proposed Payload */
@@ -751,7 +806,7 @@ export interface operations {
             };
         };
     };
-    get_changeset_api_changeset__get: {
+    get_changeset_api_staging__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -771,25 +826,7 @@ export interface operations {
             };
         };
     };
-    discard_changeset_api_changeset__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    stage_edits_api_changeset_edits_post: {
+    stage_edits_api_staging__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -809,6 +846,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_changeset_api_staging__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rebase_changeset_api_commit_rebase_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+        };
+    };
+    commit_changeset_api_commit__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Target versions taken since */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictOut"][];
                 };
             };
             /** @description Validation Error */

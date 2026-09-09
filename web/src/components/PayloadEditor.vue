@@ -6,12 +6,12 @@
       :mode="mode"
       :version="version"
       :payload="key"
-      :modified="dirty"
       :staged="staged"
     ></KeyMetadata>
 
     <EditorToolbar
       :dirty="dirty"
+      :staged="!!staged"
       :staged-comment="staged?.comment"
       @save="save"
       @discard="resetToBaseline"
@@ -91,6 +91,14 @@ async function loadPayload() {
 }
 
 watch(() => [subsystem, name, mode, version], loadPayload)
+
+// Reload committed data after a commit, unless it would throw away an unsaved payload
+watch(
+  () => nav.keysToken,
+  () => {
+    if (!dirty.value) void loadPayload()
+  },
+)
 
 watch(staged, () => {
   if (!dirty.value) resetToBaseline()

@@ -39,4 +39,11 @@ export function keyRoute(
   return { name: 'editor', params: { subsystem, name, mode, version: `v${version}` } } as const
 }
 
+/** Reads back the `vN` version segment written by keyRoute. */
+export function parseVersion(v: string | undefined): number | undefined {
+  if (!v || v[0] !== 'v') return undefined
+  const n = Number(v.slice(1))
+  return Number.isFinite(n) ? n : undefined
+}
+
 export default router

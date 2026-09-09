@@ -30,8 +30,7 @@ class NodeSpec(_NodeSpecRequired, total=False):
     children: list[str]
     """Sibling nodes of the same subsystem, which this node bundles."""
     leaves: list[str]
-    """Payload nodes owned by this one. If specified, this node becomes a bundle.
-    """
+    """Payload nodes owned by this one; if specified, this node becomes a bundle."""
     mode_group: str
     """Nodes sharing a value keep matching MODE.name sets."""
 

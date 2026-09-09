@@ -11,10 +11,11 @@ from fastapi.responses import RedirectResponse
 
 from .config import settings
 from .db.base import engine
-from .routers.changesets import router as changesets_router
+from .routers.commit import router as commit_router
 from .routers.health import router as health_router
 from .routers.keys import router as keys_router
 from .routers.nodes import router as nodes_router
+from .routers.staging import router as staging_router
 from .routers.subsystems import router as subsystems_router
 from .routers.user import router as user_router
 
@@ -68,7 +69,8 @@ def root() -> RedirectResponse:
     return RedirectResponse("/api/docs")
 
 
-app.include_router(changesets_router, prefix="/api")
+app.include_router(staging_router, prefix="/api")
+app.include_router(commit_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(keys_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")

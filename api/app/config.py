@@ -21,10 +21,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> URL:
-        """Credentials differ per context.
-
-        The API connects as the least-privileged app user, migrations as the owner.
-        """
+        """The API connects as the least-privileged app user, migrations as the owner."""
         return URL.create(
             "postgresql+psycopg",
             username=self.postgres_user,

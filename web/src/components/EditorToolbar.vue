@@ -4,12 +4,39 @@
       <v-btn
         :disabled="!dirty"
         @click="discardDialog = true"
-        icon="mdi-arrow-u-left-top"
-        size="small"
-      ></v-btn>
+        prepend-icon="mdi-cancel"
+        color="error"
+        >Discard</v-btn
+      >
     </template>
+
     <template v-slot:append>
-      <v-btn prepend-icon="mdi-check" :disabled="!dirty" @click="saveDialog = true"> Save</v-btn>
+      <v-btn prepend-icon="mdi-content-save" :disabled="!dirty" @click="saveDialog = true">
+        Save</v-btn
+      >
+
+      <v-tooltip v-if="dirty" text="Unsaved changes">
+        <template v-slot:activator="{ props }">
+          <v-btn
+            icon="mdi-cloud-alert-outline"
+            color="warning"
+            density="comfortable"
+            :disabled="!dirty"
+            @click="saveDialog = true"
+            v-bind="props"
+          ></v-btn>
+        </template>
+      </v-tooltip>
+      <v-tooltip v-else-if="staged" activator="parent" text="Saved">
+        <template v-slot:activator="{ props }">
+          <v-btn
+            icon="mdi-cloud-check-variant"
+            density="comfortable"
+            v-bind="props"
+            :disabled="dirty"
+          ></v-btn>
+        </template>
+      </v-tooltip>
     </template>
   </v-toolbar>
 
@@ -33,7 +60,7 @@ import { ref } from 'vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SaveDialog from './SaveDialog.vue'
 
-defineProps<{ dirty: boolean; stagedComment?: string }>()
+defineProps<{ dirty: boolean; staged: boolean; stagedComment?: string }>()
 const emit = defineEmits<{ save: [comment: string]; discard: [] }>()
 
 const saveDialog = ref(false)
