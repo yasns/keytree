@@ -276,7 +276,10 @@ export const useNavStore = defineStore('nav', () => {
     selectedSubsystemId.value = node.subsystem_id
     goToName(node.name)
     const name = subsystemName(node.subsystem_id)
-    snackbar.notify(`Jumped to ${name ? subsystemDisplayName(name) : 'another subsystem'}`, 'info')
+    snackbar.notify(
+      `You are editing ${node.name} in ${name ? subsystemDisplayName(name) : 'another subsystem'}`,
+      'info',
+    )
   }
 
   return {
@@ -294,6 +297,7 @@ export const useNavStore = defineStore('nav', () => {
     keysToken,
     rows,
     fetchSubsystems,
+    subsystemName,
     subsystemDisplayName,
     fetchTree,
     fetchNodeByPath,

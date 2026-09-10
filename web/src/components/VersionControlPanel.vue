@@ -20,8 +20,16 @@
       @confirm="changes.discardAll"
     ></ConfirmDialog>
 
-    <div class="overflow-y-auto flex-grow-1 mt-2" style="min-height: 0">
-      <v-list v-if="changes.visibleEdits.length" density="compact" class="py-0">
+    <div
+      v-if="!changes.visibleEdits.length"
+      class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4 mt-2"
+      style="min-height: 0"
+    >
+      No pending changes.
+    </div>
+
+    <div v-else class="overflow-y-auto flex-grow-1 mt-2" style="min-height: 0">
+      <v-list density="compact" class="py-0">
         <v-list-item v-for="edit in changes.visibleEdits" :key="edit.id">
           <v-list-item-title class="text-body-medium">
             <code>
@@ -33,7 +41,6 @@
           <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
         </v-list-item>
       </v-list>
-      <p v-else class="text-medium-emphasis px-4">No pending changes.</p>
     </div>
 
     <v-dialog v-model="conflictsOpen" max-width="560" persistent>

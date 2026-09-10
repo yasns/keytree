@@ -4,17 +4,21 @@
       <div
         v-show="!collapsed"
         ref="scroller"
-        class="d-flex h-100 flex-grow-1"
-        style="min-width: 0; overflow-x: auto"
+        class="d-flex h-100 flex-grow-1 overflow-x-auto"
+        style="min-width: 0"
       >
         <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
           <BundleColumn
+            ref="rootColumnRef"
             :subsystem="nav.bundleRoot.subsystem"
             :name="nav.bundleRoot.name"
             :mode="nav.bundleRoot.mode"
             :version="nav.bundleRoot.version"
+            :depth="0"
             :selected-alias="nav.bundlePath[0]?.alias"
+            :can-queue="false"
             @select="(child) => onSelect(0, child)"
+            @close="() => onClose(0)"
           ></BundleColumn>
         </div>
 
@@ -25,12 +29,17 @@
           style="flex: 0 0 auto; width: 400px"
         >
           <BundleColumn
+            :ref="(el) => setColumnRef(column.index, el)"
             :subsystem="column.subsystem"
             :name="column.name"
             :mode="column.mode"
             :version="column.version"
+            :depth="column.index + 1"
             :selected-alias="nav.bundlePath[column.index + 1]?.alias"
+            :can-queue="true"
             @select="(child) => onSelect(column.index + 1, child)"
+            @close="() => onClose(column.index + 1)"
+            @queue="() => rippleTo(column.index)"
           ></BundleColumn>
         </div>
       </div>
@@ -64,6 +73,8 @@
             :mode="leafEntry.mode"
             :version="leafEntry.version"
             :category="leafEntry.category"
+            :can-queue="true"
+            @queue="() => rippleTo(nav.bundlePath.length - 1)"
           ></PayloadEditor>
         </div>
       </template>
@@ -100,6 +111,22 @@ const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
 
+const rootColumnRef = ref<InstanceType<typeof BundleColumn>>()
+const columnRefs = new Map<number, InstanceType<typeof BundleColumn>>()
+
+function setColumnRef(index: number, el: unknown) {
+  if (el) columnRefs.set(index, el as InstanceType<typeof BundleColumn>)
+  else columnRefs.delete(index)
+}
+
+// A column's alias-in-parent is bundlePath[p]; its parent is the root when p===0, else loop-column p-1
+function rippleTo(p: number) {
+  const alias = nav.bundlePath[p]?.alias
+  if (alias === undefined) return
+  const parent = p === 0 ? rootColumnRef.value : columnRefs.get(p - 1)
+  void parent?.updateAliasToLatest(alias)
+}
+
 // A path entry only opens a column or an editor once the key actually fills its alias
 const columns = computed(() =>
   nav.bundlePath.flatMap((entry, index) => {
@@ -125,6 +152,11 @@ function pushPath() {
 
 function onSelect(i: number, child: KeyChildMetaOut) {
   nav.bundlePath.splice(i, Infinity, child)
+  pushPath()
+}
+
+function onClose(i: number) {
+  nav.bundlePath.splice(i, Infinity)
   pushPath()
 }
 

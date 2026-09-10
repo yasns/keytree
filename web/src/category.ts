@@ -15,7 +15,7 @@ export const CATEGORY: Record<string, CategoryMeta> = {
 }
 
 export function iconFor(node: TreeOut | KeyChildMetaOut, isAlias: boolean): string {
-  if (isAlias) return 'mdi-open-in-new'
+  if (isAlias) return 'mdi-link'
   if (node.category === null) return 'mdi-folder-key-outline'
   return CATEGORY[node.category]?.icon ?? 'mdi-script-text-key'
 }

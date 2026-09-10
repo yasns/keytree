@@ -18,27 +18,37 @@ export function conflictsFrom(err: unknown): Conflict[] | undefined {
 export const useChangesStore = defineStore('changes', () => {
   const changeset = ref<ChangesetOut | null>(null)
 
-  const dirtySources = reactive(new Set<symbol>())
-  const dirty = computed(() => dirtySources.size > 0)
+  // Bundle-path depth each dirty source belongs to, so a column can ask whether anything deeper is dirty
+  const dirtyDepths = reactive(new Map<symbol, number>())
 
-  function setDirty(key: symbol, value: boolean) {
-    if (value) dirtySources.add(key)
-    else dirtySources.delete(key)
+  function setDirty(key: symbol, value: boolean, depth: number) {
+    if (value) dirtyDepths.set(key, depth)
+    else dirtyDepths.delete(key)
+  }
+
+  function dirtyBeyond(depth: number): boolean {
+    for (const d of dirtyDepths.values()) if (d > depth) return true
+    return false
   }
 
   const confirmOpen = ref(false)
   let resolveConfirmOpen: ((leave: boolean) => void) | null = null
 
-  function confirmDiscard(): Promise<boolean> {
-    if (!dirty.value) return Promise.resolve(true)
+  /** Confirms discarding dirty sources deeper than `depth` (default: any depth, i.e. anything dirty at all). */
+  function confirmDiscardBeyond(depth: number = -Infinity): Promise<boolean> {
+    if (!dirtyBeyond(depth)) return Promise.resolve(true)
     confirmOpen.value = true
     return new Promise((resolve) => {
       resolveConfirmOpen = (leave) => {
-        if (leave) dirtySources.clear()
+        if (leave) {
+          for (const [key, d] of dirtyDepths) if (d > depth) dirtyDepths.delete(key)
+        }
         resolve(leave)
       }
     })
   }
+
+  const confirmDiscard = () => confirmDiscardBeyond()
 
   function resolveConfirm(leave: boolean) {
     confirmOpen.value = false
@@ -112,16 +122,18 @@ export const useChangesStore = defineStore('changes', () => {
     commit,
     rebase,
     setDirty,
+    dirtyBeyond,
     confirmOpen,
     confirmDiscard,
+    confirmDiscardBeyond,
     resolveConfirm,
   }
 })
 
-/** Registers a component's unsaved-changes flag with the changes store. */
-export function useDirtySource(dirty: Ref<boolean>) {
+/** Registers a component's unsaved-changes flag with the changes store, tagged with its bundle-path depth. */
+export function useDirtySource(dirty: Ref<boolean>, depth: number) {
   const changes = useChangesStore()
   const source = Symbol('dirty-source')
-  watch(dirty, (value) => changes.setDirty(source, value), { immediate: true })
-  onBeforeUnmount(() => changes.setDirty(source, false))
+  watch(dirty, (value) => changes.setDirty(source, value, depth), { immediate: true })
+  onBeforeUnmount(() => changes.setDirty(source, false, depth))
 }

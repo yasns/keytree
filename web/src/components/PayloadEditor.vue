@@ -13,7 +13,9 @@
       :dirty="dirty"
       :staged="!!staged"
       :staged-comment="staged?.comment"
+      :can-queue="!!canQueue"
       @save="save"
+      @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
     ></EditorToolbar>
 
@@ -36,13 +38,16 @@ import EditorToolbar from './EditorToolbar.vue'
   getWorker: () => new EditorWorker(),
 }
 
-const { subsystem, name, mode, version, category } = defineProps<{
+const { subsystem, name, mode, version, category, canQueue } = defineProps<{
   subsystem: string
   name: string
   mode: string
   version: number
   category?: string | null
+  canQueue?: boolean
 }>()
+
+const emit = defineEmits<{ queue: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
@@ -51,7 +56,8 @@ const theme = useTheme()
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
 const dirty = ref(false)
-useDirtySource(dirty)
+// Always the rightmost column, so nothing is ever deeper than it
+useDirtySource(dirty, Infinity)
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let baseValue = ''
 
@@ -117,6 +123,11 @@ async function save(comment: string) {
     },
   ])
   resetToBaseline()
+}
+
+async function saveAndQueue(comment: string) {
+  await save(comment)
+  emit('queue')
 }
 
 watch(
