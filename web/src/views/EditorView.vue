@@ -108,6 +108,7 @@ async function syncToRoute() {
 
   // No mode in the URL: send the user home with mode picker for this node
   if (!mode) {
+    nav.pendingNodeId = detail.id
     nav.activePanel = BrowsePanel
     router.replace('/')
   }

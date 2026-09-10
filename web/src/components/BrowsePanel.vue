@@ -28,15 +28,23 @@
         </v-chip-group>
       </div>
 
-      <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
+      <div
+        v-if="nav.selectedSubsystemId === null"
+        class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4"
+        style="min-height: 0"
+      >
+        Select a subsystem to browse its keys.
+      </div>
+
+      <div v-else class="overflow-y-auto flex-grow-1" style="min-height: 0">
         <v-treeview
           :items="nav.rows"
           item-value="path"
           activatable
           slim
           density="compact"
-          class=""
-          indent-lines="default"
+          fluid
+          indent-lines
           :item-props="itemProps"
           v-model:opened="nav.openedRow"
           v-model:activated="nav.activatedRow"
@@ -67,18 +75,16 @@
     </div>
 
     <div v-if="detail" class="d-flex flex-column border-t-sm" style="flex: 1 1 0; min-height: 0">
-      <div class="d-flex align-center px-4 ga-1">
-        <h5>Select mode</h5>
+      <div class="d-flex align-center justify-space-between pa-4 ga-1">
+        <span class="text-title-small">Select mode</span>
 
-        <v-spacer></v-spacer>
-
-        <v-btn prepend-icon="mdi-close" size="small" variant="flat" @click="clearPending"
-          >Cancel</v-btn
+        <v-btn prepend-icon="mdi-arrow-left" variant="plain" size="small" @click="clearPending"
+          >Back to Browsing</v-btn
         >
       </div>
 
       <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
-        <v-list v-if="filteredModes.length" density="compact">
+        <v-list v-if="filteredModes.length" density="compact" class="py-0">
           <v-list-item
             v-for="mode in filteredModes"
             :key="mode.id"
@@ -109,13 +115,13 @@
               <v-menu>
                 <template v-slot:activator="{ props }">
                   <v-chip
-                    size="small"
-                    variant="outlined"
+                    variant="plain"
                     append-icon="mdi-chevron-down"
                     @click.stop
                     v-bind="props"
+                    density="compact"
                   >
-                    v{{ mode.versions[0] }}
+                    v{{ selectedVersion(mode) }}
                   </v-chip>
                 </template>
                 <v-list density="compact">
@@ -134,10 +140,21 @@
       </div>
 
       <v-chip-group v-model="filter" mandatory class="px-2">
+        <v-chip value="all" size="small" variant="outlined" filter>All</v-chip>
         <v-chip value="active" size="small" variant="outlined" filter>Active</v-chip>
         <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
       </v-chip-group>
     </div>
+
+    <ConfirmDialog
+      v-model="aliasJumpOpen"
+      :title="`Jump to ${aliasJumpTitle}?`"
+      :text="`This key is edited in ${aliasJumpTitle}. Jump there?`"
+      confirm-text="Jump"
+      confirm-color="primary"
+      @confirm="confirmAliasJump"
+      @cancel="cancelAliasJump"
+    ></ConfirmDialog>
   </div>
 </template>
 
@@ -147,7 +164,7 @@ import { useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
 import { useNavStore, walk, type Row } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
-import { useSnackbarStore } from '@/stores/snackbar'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']
@@ -155,13 +172,15 @@ type Subsystem = components['schemas']['SubsystemOut']
 const nav = useNavStore()
 const router = useRouter()
 const changes = useChangesStore()
-const snackbar = useSnackbarStore()
 
 const locked = computed(() => nav.pendingNodeId !== null)
 const pendingPath = computed(() => nav.activatedRow[0])
 
 function itemProps(item: Record<string, unknown>) {
-  return { disabled: locked.value && (item as Row).path !== pendingPath.value }
+  const row = item as Row
+  return {
+    disabled: row.node.category === 'external' || (locked.value && row.path !== pendingPath.value),
+  }
 }
 
 async function clearPending() {
@@ -215,20 +234,36 @@ function onSubsystemSelect(id: number | null) {
   nav.selectedSubsystemId = id
 }
 
+const aliasJumpOpen = ref(false)
+const aliasJumpRow = ref<Row | undefined>(undefined)
+let aliasJumpPrevious: string[] = []
+const aliasJumpTitle = computed(() => {
+  const subsystemId = aliasJumpRow.value?.node.subsystem_id
+  const target = subsystemId !== undefined ? nav.subsystemName(subsystemId) : undefined
+  return target ? nav.subsystemDisplayName(target) : 'another subsystem'
+})
+
+function confirmAliasJump() {
+  if (aliasJumpRow.value) nav.goToAlias(aliasJumpRow.value.node)
+  aliasJumpRow.value = undefined
+}
+
+function cancelAliasJump() {
+  nav.activatedRow = aliasJumpPrevious
+  aliasJumpRow.value = undefined
+}
+
 watch(
   () => nav.rows,
   (rows) => {
-    const root = rows.length === 1 ? rows[0] : undefined
-    if (root?.children && !nav.openedRow.includes(root.path)) {
-      nav.openedRow = [root.path]
-    }
+    nav.openedRow = [...walk(rows)].filter((r) => r.children).map((r) => r.path)
   },
   { immediate: true },
 )
 
 watch(
   () => nav.activatedRow,
-  (keys) => {
+  (keys, oldKeys) => {
     if (!keys[0]) {
       if (locked.value) clearPending()
       return
@@ -236,18 +271,12 @@ watch(
     const row = nav.findRow((r) => r.path === keys[0])
     if (!row) return
     if (row.isAlias) {
-      nav.goToAlias(row.node)
+      aliasJumpRow.value = row
+      aliasJumpPrevious = oldKeys ?? []
+      aliasJumpOpen.value = true
       return
     }
-    if (row.node.category === 'external') {
-      const parent = nav.findRow((r) => r.path === row.ancestors.at(-1))
-      snackbar.notify(`${row.title} is selected inside its parent key`, 'info')
-      nav.activatedRow = parent ? [parent.path] : []
-      return
-    }
-    if (row.children && !nav.openedRow.includes(row.path)) {
-      nav.openedRow = [...nav.openedRow, row.path]
-    }
+    nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]
     nav.pendingNodeId = row.node.id
   },
 )
@@ -273,7 +302,7 @@ const chips = computed(() => {
 type ModeOut = components['schemas']['ModeOut']
 type NodeOut = components['schemas']['NodeOut']
 
-const filter = ref<'active' | 'archived'>('active')
+const filter = ref<'active' | 'archived' | 'all'>('active')
 const detail = ref<NodeOut | undefined>(undefined)
 
 function formatDate(iso: string) {
@@ -290,13 +319,17 @@ watch(
 
 const filteredModes = computed(() =>
   (detail.value?.modes ?? []).filter(
-    (m) => (m.archived_at === null) === (filter.value === 'active'),
+    (m) => filter.value === 'all' || (m.archived_at === null) === (filter.value === 'active'),
   ),
 )
 
 function isSelected(mode: ModeOut) {
   const root = nav.bundleRoot
   return root !== null && root.name === detail.value?.name && root.mode === mode.name
+}
+
+function selectedVersion(mode: ModeOut) {
+  return isSelected(mode) ? nav.bundleRoot!.version : mode.versions[0]
 }
 
 async function activate(mode: ModeOut, version: number | undefined) {
@@ -308,3 +341,11 @@ async function activate(mode: ModeOut, version: number | undefined) {
   router.push(keyRoute(d.subsystem_name, d.name, mode.name, version))
 }
 </script>
+
+<style scoped>
+:deep(.v-treeview-item),
+:deep(.v-list-item) {
+  min-height: 28px;
+  font-size: 0.8125rem;
+}
+</style>

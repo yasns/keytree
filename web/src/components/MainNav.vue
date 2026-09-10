@@ -33,6 +33,16 @@
       <v-divider></v-divider>
 
       <v-list density="compact" nav>
+        <v-tooltip :text="`Toggle ${isDark ? 'Light' : 'Dark'} Mode`" location="end">
+          <template v-slot:activator="{ props: props }">
+            <v-list-item @click="theme.cycle()" v-bind="props">
+              <template v-slot:prepend>
+                <v-icon :icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"></v-icon>
+              </template>
+            </v-list-item>
+          </template>
+        </v-tooltip>
+
         <v-menu>
           <template v-slot:activator="{ props: menuProps }">
             <v-tooltip text="Account" location="end">
@@ -60,27 +70,6 @@
               </div>
             </v-card-text>
           </v-card>
-        </v-menu>
-        <v-menu>
-          <template v-slot:activator="{ props: menuProps }">
-            <v-tooltip text="Settings" location="end">
-              <template v-slot:activator="{ props: tooltipProps }">
-                <v-list-item
-                  prepend-icon="mdi-cog"
-                  v-bind="{ ...menuProps, ...tooltipProps }"
-                ></v-list-item>
-              </template>
-            </v-tooltip>
-          </template>
-
-          <v-list>
-            <v-list-item @click="theme.cycle()">
-              <template v-slot:prepend>
-                <v-icon :icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"></v-icon>
-              </template>
-              <v-list-item-title>{{ isDark ? 'Light Mode' : 'Dark Mode' }}</v-list-item-title>
-            </v-list-item>
-          </v-list>
         </v-menu>
       </v-list>
     </template>

@@ -13,38 +13,36 @@
       :dirty="dirty"
       :staged="!!staged"
       :staged-comment="staged?.comment"
+      :can-queue="!!canQueue"
       @save="save"
+      @save-and-queue="saveAndQueue"
       @discard="applyBaseline"
     ></EditorToolbar>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
-      <v-list v-if="children" class="py-0">
+      <v-list v-if="children" activatable>
         <v-list-item
           v-for="row in rows"
           :key="row.child.alias"
           :active="row.child.alias === selectedAlias"
           :class="{ 'row-changed': row.changed, 'row-dirty': row.dirty }"
-          @click="emit('select', row.child)"
+          @click="onRowClick(row.child)"
           class="py-2 px-2"
         >
-          <div class="d-flex flex-column ga-1">
-            <div class="d-flex align-center ga-1">
-              <v-icon
-                :icon="iconFor(row.child, row.child.subsystem_name !== subsystem)"
-                size="x-small"
-              ></v-icon>
-
-              <span class="text-title-medium">{{ row.child.alias }}</span>
-            </div>
+          <div class="d-flex align-center ga-2">
+            <v-icon
+              :icon="iconFor(row.child, row.child.subsystem_name !== subsystem)"
+              size="small"
+            ></v-icon>
 
             <v-select
               v-if="row.child.category === 'external'"
               class="key-select"
-              :model-value="externalChoice.get(row.child.alias)"
+              :model-value="externalChoice.get(row.child.alias) || undefined"
               :items="externalItems(row.child)"
               :disabled="row.child.id === null"
+              :label="row.child.alias"
               placeholder="Select key"
-              density="compact"
               hide-details
               @click.stop
               @update:model-value="(v) => externalChoice.set(row.child.alias, v)"
@@ -54,34 +52,41 @@
               </template>
             </v-select>
             <template v-else>
-              <v-select
-                class="key-select"
-                :model-value="childChoice.get(row.child.alias)?.mode"
-                :items="modeItems(row.child)"
-                placeholder="Select key"
-                density="compact"
-                hide-details
-                @click.stop
-                @update:model-value="(v) => onModeSelect(row.child, v)"
-              >
-                <template #item="{ props: itemProps }">
-                  <v-list-item v-bind="itemProps" class="key-select"></v-list-item>
-                </template>
-                <template #selection>{{ selectionLabel(row.child) }}</template>
-              </v-select>
-
-              <div v-if="row.upgrade" class="text-caption text-medium-emphasis">
-                {{
-                  row.upgrade.staged
-                    ? 'A newer version is staged in this changeset.'
-                    : 'A newer version is available.'
-                }}
-                <a
-                  href="#"
-                  class="text-primary"
-                  @click.stop.prevent="updateToLatest(row.child, row.upgrade)"
-                  >Update to v{{ row.upgrade.version }}</a
+              <div class="d-flex flex-column ga-1 w-100">
+                <v-select
+                  class="key-select"
+                  :model-value="modeValue(childChoice.get(row.child.alias))"
+                  :items="modeItems(row.child)"
+                  :label="row.child.alias"
+                  placeholder="Select key"
+                  hide-details
+                  @click.stop
+                  @update:model-value="(v) => onModeSelect(row.child, v)"
                 >
+                  <template #item="{ props: itemProps }">
+                    <v-list-item v-bind="itemProps" class="key-select"></v-list-item>
+                  </template>
+                  <template #selection>{{ selectionLabel(row.child) }}</template>
+                </v-select>
+
+                <div v-if="row.upgrade" class="text-label-medium text-medium-emphasis">
+                  <v-icon
+                    icon="mdi-alert-circle-outline"
+                    size="x-small"
+                    style="vertical-align: baseline"
+                  ></v-icon>
+                  {{
+                    row.upgrade.staged
+                      ? 'A newer version is pending.'
+                      : 'A newer version is available.'
+                  }}
+                  <a
+                    href="#"
+                    class="text-primary"
+                    @click.stop.prevent="updateToLatest(row.child, row.upgrade)"
+                    >Update to v{{ row.upgrade.version }}</a
+                  >
+                </div>
               </div>
             </template>
           </div>
@@ -114,10 +119,13 @@ const props = defineProps<{
   name: string
   mode: string
   version: number
+  /** This column's bundle-path index, i.e. what a row click here writes to. Root is 0. */
+  depth: number
   selectedAlias?: string
+  canQueue?: boolean
 }>()
 
-const emit = defineEmits<{ select: [child: KeyChildMetaOut] }>()
+const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
@@ -173,22 +181,30 @@ function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   return { version, staged: committed !== undefined && version > committed }
 }
 
-/** Items are what picking them gets you, so each is labelled at its mode's tip. */
+/** Value contains the tip version so reselecting a newer tip is a value change. */
 function modeItems(child: KeyChildMetaOut) {
   return [
     { title: 'None', value: '' },
-    ...modeOptions(child).map((m) => ({
-      title: `${child.subsystem_name}/${child.node_name}/${m.name}/v${m.versions[0]}`,
-      value: m.name,
-    })),
+    ...modeOptions(child).map((m) => {
+      const version = tipOf(child, m.name)?.version ?? m.versions[0]
+      return {
+        title: `${child.subsystem_name}/${child.node_name}/${m.name}/v${version}`,
+        value: `${m.name}/${version}`,
+      }
+    }),
   ]
+}
+
+/** Undefined for a cleared row so a placeholder is shown. */
+function modeValue(choice: ChildChoice | undefined): string | undefined {
+  if (!choice?.mode) return undefined
+  return `${choice.mode}/${choice.version ?? ''}`
 }
 
 /** The field shows the version this row actually points at, which may be behind its mode's tip. */
 function selectionLabel(child: KeyChildMetaOut): string {
   const choice = childChoice.get(child.alias)
-  if (!choice) return ''
-  if (!choice.mode) return 'None'
+  if (!choice?.mode) return ''
   const base = `${child.subsystem_name}/${child.node_name}/${choice.mode}`
   return choice.version === null ? base : `${base}/v${choice.version}`
 }
@@ -229,24 +245,25 @@ function applyBaseline() {
   }
 }
 
-async function onModeSelect(child: KeyChildMetaOut, modeName: string) {
-  if (modeName === '') {
+async function onModeSelect(child: KeyChildMetaOut, value: string) {
+  if (value === '') {
     // Cleared: the map entry for this alias is dropped, so the commit leaves it with no child row
     childChoice.set(child.alias, { keyId: null, mode: '', version: null })
-    return
+  } else {
+    const modeName = value.slice(0, value.lastIndexOf('/'))
+    const tip = tipOf(child, modeName)
+    if (modeName === child.mode_name && tip?.version === child.version) {
+      childChoice.set(child.alias, { keyId: child.id, mode: modeName, version: child.version })
+    } else {
+      childChoice.set(child.alias, {
+        keyId: childChoice.get(child.alias)?.keyId ?? child.id,
+        mode: modeName,
+        version: null,
+      })
+      if (tip) await selectKeyVersion(child, modeName, tip)
+    }
   }
-  const tip = tipOf(child, modeName)
-  if (modeName === child.mode_name && tip?.version === child.version) {
-    childChoice.set(child.alias, { keyId: child.id, mode: modeName, version: child.version })
-    return
-  }
-  childChoice.set(child.alias, {
-    keyId: childChoice.get(child.alias)?.keyId ?? child.id,
-    mode: modeName,
-    version: null,
-  })
-  if (!tip) return
-  await selectKeyVersion(child, modeName, tip)
+  await maybeReopen(child)
 }
 
 async function selectKeyVersion(child: KeyChildMetaOut, modeName: string, tip: Upgrade) {
@@ -276,11 +293,12 @@ async function updateToLatest(child: KeyChildMetaOut, tip: Upgrade) {
   const choice = childChoice.get(child.alias)
   if (!choice) return
   await selectKeyVersion(child, choice.mode, tip)
+  await maybeReopen(child)
 }
 
 /** Mode separates a cleared row from one on a staged key, since neither of them has a key id. */
 function choiceId(choice: ChildChoice): string {
-  return `${choice.mode}#${choice.keyId ?? ''}`
+  return `${choice.mode}/${choice.keyId ?? ''}`
 }
 
 /** Current selection for a row, i.e. the external payload string, or the internal mode and key id. */
@@ -305,7 +323,34 @@ function rowDirty(child: KeyChildMetaOut): boolean {
   return currentValue(child) !== baseline
 }
 
-/** Per-row derivations done once here rather than on every template read. */
+/** The key a row points at per its pending UI choice */
+function resolvedChild(child: KeyChildMetaOut): KeyChildMetaOut {
+  if (child.category === 'external') {
+    return { ...child, payload: externalChoice.get(child.alias) || null }
+  }
+  const choice = childChoice.get(child.alias)
+  if (!choice?.mode) return { ...child, id: null, mode_name: null, version: null }
+  return { ...child, id: choice.keyId, mode_name: choice.mode, version: choice.version }
+}
+
+// Clicking the already-open row toggles it closed; clicking any other row opens it at its current selection
+async function onRowClick(child: KeyChildMetaOut) {
+  if (child.alias !== props.selectedAlias) {
+    emit('select', resolvedChild(child))
+    return
+  }
+  if (!(await changes.confirmDiscardBeyond(props.depth))) return
+  emit('close')
+}
+
+// A dropdown change on the row whose descendant is already open re-navigates it to match, without closing it
+async function maybeReopen(child: KeyChildMetaOut) {
+  if (child.alias !== props.selectedAlias) return
+  if (!(await changes.confirmDiscardBeyond(props.depth))) return
+  emit('select', resolvedChild(child))
+}
+
+/** Per-row derivations done once here */
 const rows = computed(() =>
   (children.value ?? []).map((child) => ({
     child,
@@ -317,7 +362,7 @@ const rows = computed(() =>
 
 const dirty = computed(() => rows.value.some((r) => r.dirty))
 
-useDirtySource(dirty)
+useDirtySource(dirty, props.depth)
 
 async function save(comment: string) {
   if (!children.value) return
@@ -361,6 +406,22 @@ async function save(comment: string) {
 
   await changes.stage(edits)
 }
+
+async function saveAndQueue(comment: string) {
+  await save(comment)
+  emit('queue')
+}
+
+async function updateAliasToLatest(alias: string) {
+  const child = children.value?.find((c) => c.alias === alias)
+  if (!child || child.category === 'external') return
+  const modeName = childChoice.get(alias)?.mode || child.mode_name
+  if (!modeName) return
+  const tip = tipOf(child, modeName)
+  if (tip) await selectKeyVersion(child, modeName, tip)
+}
+
+defineExpose({ updateAliasToLatest })
 
 let loadToken = 0
 
