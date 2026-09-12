@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import AppUser, Changeset, Key, StagedEdit
+from app.db.models import AppUser, Changeset, Key, Mode, Node, StagedEdit, Subsystem
 from app.routers.commit import (
     _build_key_children,
     _build_keys,
@@ -16,8 +16,10 @@ from app.routers.commit import (
 )
 from app.routers.staging import (
     ProposedChildOut,
+    StagedEditIn,
     _build_changeset,
     _get_or_create_open_changeset,
+    _resolve_bases,
 )
 
 
@@ -83,6 +85,85 @@ def test_build_changeset_assembles_edits_and_ripple():
     )
 
 
+def test_build_changeset_handles_a_fork_with_no_base_key():
+    """A forked mode's v1 edit has no base key, so its row's base version is None."""
+    changeset = Changeset(
+        id=7, created_by="jdoe", comment="", created_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    fork_edit = StagedEdit(
+        id=1,
+        changeset_id=7,
+        mode_id=118,
+        base_key_id=None,
+        expected_version=1,
+        proposed_payload="LHC",
+        proposed_children=None,
+        comment="fork",
+        validation_status="skipped",
+        created_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+    rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
+
+    out = _build_changeset(changeset, rows, {})
+
+    assert out.edits[0].base_version is None
+    assert out.edits[0].expected_version == 1
+
+
+def test_build_changeset_reports_the_fork_source():
+    changeset = Changeset(
+        id=7, created_by="jdoe", comment="", created_at=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    fork_edit = StagedEdit(
+        id=1,
+        changeset_id=7,
+        mode_id=118,
+        base_key_id=None,
+        copied_from_key_id=42,
+        expected_version=1,
+        proposed_payload="LHC",
+        proposed_children=None,
+        comment="fork",
+        validation_status="skipped",
+        created_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+
+    rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
+    out = _build_changeset(
+        changeset, rows, {42: ProposedChildOut(key_id=42, mode_name="default", version=3)}
+    )
+
+    assert out.edits[0].copied_from == ProposedChildOut(key_id=42, mode_name="default", version=3)
+
+
+def _fresh_mode_row() -> _CommitRow:
+    """A fresh mode (tip_version 0, no base key), whose edit commits as v1."""
+    edit = StagedEdit(
+        id=1,
+        changeset_id=7,
+        mode_id=118,
+        base_key_id=None,
+        expected_version=1,
+        proposed_payload="x",
+    )
+    return _CommitRow(edit, "cms_run", "clock_source", "collisions2026", 10, None, 0)
+
+
+def test_build_keys_lands_on_v1_for_a_fresh_mode():
+    changeset = Changeset(id=7, created_by="jdoe", comment="")
+
+    keys = _build_keys([_fresh_mode_row()], changeset)
+
+    assert [k.version for k in keys] == [1]
+    assert keys[0].label == "cms_run/clock_source/collisions2026/v1"
+
+
+def test_conflicts_is_empty_for_a_fresh_mode():
+    """expected_version=1 against tip_version=0 is not a conflict, it's the mode's first key."""
+    assert _conflicts([_fresh_mode_row()]) == []
+
+
 @pytest.mark.docker
 def test_get_or_create_open_changeset_is_race_safe(
     session_factory: async_sessionmaker[AsyncSession],
@@ -113,6 +194,73 @@ def test_get_or_create_open_changeset_is_race_safe(
     id_a, id_b, open_ids = asyncio.run(run())
     assert id_a == id_b
     assert open_ids == [id_a]
+
+
+async def _forked_mode(
+    session_factory: async_sessionmaker[AsyncSession], *, cern_login: str, mode_name: str
+) -> tuple[int, int]:
+    """A freshly forked mode with no key yet, staged as its v1, on the seeded cms_run/clock_source
+    node. Returns (changeset_id, mode_id)."""
+    async with session_factory() as session:
+        session.add(AppUser(cern_login=cern_login, display_name=cern_login))
+        node_id = await session.scalar(
+            select(Node.id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(Subsystem.name == "cms_run", Node.name == "clock_source")
+        )
+        assert node_id is not None
+        mode = Mode(node_id=node_id, name=mode_name, description="d", created_by=cern_login)
+        session.add(mode)
+        changeset = Changeset(created_by=cern_login, comment="")
+        session.add(changeset)
+        await session.flush()
+        session.add(
+            StagedEdit(
+                changeset_id=changeset.id,
+                mode_id=mode.id,
+                base_key_id=None,
+                expected_version=1,
+                proposed_payload="LHC",
+                comment="fork",
+                validation_status="skipped",
+            )
+        )
+        await session.commit()
+        return changeset.id, mode.id
+
+
+@pytest.mark.docker
+def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """A fork's v1 has no key to resolve through keys_by_locator, so an edit against it must
+    match up with the fork's own staged edit instead of 404ing."""
+    changeset_id, mode_id = asyncio.run(
+        _forked_mode(session_factory, cern_login="forker", mode_name="collisions2026")
+    )
+
+    async def run():
+        async with session_factory() as session:
+            return await _resolve_bases(
+                [
+                    StagedEditIn(
+                        subsystem_name="cms_run",
+                        node_name="clock_source",
+                        mode_name="collisions2026",
+                        base_version=1,
+                        proposed_payload="new payload",
+                        comment="edit",
+                    )
+                ],
+                changeset_id,
+                session,
+            )
+
+    [base] = asyncio.run(run())
+    assert base.mode_id == mode_id
+    assert base.base_key_id is None
+    assert base.expected_version == 1
+    assert base.copied_from_key_id is None
 
 
 def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():

@@ -17,7 +17,7 @@
       title="Discard all changes?"
       text="This will discard every staged edit in this changeset."
       confirm-text="Discard"
-      @confirm="changes.discardAll"
+      @confirm="discardAll"
     ></ConfirmDialog>
 
     <div
@@ -62,8 +62,9 @@
                 </code>
               </v-list-item-title>
               <v-list-item-subtitle>
-                staged as v{{ conflict.expected_version }} from v{{ conflict.base_version }}, now on
-                v{{ conflict.tip_version }}
+                staged as v{{ conflict.expected_version }} from
+                {{ conflict.base_version === null ? 'new mode' : `v${conflict.base_version}` }}, now
+                on v{{ conflict.tip_version }}
               </v-list-item-subtitle>
             </v-list-item>
           </v-list>
@@ -108,7 +109,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { keyRoute, parseVersion } from '@/router'
-import { conflictsFrom, useChangesStore, type Conflict } from '@/stores/changes'
+import { conflictsFrom, pendingSource, useChangesStore, type Conflict } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -131,6 +132,23 @@ function routedKey() {
   const parsed = parseVersion(version)
   if (!subsystem || !name || !mode || parsed === undefined) return undefined
   return { subsystem, name, mode, version: parsed }
+}
+
+async function discardAll() {
+  const key = routedKey()
+  const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
+  const source = pendingSource(staged)
+  await changes.discardAll()
+
+  if (key && source) {
+    snackbar.notify(`Discarded. Back on "${source.mode_name}" v${source.version}`, 'info')
+    const { at: _at, ...query } = route.query
+    await router.replace({
+      ...keyRoute(key.subsystem, key.name, source.mode_name, source.version),
+      query,
+    })
+  }
+  await nav.refreshKeys()
 }
 
 async function rebase() {

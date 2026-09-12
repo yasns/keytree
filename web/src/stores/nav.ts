@@ -161,18 +161,29 @@ export const useNavStore = defineStore('nav', () => {
       await fetchNodeByPath(nodeDetail.value.subsystem_name, nodeDetail.value.name)
   }
 
+  /** So components sharing a node don't each fire their own. */
+  const modesByPathPending = new Map<string, Promise<ModeOut[]>>()
+
   async function fetchModesByPath(subsystem: string, name: string): Promise<ModeOut[]> {
     const cached = [...nodeDetailCache.value.values()].find(
       (n) => n.subsystem_name === subsystem && n.name === name,
     )
     if (cached) return cached.modes
-    const data = unwrap(
-      await api.GET('/api/nodes/by-path/{subsystem_name}/{node_name}', {
+    const cacheKey = `${subsystem}/${name}`
+    const pending = modesByPathPending.get(cacheKey)
+    if (pending) return pending
+    const request = api
+      .GET('/api/nodes/by-path/{subsystem_name}/{node_name}', {
         params: { path: { subsystem_name: subsystem, node_name: name } },
-      }),
-    )
-    nodeDetailCache.value.set(data.id, data)
-    return data.modes
+      })
+      .then((res) => {
+        const data = unwrap(res)
+        nodeDetailCache.value.set(data.id, data)
+        return data.modes
+      })
+      .finally(() => modesByPathPending.delete(cacheKey))
+    modesByPathPending.set(cacheKey, request)
+    return request
   }
 
   async function fetchKeyPayload(

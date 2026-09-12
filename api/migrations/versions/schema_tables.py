@@ -113,21 +113,18 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
         sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("mode_group", sa.String(length=64), nullable=True),
         sa.CheckConstraint(
             "category IN "
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name=op.f("ck_node_category_enum"),
         ),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_node_name_slug")),
-        sa.CheckConstraint("mode_group ~ '^[a-z0-9_]+$'", name=op.f("ck_node_mode_group_slug")),
         sa.ForeignKeyConstraint(
             ["subsystem_id"], ["subsystem.id"], name=op.f("fk_node_subsystem_id_subsystem")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_node")),
         sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_node_subsystem_id_name")),
     )
-    op.create_index(op.f("ix_node_mode_group"), "node", ["mode_group"], unique=False)
     op.execute("GRANT SELECT ON node TO keytree_app")
 
     _ = op.create_table(
@@ -170,7 +167,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("id", "node_id", name=op.f("uq_mode_id_node_id")),
         sa.UniqueConstraint("node_id", "name", name=op.f("uq_mode_node_id_name")),
     )
-    op.execute("GRANT SELECT, INSERT ON mode TO keytree_app")
+    op.execute("GRANT SELECT, INSERT, DELETE ON mode TO keytree_app")
     op.execute("GRANT UPDATE (archived_by, archived_at) ON mode TO keytree_app")
     op.execute("GRANT USAGE ON SEQUENCE mode_id_seq TO keytree_app")
 

@@ -24,6 +24,7 @@ import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute, parseVersion } from '@/router'
 import { useNavStore, type BundleRoot } from '@/stores/nav'
+import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import BundleBrowser from '@/components/BundleBrowser.vue'
@@ -37,6 +38,7 @@ const { subsystem, name, mode, version } = defineProps<{
 }>()
 
 const nav = useNavStore()
+const changes = useChangesStore()
 const router = useRouter()
 const snackbar = useSnackbarStore()
 
@@ -46,15 +48,20 @@ const selectedVersion = computed(() => {
   const m = selectedMode.value
   if (!m) return undefined
   const requested = parseVersion(version)
-  return requested !== undefined && m.versions.includes(requested) ? requested : m.versions[0]
+  if (requested !== undefined && m.versions.includes(requested)) return requested
+  // A freshly forked mode has no committed key yet
+  if (m.versions.length === 0)
+    return changes.stagedForMode(subsystem, name, m.name)?.expected_version
+  return m.versions[0]
 })
 
-// Redirect to 404 when the routed mode doesn't match one of the node's modes
+// Redirect to 404 when the routed mode is invalid for that node
 watch(
   () => [nav.nodeDetail, mode] as const,
   ([detail, mode]) => {
     if (!detail || detail.name !== name || !mode) return
     if (!detail.modes.some((m) => m.name === mode)) {
+      if (changes.stagedForMode(subsystem, name, mode)) return
       nav.nodeDetail = null
       snackbar.notify(`"${mode}" is not a mode of ${name}`, 'error')
       router.replace('/404')

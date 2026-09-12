@@ -89,7 +89,7 @@
             v-for="mode in filteredModes"
             :key="mode.id"
             :active="isSelected(mode)"
-            @click="activate(mode, mode.versions[0])"
+            @click="activate(mode, defaultVersion(mode))"
           >
             <v-list-item-title class="d-flex align-center">
               {{ mode.name }}
@@ -126,10 +126,10 @@
                 </template>
                 <v-list density="compact">
                   <v-list-item
-                    v-for="v in mode.versions"
-                    :key="v"
-                    :title="`v${v}`"
-                    @click="activate(mode, v)"
+                    v-for="opt in versionOptions(mode)"
+                    :key="opt.version"
+                    :title="opt.label"
+                    @click="activate(mode, opt.version)"
                   ></v-list-item>
                 </v-list>
               </v-menu>
@@ -317,6 +317,14 @@ watch(
   { immediate: true },
 )
 
+// Reload committed data after a commit
+watch(
+  () => nav.keysToken,
+  async () => {
+    if (nav.pendingNodeId !== null) detail.value = await nav.fetchNodeDetail(nav.pendingNodeId)
+  },
+)
+
 const filteredModes = computed(() =>
   (detail.value?.modes ?? []).filter(
     (m) => filter.value === 'all' || (m.archived_at === null) === (filter.value === 'active'),
@@ -328,8 +336,30 @@ function isSelected(mode: ModeOut) {
   return root !== null && root.name === detail.value?.name && root.mode === mode.name
 }
 
+function pendingVersion(mode: ModeOut): number | undefined {
+  const d = detail.value
+  const staged = d && changes.stagedForMode(d.subsystem_name, d.name, mode.name)
+  if (!staged || mode.versions.includes(staged.expected_version)) return undefined
+  return staged.expected_version
+}
+
 function selectedVersion(mode: ModeOut) {
-  return isSelected(mode) ? nav.bundleRoot!.version : mode.versions[0]
+  return isSelected(mode) ? nav.bundleRoot!.version : defaultVersion(mode)
+}
+
+function defaultVersion(mode: ModeOut): number | undefined {
+  return mode.versions[0] ?? pendingVersion(mode)
+}
+
+function versionOptions(mode: ModeOut): { version: number; label: string }[] {
+  const committed = mode.versions.map((v, i) => ({
+    version: v,
+    label: i === 0 ? `v${v} (latest)` : `v${v}`,
+  }))
+  const pending = pendingVersion(mode)
+  return pending === undefined
+    ? committed
+    : [{ version: pending, label: `v${pending} (pending)` }, ...committed]
 }
 
 async function activate(mode: ModeOut, version: number | undefined) {

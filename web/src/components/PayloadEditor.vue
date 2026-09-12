@@ -14,9 +14,15 @@
       :staged="!!staged"
       :staged-comment="staged?.comment"
       :can-queue="!!canQueue"
+      :subsystem="subsystem"
+      :name="name"
+      :mode="mode"
+      :committed="isCommitted(staged)"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
+      @fork="fork"
+      @copy-to="copyTo"
     ></EditorToolbar>
 
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
@@ -29,7 +35,8 @@ import { useTheme } from 'vuetify'
 import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { useNavStore } from '@/stores/nav'
-import { useChangesStore, useDirtySource } from '@/stores/changes'
+import { isCommitted, useChangesStore, useDirtySource } from '@/stores/changes'
+import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { CATEGORY } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import EditorToolbar from './EditorToolbar.vue'
@@ -52,6 +59,7 @@ const emit = defineEmits<{ queue: [] }>()
 const nav = useNavStore()
 const changes = useChangesStore()
 const theme = useTheme()
+const { navigateToStaged } = useStagedNavigation()
 
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
@@ -90,7 +98,9 @@ onMounted(() => {
 
 async function loadPayload() {
   if (!editor) return
-  key.value = await nav.fetchKeyPayload(subsystem, name, mode, version)
+  key.value = isCommitted(staged.value)
+    ? await nav.fetchKeyPayload(subsystem, name, mode, version)
+    : undefined
   resetToBaseline()
   const model = editor.getModel()
   if (model) monaco.editor.setModelLanguage(model, languageFor(category))
@@ -110,24 +120,40 @@ watch(staged, () => {
   if (!dirty.value) resetToBaseline()
 })
 
+function baseEdit(comment: string) {
+  return {
+    subsystem_name: subsystem,
+    node_name: name,
+    mode_name: mode,
+    base_version: version,
+    proposed_payload: editor!.getValue(),
+    comment,
+  }
+}
+
 async function save(comment: string) {
   if (!editor) return
-  await changes.stage([
-    {
-      subsystem_name: subsystem,
-      node_name: name,
-      mode_name: mode,
-      base_version: version,
-      proposed_payload: editor.getValue(),
-      comment,
-    },
-  ])
+  await changes.stage([baseEdit(comment)])
   resetToBaseline()
 }
 
 async function saveAndQueue(comment: string) {
   await save(comment)
   emit('queue')
+}
+
+async function fork(newModeName: string, description: string) {
+  if (!editor) return
+  await changes.fork({ ...baseEdit(description), new_mode_name: newModeName, description })
+  resetToBaseline()
+  await navigateToStaged(subsystem, name, newModeName, `Forked to mode "${newModeName}"`)
+}
+
+async function copyTo(targetMode: string, comment: string) {
+  if (!editor) return
+  await changes.copyTo({ ...baseEdit(comment), target_mode_name: targetMode })
+  resetToBaseline()
+  await navigateToStaged(subsystem, name, targetMode, `Copied to mode "${targetMode}"`)
 }
 
 watch(

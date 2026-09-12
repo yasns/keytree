@@ -55,7 +55,6 @@
           <v-btn
             icon="mdi-cloud-alert-outline"
             color="warning"
-            :disabled="!dirty"
             @click="openSave(canQueue)"
             v-bind="props"
           ></v-btn>
@@ -63,13 +62,34 @@
       </v-tooltip>
       <v-tooltip v-else text="Saved">
         <template v-slot:activator="{ props }">
-          <v-btn
-            icon="mdi-cloud-check-variant-outline"
-            v-bind="props"
-            :disabled="!dirty && !staged"
-          ></v-btn>
+          <v-btn icon="mdi-cloud-check-variant-outline" v-bind="props"></v-btn>
         </template>
       </v-tooltip>
+
+      <v-menu>
+        <template v-slot:activator="{ props }">
+          <v-btn icon="mdi-dots-vertical" v-bind="props"></v-btn>
+        </template>
+        <v-list density="compact">
+          <v-tooltip
+            v-for="item in kebabItems"
+            :key="item.title"
+            :disabled="committed"
+            text="Commit the changes first"
+          >
+            <template v-slot:activator="{ props }">
+              <div v-bind="props">
+                <v-list-item
+                  :title="item.title"
+                  :disabled="!committed"
+                  @click="item.onClick"
+                  :prepend-icon="item.icon"
+                ></v-list-item>
+              </div>
+            </template>
+          </v-tooltip>
+        </v-list>
+      </v-menu>
     </template>
   </v-toolbar>
 
@@ -86,23 +106,65 @@
     confirm-text="Discard"
     @confirm="emit('discard')"
   ></ConfirmDialog>
+
+  <ForkModeDialog
+    v-model="forkDialog"
+    :existing="modes.map((m) => m.name)"
+    @fork="(name, description) => emit('fork', name, description)"
+  ></ForkModeDialog>
+
+  <CopyToModeDialog
+    v-model="copyDialog"
+    :modes="modes"
+    :current="mode ?? ''"
+    @copy="(target, comment) => emit('copy-to', target, comment)"
+  ></CopyToModeDialog>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, toRef } from 'vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SaveDialog from './SaveDialog.vue'
+import ForkModeDialog from './ForkModeDialog.vue'
+import CopyToModeDialog from './CopyToModeDialog.vue'
+import { useModesByPath } from '@/composables/useModesByPath'
 
-defineProps<{ dirty: boolean; staged: boolean; stagedComment?: string; canQueue?: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    dirty: boolean
+    staged: boolean
+    stagedComment?: string
+    canQueue?: boolean
+    subsystem?: string
+    name?: string
+    mode?: string
+    committed?: boolean
+  }>(),
+  { committed: true },
+)
 const emit = defineEmits<{
   save: [comment: string]
   'save-and-queue': [comment: string]
   discard: []
+  fork: [name: string, description: string]
+  'copy-to': [mode: string, comment: string]
 }>()
 
 const saveDialog = ref(false)
 const discardDialog = ref(false)
+const forkDialog = ref(false)
+const copyDialog = ref(false)
 const queueOnSave = ref(false)
+const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
+
+const kebabItems = [
+  { title: 'Fork to New Mode…', icon: 'mdi-source-fork', onClick: () => (forkDialog.value = true) },
+  {
+    title: 'Copy to Existing Mode…',
+    icon: 'mdi-source-pull',
+    onClick: () => (copyDialog.value = true),
+  },
+]
 
 function openSave(queue: boolean) {
   queueOnSave.value = queue
