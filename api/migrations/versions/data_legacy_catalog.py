@@ -28,11 +28,9 @@ class _NodeSpecRequired(TypedDict):
 class NodeSpec(_NodeSpecRequired, total=False):
     category: str
     children: list[str]
-    """Sibling nodes of the same subsystem, which this node bundles."""
+    """Direct descendants of this subsystem bundled by this node."""
     leaves: list[str]
-    """Payload nodes owned by this one; if specified, this node becomes a bundle."""
-    mode_group: str
-    """Nodes sharing a value keep matching MODE.name sets."""
+    """Payload nodes owned by this one. Populated for bundles only."""
 
 
 class SubsystemSpec(TypedDict):
@@ -85,8 +83,8 @@ CATALOG: dict[str, SubsystemSpec] = {
         "display_name": "L1 Trigger",
         "category": "top_level",
         "nodes": [
-            NodeSpec(name="conf", children=["tcds"], mode_group="l1_trg"),
-            NodeSpec(name="rs", mode_group="l1_trg"),
+            NodeSpec(name="conf", children=["tcds"]),
+            NodeSpec(name="rs"),
             NodeSpec(name="tcds"),
         ],
     },
@@ -330,7 +328,6 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                     "name": node["name"],
                     # Category is reserved for leaves.
                     "category": None if leaves else node.get("category"),
-                    "mode_group": node.get("mode_group"),
                 }
             )
             rows.extend(
@@ -338,7 +335,6 @@ def _node_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                     "subsystem_id": subsystem_id,
                     "name": _leaf_name(node["name"], leaf),
                     "category": node.get("category"),
-                    "mode_group": None,
                 }
                 for leaf in leaves
             )

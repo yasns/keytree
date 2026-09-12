@@ -29,7 +29,7 @@ class ConflictOut(BaseModel):
     subsystem_name: str
     node_name: str
     mode_name: str
-    base_version: int
+    base_version: int | None
     expected_version: int
     tip_version: int
 
@@ -40,7 +40,7 @@ class _CommitRow(NamedTuple):
     node_name: str
     mode_name: str
     node_id: int
-    base_version: int
+    base_version: int | None
     tip_version: int
 
 
@@ -150,13 +150,13 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
             Mode.name,
             Node.id,
             Key.version,
-            tip_versions.c.tip_version,
+            func.coalesce(tip_versions.c.tip_version, 0),
         )
         .join(Mode, Mode.id == StagedEdit.mode_id)
         .join(Node, Node.id == Mode.node_id)
         .join(Subsystem, Subsystem.id == Node.subsystem_id)
-        .join(Key, Key.id == StagedEdit.base_key_id)
-        .join(tip_versions, tip_versions.c.mode_id == StagedEdit.mode_id)
+        .outerjoin(Key, Key.id == StagedEdit.base_key_id)
+        .outerjoin(tip_versions, tip_versions.c.mode_id == StagedEdit.mode_id)
         .where(StagedEdit.changeset_id == changeset_id)
     )
     return [_CommitRow(*row) for row in result.tuples()]
@@ -186,6 +186,7 @@ def _rebased_edits(
             changeset_id=row.edit.changeset_id,
             mode_id=row.edit.mode_id,
             base_key_id=tip_keys[row.edit.mode_id][0],
+            copied_from_key_id=row.edit.copied_from_key_id,
             expected_version=tip_keys[row.edit.mode_id][1] + 1,
             proposed_payload=row.edit.proposed_payload,
             proposed_children=row.edit.proposed_children,

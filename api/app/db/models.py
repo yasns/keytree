@@ -51,8 +51,6 @@ class Node(Base):
 
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    mode_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
     __table_args__: tuple[SchemaItem, ...] = (
         UniqueConstraint("subsystem_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
@@ -61,8 +59,6 @@ class Node(Base):
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name="category_enum",
         ),
-        CheckConstraint("mode_group ~ '^[a-z0-9_]+$'", name="mode_group_slug"),
-        Index("ix_node_mode_group", "mode_group"),
     )
 
 

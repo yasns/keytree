@@ -52,10 +52,13 @@ _KeyLocator = tuple[str, str, str, int]
 """(subsystem_name, node_name, mode_name, version)."""
 
 
-async def keys_or_404(locators: list[_KeyLocator], session: SessionDep) -> list[Key]:
-    """Resolves multiple (subsystem, node, mode, version) keys in one query, in request order."""
+async def keys_by_locator(
+    locators: list[_KeyLocator], session: SessionDep
+) -> dict[_KeyLocator, Key]:
+    """Resolves multiple (subsystem, node, mode, version) keys in one query. Missing locators are
+    simply absent from the result."""
     if not locators:
-        return []
+        return {}
     rows = await session.execute(
         select(Subsystem.name, Node.name, Mode.name, Key)
         .select_from(Key)
@@ -64,7 +67,12 @@ async def keys_or_404(locators: list[_KeyLocator], session: SessionDep) -> list[
         .join(Subsystem, Subsystem.id == Node.subsystem_id)
         .where(tuple_(Subsystem.name, Node.name, Mode.name, Key.version).in_(locators))
     )
-    found = {(s, n, m, key.version): key for s, n, m, key in rows.tuples()}
+    return {(s, n, m, key.version): key for s, n, m, key in rows.tuples()}
+
+
+async def keys_or_404(locators: list[_KeyLocator], session: SessionDep) -> list[Key]:
+    """Resolves multiple (subsystem, node, mode, version) keys in one query, in request order."""
+    found = await keys_by_locator(locators, session)
     keys: list[Key] = []
     for locator in locators:
         key = found.get(locator)

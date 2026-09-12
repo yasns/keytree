@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import cast
+from typing import NamedTuple, cast
 
-from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, model_validator
-from sqlalchemy import delete, func, select
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
 from app.db.models import Changeset, Key, Mode, Node, StagedEdit, Subsystem
-from app.routers.keys import keys_or_404
+from app.routers.keys import key_or_404, keys_by_locator
 from app.routers.user import upsert_app_user
 
 router = APIRouter(
@@ -36,6 +37,15 @@ class StagedEditIn(BaseModel):
         return self
 
 
+class ForkIn(StagedEditIn):
+    new_mode_name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
+    description: str = Field(min_length=1, max_length=255)
+
+
+class CopyIn(StagedEditIn):
+    target_mode_name: str
+
+
 class ProposedChildOut(BaseModel):
     key_id: int
     mode_name: str
@@ -47,13 +57,13 @@ class StagedEditOut(BaseModel):
     subsystem_name: str
     node_name: str
     mode_name: str
-    base_version: int
-    """Version whose content this edit started from, which need not be the mode's tip."""
+    base_version: int | None
+    """Not necessarily the mode's tip. None for a forked mode's v1."""
     expected_version: int
-    """Version the commit will create."""
     category: str | None
     proposed_payload: str | None
     proposed_children: dict[str, ProposedChildOut | None] | None
+    copied_from: ProposedChildOut | None
     comment: str
     created_by: str
     created_at: datetime
@@ -67,7 +77,7 @@ class ChangesetOut(BaseModel):
     edits: list[StagedEditOut]
 
 
-_EditRow = tuple[StagedEdit, str, str, str, int, str | None]
+_EditRow = tuple[StagedEdit, str, str, str, int | None, str | None]
 
 
 def _build_children(
@@ -100,6 +110,9 @@ def _build_changeset(
                 category=category,
                 proposed_payload=edit.proposed_payload,
                 proposed_children=_build_children(edit.proposed_children, child_modes),
+                copied_from=child_modes.get(edit.copied_from_key_id)
+                if edit.copied_from_key_id is not None
+                else None,
                 comment=edit.comment,
                 created_by=changeset.created_by,
                 created_at=edit.created_at,
@@ -139,20 +152,21 @@ async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
         .join(Mode, Mode.id == StagedEdit.mode_id)
         .join(Node, Node.id == Mode.node_id)
         .join(Subsystem, Subsystem.id == Node.subsystem_id)
-        .join(Key, Key.id == StagedEdit.base_key_id)
+        .outerjoin(Key, Key.id == StagedEdit.base_key_id)
         .where(StagedEdit.changeset_id == changeset_id)
     )
     return list(rows.tuples())
 
 
 async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, ProposedChildOut]:
-    """Mode name and version for every child key the given edits point at, in one query."""
+    """Mode name and version for every child key or fork/copy source the given edits point at, in
+    one query."""
     key_ids = {
         key_id
         for edit, *_ in rows
         for key_id in cast("dict[str, int | None]", edit.proposed_children or {}).values()
         if key_id is not None
-    }
+    } | {edit.copied_from_key_id for edit, *_ in rows if edit.copied_from_key_id is not None}
     if not key_ids:
         return {}
     rows_ = await session.execute(
@@ -171,14 +185,15 @@ async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetO
     return _build_changeset(changeset, rows, await _child_modes(rows, session))
 
 
-async def _tip_versions(mode_ids: set[int], session: SessionDep) -> dict[int, int]:
-    """Newest committed version per mode. Every mode id must already have at least one key."""
+async def _tip_keys(mode_ids: set[int], session: SessionDep) -> dict[int, tuple[int, int]]:
+    """Newest key id and version per mode. Modes with no keys yet are not returned."""
     rows = await session.execute(
-        select(Key.mode_id, func.max(Key.version))
+        select(Key.mode_id, Key.id, Key.version)
         .where(Key.mode_id.in_(mode_ids))
-        .group_by(Key.mode_id)
+        .order_by(Key.mode_id, Key.version.desc())
+        .distinct(Key.mode_id)
     )
-    return dict(rows.tuples().all())
+    return {mode_id: (key_id, version) for mode_id, key_id, version in rows.tuples()}
 
 
 @router.get("/")
@@ -188,6 +203,63 @@ async def get_changeset(request: Request, session: SessionDep) -> ChangesetOut |
     if changeset is None:
         return None
     return await changeset_out(changeset, session)
+
+
+class _ResolvedBase(NamedTuple):
+    mode_id: int
+    base_key_id: int | None
+    expected_version: int
+    copied_from_key_id: int | None
+
+
+async def _resolve_bases(
+    edits: list[StagedEditIn], changeset_id: int, session: SessionDep
+) -> list[_ResolvedBase]:
+    """Resolves each edit's base, in request order."""
+    locators = [(e.subsystem_name, e.node_name, e.mode_name, e.base_version) for e in edits]
+    keys = await keys_by_locator(locators, session)
+
+    unresolved = [e for e, locator in zip(edits, locators, strict=True) if locator not in keys]
+    mode_ids_by_name: dict[tuple[str, str, str], int] = {}
+    if unresolved:
+        names = {(e.subsystem_name, e.node_name, e.mode_name) for e in unresolved}
+        rows = await session.execute(
+            select(Subsystem.name, Node.name, Mode.name, Mode.id)
+            .select_from(Mode)
+            .join(Node, Node.id == Mode.node_id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(tuple_(Subsystem.name, Node.name, Mode.name).in_(names))
+        )
+        mode_ids_by_name = {(s, n, m): mode_id for s, n, m, mode_id in rows.tuples()}
+
+    keyless_mode_ids = set(mode_ids_by_name.values())
+    own_edits: dict[int, StagedEdit] = {}
+    if keyless_mode_ids:
+        rows = await session.execute(
+            select(StagedEdit).where(
+                StagedEdit.changeset_id == changeset_id,
+                StagedEdit.mode_id.in_(keyless_mode_ids),
+            )
+        )
+        own_edits = {edit.mode_id: edit for edit in rows.scalars()}
+
+    tips = await _tip_keys({key.mode_id for key in keys.values()}, session)
+
+    bases: list[_ResolvedBase] = []
+    for edit_in, locator in zip(edits, locators, strict=True):
+        key = keys.get(locator)
+        if key is not None:
+            bases.append(_ResolvedBase(key.mode_id, key.id, tips[key.mode_id][1] + 1, None))
+            continue
+        key_name = (edit_in.subsystem_name, edit_in.node_name, edit_in.mode_name)
+        mode_id = mode_ids_by_name.get(key_name)
+        own = own_edits.get(mode_id) if mode_id is not None else None
+        if own is None or own.expected_version != edit_in.base_version:
+            raise HTTPException(status_code=404, detail="key not found")
+        bases.append(
+            _ResolvedBase(mode_id, own.base_key_id, own.expected_version, own.copied_from_key_id)
+        )
+    return bases
 
 
 @router.post("/")
@@ -202,31 +274,23 @@ async def stage_edits(
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
-    base_keys = await keys_or_404(
-        [
-            (edit_in.subsystem_name, edit_in.node_name, edit_in.mode_name, edit_in.base_version)
-            for edit_in in edits
-        ],
-        session,
-    )
+    bases = await _resolve_bases(edits, changeset.id, session)
 
-    # Staged edits are immutable, so re-staging deletes then inserts.
     _ = await session.execute(
         delete(StagedEdit).where(
             StagedEdit.changeset_id == changeset.id,
-            StagedEdit.mode_id.in_({key.mode_id for key in base_keys}),
+            StagedEdit.mode_id.in_({base.mode_id for base in bases}),
         )
     )
 
-    tips = await _tip_versions({key.mode_id for key in base_keys}, session)
-
-    for edit_in, base_key in zip(edits, base_keys, strict=True):
+    for edit_in, base in zip(edits, bases, strict=True):
         session.add(
             StagedEdit(
                 changeset_id=changeset.id,
-                mode_id=base_key.mode_id,
-                base_key_id=base_key.id,
-                expected_version=tips[base_key.mode_id] + 1,
+                mode_id=base.mode_id,
+                base_key_id=base.base_key_id,
+                copied_from_key_id=base.copied_from_key_id,
+                expected_version=base.expected_version,
                 proposed_payload=edit_in.proposed_payload,
                 proposed_children=edit_in.proposed_children,
                 comment=edit_in.comment,
@@ -238,13 +302,113 @@ async def stage_edits(
     return await changeset_out(changeset, session)
 
 
+async def _login_and_source(
+    body: StagedEditIn, request: Request, session: SessionDep
+) -> tuple[str, Key]:
+    claims = request.state.claims
+    cern_login = claims["cern_upn"]
+    await upsert_app_user(claims, session)
+    source = await key_or_404(
+        body.subsystem_name, body.node_name, body.mode_name, body.base_version, session
+    )
+    return cern_login, source
+
+
+@router.post("/fork")
+async def fork_mode(body: ForkIn, request: Request, session: SessionDep) -> ChangesetOut:
+    """Branches a key's content into a brand new mode on the same node, staged as its v1."""
+    cern_login, source = await _login_and_source(body, request, session)
+
+    node = await session.get(Node, source.node_id)
+    assert node is not None
+
+    changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    mode = Mode(
+        node_id=source.node_id,
+        name=body.new_mode_name,
+        description=body.description,
+        forked_from_key_id=source.id,
+        created_by=cern_login,
+    )
+    session.add(mode)
+    try:
+        await session.flush()
+    except IntegrityError as e:
+        raise HTTPException(status_code=409, detail="mode already exists") from e
+
+    session.add(
+        StagedEdit(
+            changeset_id=changeset.id,
+            mode_id=mode.id,
+            base_key_id=None,
+            copied_from_key_id=source.id,
+            expected_version=1,
+            proposed_payload=body.proposed_payload,
+            proposed_children=body.proposed_children,
+            comment=body.comment,
+            validation_status="skipped",
+        )
+    )
+
+    await session.commit()
+    return await changeset_out(changeset, session)
+
+
+@router.post("/copy")
+async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> ChangesetOut:
+    """Copies a key's content onto another existing mode, staged as that mode's next version."""
+    cern_login, source = await _login_and_source(body, request, session)
+
+    target = await session.scalar(
+        select(Mode).where(Mode.node_id == source.node_id, Mode.name == body.target_mode_name)
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="target mode not found")
+    if target.archived_at is not None:
+        raise HTTPException(status_code=400, detail="target mode is archived")
+
+    changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    _ = await session.execute(
+        delete(StagedEdit).where(
+            StagedEdit.changeset_id == changeset.id, StagedEdit.mode_id == target.id
+        )
+    )
+    tip_key_id, tip_version = (await _tip_keys({target.id}, session)).get(target.id, (None, 0))
+    session.add(
+        StagedEdit(
+            changeset_id=changeset.id,
+            mode_id=target.id,
+            base_key_id=tip_key_id,
+            copied_from_key_id=source.id,
+            expected_version=tip_version + 1,
+            proposed_payload=body.proposed_payload,
+            proposed_children=body.proposed_children,
+            comment=body.comment,
+            validation_status="skipped",
+        )
+    )
+
+    await session.commit()
+    return await changeset_out(changeset, session)
+
+
 @router.delete("/", status_code=204)
 async def discard_changeset(request: Request, session: SessionDep) -> None:
-    """Discards the caller's open changeset and all its staged edits."""
+    """Discards the caller's open changeset and all its staged edits, including any modes created
+    while forking."""
     cern_login = request.state.claims["cern_upn"]
     _ = await session.execute(
         delete(Changeset).where(
             Changeset.created_by == cern_login, Changeset.committed_at.is_(None)
+        )
+    )
+    _ = await session.execute(
+        delete(Mode).where(
+            Mode.created_by == cern_login,
+            ~select(Key.id).where(Key.mode_id == Mode.id).exists(),
+            ~select(StagedEdit.id).where(StagedEdit.mode_id == Mode.id).exists(),
         )
     )
     await session.commit()

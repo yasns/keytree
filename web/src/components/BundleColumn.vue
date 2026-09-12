@@ -14,9 +14,15 @@
       :staged="!!staged"
       :staged-comment="staged?.comment"
       :can-queue="!!canQueue"
+      :subsystem="subsystem"
+      :name="name"
+      :mode="mode"
+      :committed="isCommitted(staged)"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="applyBaseline"
+      @fork="fork"
+      @copy-to="copyTo"
     ></EditorToolbar>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
@@ -44,6 +50,7 @@
               :label="row.child.alias"
               placeholder="Select key"
               hide-details
+              density="compact"
               @click.stop
               @update:model-value="(v) => externalChoice.set(row.child.alias, v)"
             >
@@ -60,6 +67,7 @@
                   :label="row.child.alias"
                   placeholder="Select key"
                   hide-details
+                  density="compact"
                   @click.stop
                   @update:model-value="(v) => onModeSelect(row.child, v)"
                 >
@@ -101,7 +109,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { childLocator, useNavStore } from '@/stores/nav'
-import { useChangesStore, useDirtySource } from '@/stores/changes'
+import { isCommitted, pendingSource, useChangesStore, useDirtySource } from '@/stores/changes'
+import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
 import type { components } from '@/api-types'
@@ -129,6 +138,7 @@ const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [
 
 const nav = useNavStore()
 const changes = useChangesStore()
+const { navigateToStaged } = useStagedNavigation()
 
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
@@ -364,12 +374,15 @@ const dirty = computed(() => rows.value.some((r) => r.dirty))
 
 useDirtySource(dirty, props.depth)
 
-async function save(comment: string) {
-  if (!children.value) return
-  const edits: StagedEditIn[] = []
+/** Splits the row selections into payload edits on external children and this key's own alias -> child map. */
+function buildEdits(comment: string): {
+  childEdits: StagedEditIn[]
+  proposedChildren: Record<string, number | null>
+} {
+  const childEdits: StagedEditIn[] = []
   const proposedChildren: Record<string, number | null> = {}
 
-  for (const child of children.value) {
+  for (const child of children.value ?? []) {
     if (child.category === 'external') {
       // An empty alias has no base key to stage a payload edit against
       const locator = childLocator(child)
@@ -378,7 +391,7 @@ async function save(comment: string) {
       const changed = value !== (child.payload ?? '')
       proposedChildren[child.alias] = changed ? null : child.id
       if (changed) {
-        edits.push({
+        childEdits.push({
           subsystem_name: locator.subsystem,
           node_name: locator.name,
           mode_name: locator.mode,
@@ -395,21 +408,59 @@ async function save(comment: string) {
     }
   }
 
-  edits.push({
+  return { childEdits, proposedChildren }
+}
+
+function baseEdit(comment: string, proposedChildren: Record<string, number | null>) {
+  return {
     subsystem_name: props.subsystem,
     node_name: props.name,
     mode_name: props.mode,
     base_version: props.version,
     proposed_children: proposedChildren,
     comment,
-  })
+  }
+}
 
-  await changes.stage(edits)
+async function save(comment: string) {
+  if (!children.value) return
+  const { childEdits, proposedChildren } = buildEdits(comment)
+  await changes.stage([...childEdits, baseEdit(comment, proposedChildren)])
 }
 
 async function saveAndQueue(comment: string) {
   await save(comment)
   emit('queue')
+}
+
+async function fork(newModeName: string, description: string) {
+  if (!children.value) return
+  const { childEdits, proposedChildren } = buildEdits(description)
+  if (childEdits.length) await changes.stage(childEdits)
+  await changes.fork({
+    ...baseEdit(description, proposedChildren),
+    new_mode_name: newModeName,
+    description,
+  })
+  applyBaseline()
+  await navigateToStaged(
+    props.subsystem,
+    props.name,
+    newModeName,
+    `Forked to mode "${newModeName}"`,
+  )
+}
+
+async function copyTo(targetMode: string, comment: string) {
+  if (!children.value) return
+  const { childEdits, proposedChildren } = buildEdits(comment)
+  if (childEdits.length) await changes.stage(childEdits)
+  await changes.copyTo({
+    ...baseEdit(comment, proposedChildren),
+    target_mode_name: targetMode,
+  })
+  applyBaseline()
+  await navigateToStaged(props.subsystem, props.name, targetMode, `Copied to mode "${targetMode}"`)
 }
 
 async function updateAliasToLatest(alias: string) {
@@ -431,9 +482,12 @@ async function load() {
   externalChoice.clear()
   childChoice.clear()
   const token = ++loadToken
+  const source = pendingSource(staged.value)
+  const sourceMode = source?.mode_name ?? props.mode
+  const sourceVersion = source?.version ?? props.version
   const [p, c] = await Promise.all([
-    nav.fetchKeyPayload(props.subsystem, props.name, props.mode, props.version),
-    nav.fetchKeyChildren(props.subsystem, props.name, props.mode, props.version),
+    nav.fetchKeyPayload(props.subsystem, props.name, sourceMode, sourceVersion),
+    nav.fetchKeyChildren(props.subsystem, props.name, sourceMode, sourceVersion),
   ])
   if (token !== loadToken) return
   payload.value = p

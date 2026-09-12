@@ -124,9 +124,50 @@ export interface paths {
         post: operations["stage_edits_api_staging__post"];
         /**
          * Discard Changeset
-         * @description Discards the caller's open changeset and all its staged edits.
+         * @description Discards the caller's open changeset and all its staged edits, including any modes created
+         *     while forking.
          */
         delete: operations["discard_changeset_api_staging__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/staging/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork Mode
+         * @description Branches a key's content into a brand new mode on the same node, staged as its v1.
+         */
+        post: operations["fork_mode_api_staging_fork_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/staging/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy To Mode
+         * @description Copies a key's content onto another existing mode, staged as that mode's next version.
+         */
+        post: operations["copy_to_mode_api_staging_copy_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -396,11 +437,55 @@ export interface components {
             /** Mode Name */
             mode_name: string;
             /** Base Version */
-            base_version: number;
+            base_version: number | null;
             /** Expected Version */
             expected_version: number;
             /** Tip Version */
             tip_version: number;
+        };
+        /** CopyIn */
+        CopyIn: {
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Base Version */
+            base_version: number;
+            /** Proposed Payload */
+            proposed_payload?: string | null;
+            /** Proposed Children */
+            proposed_children?: {
+                [key: string]: number | null;
+            } | null;
+            /** Comment */
+            comment: string;
+            /** Target Mode Name */
+            target_mode_name: string;
+        };
+        /** ForkIn */
+        ForkIn: {
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Base Version */
+            base_version: number;
+            /** Proposed Payload */
+            proposed_payload?: string | null;
+            /** Proposed Children */
+            proposed_children?: {
+                [key: string]: number | null;
+            } | null;
+            /** Comment */
+            comment: string;
+            /** New Mode Name */
+            new_mode_name: string;
+            /** Description */
+            description: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -532,7 +617,7 @@ export interface components {
             /** Mode Name */
             mode_name: string;
             /** Base Version */
-            base_version: number;
+            base_version: number | null;
             /** Expected Version */
             expected_version: number;
             /** Category */
@@ -543,6 +628,7 @@ export interface components {
             proposed_children: {
                 [key: string]: components["schemas"]["ProposedChildOut"] | null;
             } | null;
+            copied_from: components["schemas"]["ProposedChildOut"] | null;
             /** Comment */
             comment: string;
             /** Created By */
@@ -874,6 +960,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    fork_mode_api_staging_fork_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_to_mode_api_staging_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

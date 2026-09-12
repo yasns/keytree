@@ -6,6 +6,8 @@ import type { components } from '@/api-types'
 type ChangesetOut = components['schemas']['ChangesetOut']
 type StagedEditIn = components['schemas']['StagedEditIn']
 type StagedEditOut = components['schemas']['StagedEditOut']
+type ForkIn = components['schemas']['ForkIn']
+type CopyIn = components['schemas']['CopyIn']
 export type Conflict = components['schemas']['ConflictOut']
 
 /** A commit rejected because someone else committed these modes since they were staged. */
@@ -13,6 +15,16 @@ export function conflictsFrom(err: unknown): Conflict[] | undefined {
   if (!err || typeof err !== 'object') return undefined
   const { status, detail } = err as ApiError
   return status === 409 && Array.isArray(detail) ? (detail as Conflict[]) : undefined
+}
+
+/** False only while a fork/copy's staged edit hasn't produced a key of its own yet. */
+export function isCommitted(edit: StagedEditOut | undefined): boolean {
+  return edit?.base_version !== null
+}
+
+/** The mode a pending fork/copy's rows come from, until it has a key of its own. */
+export function pendingSource(edit: StagedEditOut | undefined) {
+  return edit?.base_version === null ? edit.copied_from : null
 }
 
 export const useChangesStore = defineStore('changes', () => {
@@ -65,19 +77,19 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = unwrap(await api.GET('/api/staging/'))
   }
 
-  /** Any staged edit on a node, whichever mode. This is how a null proposed child resolves to a key. */
+  /** Any staged edit on a node, whichever mode. */
   function stagedForNode(subsystem: string, name: string): StagedEditOut | undefined {
     return edits.value.find((e) => e.subsystem_name === subsystem && e.node_name === name)
   }
 
-  /** A changeset holds at most one edit per mode, whatever version it was based on. */
+  /** Staged edit on a mode. At most one edit per mode, whatever version it was based on. */
   function stagedForMode(subsystem: string, name: string, mode: string): StagedEditOut | undefined {
     return edits.value.find(
       (e) => e.subsystem_name === subsystem && e.node_name === name && e.mode_name === mode,
     )
   }
 
-  /** The edit on a mode, but only when it was based on the given version. */
+  /** Edit on a mode based on the given version. Forks match on their produced version instead. */
   function stagedFor(
     subsystem: string,
     name: string,
@@ -85,11 +97,20 @@ export const useChangesStore = defineStore('changes', () => {
     baseVersion: number,
   ): StagedEditOut | undefined {
     const edit = stagedForMode(subsystem, name, mode)
-    return edit?.base_version === baseVersion ? edit : undefined
+    if (!edit) return undefined
+    return (edit.base_version ?? edit.expected_version) === baseVersion ? edit : undefined
   }
 
   async function stage(newEdits: StagedEditIn[]) {
     changeset.value = unwrap(await api.POST('/api/staging/', { body: newEdits }))
+  }
+
+  async function fork(body: ForkIn) {
+    changeset.value = unwrap(await api.POST('/api/staging/fork', { body }))
+  }
+
+  async function copyTo(body: CopyIn) {
+    changeset.value = unwrap(await api.POST('/api/staging/copy', { body }))
   }
 
   async function discardAll() {
@@ -118,6 +139,8 @@ export const useChangesStore = defineStore('changes', () => {
     stagedForNode,
     stagedForMode,
     stage,
+    fork,
+    copyTo,
     discardAll,
     commit,
     rebase,

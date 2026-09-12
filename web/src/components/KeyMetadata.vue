@@ -62,14 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import type { components } from '@/api-types'
-import { useNavStore } from '@/stores/nav'
+import { useModesByPath } from '@/composables/useModesByPath'
 import CopyButton from './CopyButton.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']
-type ModeOut = components['schemas']['ModeOut']
 
 const LOCALE = new Intl.Locale('en-GB')
 const RTF = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' })
@@ -97,26 +96,17 @@ const props = defineProps<{
   staged?: StagedEditOut
 }>()
 
-const nav = useNavStore()
 const panel = ref(undefined)
 
-const modes = ref<ModeOut[]>([])
-watch(
-  () => [props.subsystem, props.name] as const,
-  ([subsystem, name]) => {
-    nav.fetchModesByPath(subsystem, name).then((m) => (modes.value = m))
-  },
-  { immediate: true },
-)
+const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
 
-/** Undefined until the mode list loads, so the chip doesn't flash before it's known. */
 const isLatest = computed(() => {
   const latest = modes.value.find((m) => m.name === props.mode)?.versions[0]
   return latest === undefined ? undefined : latest === props.version
 })
 
 const displayVersion = computed(() =>
-  props.staged ? props.staged.base_version + 1 : props.version,
+  props.staged ? props.staged.expected_version : props.version,
 )
 const displayLabel = computed(() =>
   props.staged
