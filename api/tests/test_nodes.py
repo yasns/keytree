@@ -41,7 +41,8 @@ def test_build_node_detail_versions_and_archived_modes():
 
     keys = [_key(1, mode_id=118, version=1), _key(2, mode_id=118, version=2)]
 
-    out = _build_node_detail(node, "ugt", [archived, active], keys)
+    display_names = {"keytree_app": "Keytree App", "alice": "Alice"}
+    out = _build_node_detail(node, "ugt", [archived, active], keys, display_names)
 
     assert out.id == 42
     assert out.category == "run_settings"
@@ -52,5 +53,8 @@ def test_build_node_detail_versions_and_archived_modes():
 
     default_mode, retired_mode = out.modes
     assert default_mode.versions == [2, 1]  # newest first
+    assert default_mode.created_by_display_name == "Keytree App"
+    assert default_mode.archived_by_display_name is None
     assert retired_mode.versions == []
     assert retired_mode.archived_at == datetime(2026, 1, 1, tzinfo=UTC)
+    assert retired_mode.archived_by_display_name == "Alice"

@@ -17,6 +17,8 @@ export type BundleRoot = {
   name: string
   mode: string
   version: number
+  /** True when `version` is the mode's staged edit rather than a committed key. */
+  pending: boolean
 }
 
 /** The key filling a child alias, or undefined when the alias is empty (KeyChildMetaOut nulls its key fields together). */
@@ -27,6 +29,7 @@ export function childLocator(child: KeyChildMetaOut): BundleRoot | undefined {
     name: child.node_name,
     mode: child.mode_name,
     version: child.version,
+    pending: false,
   }
 }
 

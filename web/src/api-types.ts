@@ -533,6 +533,8 @@ export interface components {
             payload: string | null;
             /** Created By */
             created_by: string;
+            /** Created By Display Name */
+            created_by_display_name: string;
             /**
              * Created At
              * Format: date-time
@@ -540,6 +542,16 @@ export interface components {
             created_at: string;
             /** Comment */
             comment: string;
+            based_on: components["schemas"]["KeyRefOut"] | null;
+        };
+        /** KeyRefOut */
+        KeyRefOut: {
+            /** Mode Name */
+            mode_name: string;
+            /** Version */
+            version: number;
+            /** Label */
+            label: string;
         };
         /** ModeOut */
         ModeOut: {
@@ -551,6 +563,8 @@ export interface components {
             description: string;
             /** Created By */
             created_by: string;
+            /** Created By Display Name */
+            created_by_display_name: string;
             /**
              * Created At
              * Format: date-time
@@ -558,6 +572,8 @@ export interface components {
             created_at: string;
             /** Archived By */
             archived_by: string | null;
+            /** Archived By Display Name */
+            archived_by_display_name: string | null;
             /** Archived At */
             archived_at: string | null;
             /** Versions */
@@ -586,6 +602,8 @@ export interface components {
             mode_name: string;
             /** Version */
             version: number;
+            /** Label */
+            label: string;
         };
         /** StagedEditIn */
         StagedEditIn: {
@@ -629,6 +647,7 @@ export interface components {
                 [key: string]: components["schemas"]["ProposedChildOut"] | null;
             } | null;
             copied_from: components["schemas"]["ProposedChildOut"] | null;
+            based_on: components["schemas"]["ProposedChildOut"] | null;
             /** Comment */
             comment: string;
             /** Created By */

@@ -11,6 +11,7 @@
           :mode="selectedMode.name"
           :version="selectedVersion"
           :category="nav.nodeDetail.category"
+          :pending="isPending"
         ></PayloadEditor>
       </template>
 
@@ -43,15 +44,27 @@ const router = useRouter()
 const snackbar = useSnackbarStore()
 
 const selectedMode = computed(() => nav.nodeDetail?.modes.find((m) => m.name === mode))
+const requestedVersion = computed(() => parseVersion(version))
+
+const pendingEdit = computed(() => {
+  const m = selectedMode.value
+  return m ? changes.stagedForMode(subsystem, name, m.name) : undefined
+})
+
+// Either the route explicitly asks for the mode's staged edit, or it has no committed key to fall
+// back to
+const isPending = computed(() => {
+  const m = selectedMode.value
+  if (m?.versions.length === 0) return true
+  return requestedVersion.value === 'pending' && pendingEdit.value !== undefined
+})
 
 const selectedVersion = computed(() => {
   const m = selectedMode.value
   if (!m) return undefined
-  const requested = parseVersion(version)
-  if (requested !== undefined && m.versions.includes(requested)) return requested
-  // A freshly forked mode has no committed key yet
-  if (m.versions.length === 0)
-    return changes.stagedForMode(subsystem, name, m.name)?.expected_version
+  if (isPending.value) return pendingEdit.value?.expected_version
+  const requested = requestedVersion.value
+  if (typeof requested === 'number' && m.versions.includes(requested)) return requested
   return m.versions[0]
 })
 
@@ -72,11 +85,24 @@ watch(
 
 // Point a missing or invalid version at the version actually being rendered
 watch(selectedVersion, (v) => {
-  const requested = parseVersion(version)
-  if (v !== undefined && requested !== v) {
+  if (v === undefined) return
+  if (isPending.value) {
+    if (requestedVersion.value !== 'pending')
+      router.replace(keyRoute(subsystem, name, mode, 'pending'))
+  } else if (requestedVersion.value !== v) {
     router.replace(keyRoute(subsystem, name, mode, v))
   }
 })
+
+// Follow a pending route once its edit commits or is discarded
+watch(
+  () => nav.keysToken,
+  () => {
+    if (!isPending.value || pendingEdit.value) return
+    const tip = selectedMode.value?.versions[0]
+    if (tip !== undefined) router.replace(keyRoute(subsystem, name, mode, tip))
+  },
+)
 
 async function syncToRoute() {
   await nav.fetchSubsystems()
@@ -129,7 +155,8 @@ function sameBundleRoot(a: BundleRoot | null, b: BundleRoot): boolean {
     a.subsystem === b.subsystem &&
     a.name === b.name &&
     a.mode === b.mode &&
-    a.version === b.version
+    a.version === b.version &&
+    a.pending === b.pending
   )
 }
 
@@ -143,6 +170,7 @@ watch(
       name: detail.name,
       mode: mode.name,
       version,
+      pending: isPending.value,
     }
     if (!sameBundleRoot(nav.bundleRoot, root)) nav.bundleRoot = root
   },

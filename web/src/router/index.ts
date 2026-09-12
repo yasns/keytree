@@ -30,17 +30,24 @@ router.beforeEach(async (to, from) => {
   if (!(await changes.confirmDiscard())) return false
 })
 
+/** A committed version number, or 'pending' for the version a mode's staged edit would produce. */
+export type VersionTarget = number | 'pending'
+
 export function keyRoute(
   subsystem: string,
   name: string,
   mode: string | undefined,
-  version: number,
+  version: VersionTarget,
 ) {
-  return { name: 'editor', params: { subsystem, name, mode, version: `v${version}` } } as const
+  return {
+    name: 'editor',
+    params: { subsystem, name, mode, version: version === 'pending' ? 'pending' : `v${version}` },
+  } as const
 }
 
-/** Reads back the `vN` version segment written by keyRoute. */
-export function parseVersion(v: string | undefined): number | undefined {
+/** Reads back the `vN`/`pending` version segment written by keyRoute. */
+export function parseVersion(v: string | undefined): VersionTarget | undefined {
+  if (v === 'pending') return 'pending'
   if (!v || v[0] !== 'v') return undefined
   const n = Number(v.slice(1))
   return Number.isFinite(n) ? n : undefined

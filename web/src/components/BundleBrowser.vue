@@ -14,6 +14,7 @@
             :name="nav.bundleRoot.name"
             :mode="nav.bundleRoot.mode"
             :version="nav.bundleRoot.version"
+            :pending="nav.bundleRoot.pending"
             :depth="0"
             :selected-alias="nav.bundlePath[0]?.alias"
             :can-queue="false"
