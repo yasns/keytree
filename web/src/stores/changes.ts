@@ -17,11 +17,6 @@ export function conflictsFrom(err: unknown): Conflict[] | undefined {
   return status === 409 && Array.isArray(detail) ? (detail as Conflict[]) : undefined
 }
 
-/** False only while a fork/copy's staged edit hasn't produced a key of its own yet. */
-export function isCommitted(edit: StagedEditOut | undefined): boolean {
-  return edit?.base_version !== null
-}
-
 /** The mode a pending fork/copy's rows come from, until it has a key of its own. */
 export function pendingSource(edit: StagedEditOut | undefined) {
   return edit?.base_version === null ? edit.copied_from : null

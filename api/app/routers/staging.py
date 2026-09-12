@@ -50,6 +50,7 @@ class ProposedChildOut(BaseModel):
     key_id: int
     mode_name: str
     version: int
+    label: str
 
 
 class StagedEditOut(BaseModel):
@@ -64,6 +65,8 @@ class StagedEditOut(BaseModel):
     proposed_payload: str | None
     proposed_children: dict[str, ProposedChildOut | None] | None
     copied_from: ProposedChildOut | None
+    based_on: ProposedChildOut | None
+    """The fork/copy source, or its previous version otherwise."""
     comment: str
     created_by: str
     created_at: datetime
@@ -112,6 +115,9 @@ def _build_changeset(
                 proposed_children=_build_children(edit.proposed_children, child_modes),
                 copied_from=child_modes.get(edit.copied_from_key_id)
                 if edit.copied_from_key_id is not None
+                else None,
+                based_on=child_modes.get(aid)
+                if (aid := edit.copied_from_key_id or edit.base_key_id) is not None
                 else None,
                 comment=edit.comment,
                 created_by=changeset.created_by,
@@ -167,16 +173,17 @@ async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, P
         for key_id in cast("dict[str, int | None]", edit.proposed_children or {}).values()
         if key_id is not None
     } | {edit.copied_from_key_id for edit, *_ in rows if edit.copied_from_key_id is not None}
+    key_ids |= {edit.base_key_id for edit, *_ in rows if edit.base_key_id is not None}
     if not key_ids:
         return {}
     rows_ = await session.execute(
-        select(Key.id, Mode.name, Key.version)
+        select(Key.id, Mode.name, Key.version, Key.label)
         .join(Mode, Mode.id == Key.mode_id)
         .where(Key.id.in_(key_ids))
     )
     return {
-        key_id: ProposedChildOut(key_id=key_id, mode_name=mode_name, version=version)
-        for key_id, mode_name, version in rows_.tuples()
+        key_id: ProposedChildOut(key_id=key_id, mode_name=mode_name, version=version, label=label)
+        for key_id, mode_name, version, label in rows_.tuples()
     }
 
 
@@ -254,7 +261,7 @@ async def _resolve_bases(
         key_name = (edit_in.subsystem_name, edit_in.node_name, edit_in.mode_name)
         mode_id = mode_ids_by_name.get(key_name)
         own = own_edits.get(mode_id) if mode_id is not None else None
-        if own is None or own.expected_version != edit_in.base_version:
+        if mode_id is None or own is None or own.expected_version != edit_in.base_version:
             raise HTTPException(status_code=404, detail="key not found")
         bases.append(
             _ResolvedBase(mode_id, own.base_key_id, own.expected_version, own.copied_from_key_id)

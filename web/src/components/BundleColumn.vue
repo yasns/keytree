@@ -7,6 +7,7 @@
       :version="version"
       :payload="payload"
       :staged="staged"
+      :pending="pending"
     ></KeyMetadata>
 
     <EditorToolbar
@@ -17,7 +18,7 @@
       :subsystem="subsystem"
       :name="name"
       :mode="mode"
-      :committed="isCommitted(staged)"
+      :committed="!pending"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="applyBaseline"
@@ -31,7 +32,12 @@
           v-for="row in rows"
           :key="row.child.alias"
           :active="row.child.alias === selectedAlias"
-          :class="{ 'row-changed': row.changed, 'row-dirty': row.dirty }"
+          :class="{
+            'row-changed': row.changed,
+            'row-dirty': row.dirty,
+            'row-external': row.child.category === 'external',
+          }"
+          :ripple="row.child.category !== 'external'"
           @click="onRowClick(row.child)"
           class="py-2 px-2"
         >
@@ -109,7 +115,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { childLocator, useNavStore } from '@/stores/nav'
-import { isCommitted, pendingSource, useChangesStore, useDirtySource } from '@/stores/changes'
+import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
@@ -132,6 +138,7 @@ const props = defineProps<{
   depth: number
   selectedAlias?: string
   canQueue?: boolean
+  pending?: boolean
 }>()
 
 const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [] }>()
@@ -144,7 +151,9 @@ const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
 
 const staged = computed(() =>
-  changes.stagedFor(props.subsystem, props.name, props.mode, props.version),
+  props.pending
+    ? changes.stagedForMode(props.subsystem, props.name, props.mode)
+    : changes.stagedFor(props.subsystem, props.name, props.mode, props.version),
 )
 
 const externalOptionsCache = reactive(new Map<string, string[]>())
@@ -345,6 +354,8 @@ function resolvedChild(child: KeyChildMetaOut): KeyChildMetaOut {
 
 // Clicking the already-open row toggles it closed; clicking any other row opens it at its current selection
 async function onRowClick(child: KeyChildMetaOut) {
+  // External children have no nested key to open a column for
+  if (child.category === 'external') return
   if (child.alias !== props.selectedAlias) {
     emit('select', resolvedChild(child))
     return
@@ -482,7 +493,7 @@ async function load() {
   externalChoice.clear()
   childChoice.clear()
   const token = ++loadToken
-  const source = pendingSource(staged.value)
+  const source = staged.value?.based_on
   const sourceMode = source?.mode_name ?? props.mode
   const sourceVersion = source?.version ?? props.version
   const [p, c] = await Promise.all([
@@ -500,7 +511,9 @@ async function load() {
   applyBaseline()
 }
 
-watch(() => [props.subsystem, props.name, props.mode, props.version], load, { immediate: true })
+watch(() => [props.subsystem, props.name, props.mode, props.version, props.pending], load, {
+  immediate: true,
+})
 
 // Reload committed data after a commit, unless it would throw away unsaved selections
 watch(
@@ -528,5 +541,11 @@ watch(staged, applyBaseline)
 }
 .row-dirty {
   background-color: rgba(var(--v-theme-warning), 0.16);
+}
+.row-external {
+  cursor: default;
+}
+.row-external:hover :deep(.v-list-item__overlay) {
+  opacity: 0;
 }
 </style>

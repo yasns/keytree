@@ -13,7 +13,8 @@
               <v-badge
                 v-if="item.badge"
                 :content="item.badge"
-                color="error"
+                color="warning"
+                text-color="black"
                 floating
                 offset-x="10"
                 offset-y="10"
@@ -95,7 +96,7 @@ const nav = useNavStore()
 const changes = useChangesStore()
 
 const menuItems = computed(() => [
-  { icon: 'mdi-script-text-key', title: 'Browse', component: BrowsePanel },
+  { icon: 'mdi-key-chain', title: 'Browse', component: BrowsePanel },
   {
     icon: 'mdi-source-branch',
     title:

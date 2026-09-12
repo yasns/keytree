@@ -62,7 +62,13 @@ def test_build_changeset_assembles_edits_and_ripple():
     ]
 
     out = _build_changeset(
-        changeset, rows, {9: ProposedChildOut(key_id=9, mode_name="special", version=5)}
+        changeset,
+        rows,
+        {
+            9: ProposedChildOut(
+                key_id=9, mode_name="special", version=5, label="cms_run/conf/special/v5"
+            )
+        },
     )
 
     assert out.id == 7
@@ -81,7 +87,7 @@ def test_build_changeset_assembles_edits_and_ripple():
     assert bundle_edit.proposed_children is not None
     assert bundle_edit.proposed_children["clock_source"] is None
     assert bundle_edit.proposed_children["other_child"] == ProposedChildOut(
-        key_id=9, mode_name="special", version=5
+        key_id=9, mode_name="special", version=5, label="cms_run/conf/special/v5"
     )
 
 
@@ -131,10 +137,18 @@ def test_build_changeset_reports_the_fork_source():
 
     rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
     out = _build_changeset(
-        changeset, rows, {42: ProposedChildOut(key_id=42, mode_name="default", version=3)}
+        changeset,
+        rows,
+        {
+            42: ProposedChildOut(
+                key_id=42, mode_name="default", version=3, label="cms_run/clock_source/default/v3"
+            )
+        },
     )
 
-    assert out.edits[0].copied_from == ProposedChildOut(key_id=42, mode_name="default", version=3)
+    assert out.edits[0].copied_from == ProposedChildOut(
+        key_id=42, mode_name="default", version=3, label="cms_run/clock_source/default/v3"
+    )
 
 
 def _fresh_mode_row() -> _CommitRow:

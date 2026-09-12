@@ -45,6 +45,7 @@
           density="compact"
           fluid
           indent-lines
+          separate-roots
           :item-props="itemProps"
           v-model:opened="nav.openedRow"
           v-model:activated="nav.activatedRow"
@@ -66,7 +67,7 @@
               icon="mdi-close"
               size="small"
               variant="text"
-              density="compact"
+              density="comfortable"
               @click.stop="clearPending"
             ></v-btn>
           </template>
@@ -89,27 +90,10 @@
             v-for="mode in filteredModes"
             :key="mode.id"
             :active="isSelected(mode)"
-            @click="activate(mode, defaultVersion(mode))"
+            @click="activate(mode, defaultTarget(mode))"
           >
             <v-list-item-title class="d-flex align-center">
               {{ mode.name }}
-              <v-tooltip location="top">
-                <template v-slot:activator="{ props }">
-                  <v-icon
-                    icon="mdi-information-outline"
-                    size="x-small"
-                    class="ml-1 text-medium-emphasis"
-                    v-bind="props"
-                    @click.stop
-                  ></v-icon>
-                </template>
-                <div>{{ mode.description || 'No description.' }}</div>
-                <div>Created by {{ mode.created_by }} on {{ formatDate(mode.created_at) }}</div>
-                <div v-if="mode.archived_at">
-                  archived by {{ mode.archived_by }} on
-                  {{ formatDate(mode.archived_at) }}
-                </div>
-              </v-tooltip>
             </v-list-item-title>
             <template v-slot:append>
               <v-menu>
@@ -123,6 +107,26 @@
                   >
                     v{{ selectedVersion(mode) }}
                   </v-chip>
+                  <v-tooltip location="top">
+                    <template v-slot:activator="{ props }">
+                      <v-icon
+                        icon="mdi-information-outline"
+                        size="small"
+                        class="ml-1 text-medium-emphasis"
+                        v-bind="props"
+                        @click.stop
+                      ></v-icon>
+                    </template>
+                    <div class="text-label-large">{{ mode.description || 'No description.' }}</div>
+                    <div>
+                      Created by {{ mode.created_by_display_name }} ({{ mode.created_by }})
+                      {{ relativeTime(mode.created_at) }}
+                    </div>
+                    <div v-if="mode.archived_at">
+                      Archived by {{ mode.archived_by_display_name }} ({{ mode.archived_by }})
+                      {{ relativeTime(mode.archived_at) }}
+                    </div>
+                  </v-tooltip>
                 </template>
                 <v-list density="compact">
                   <v-list-item
@@ -161,7 +165,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { keyRoute } from '@/router'
+import { relativeTime } from '@/format'
+import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore, walk, type Row } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -305,10 +310,6 @@ type NodeOut = components['schemas']['NodeOut']
 const filter = ref<'active' | 'archived' | 'all'>('active')
 const detail = ref<NodeOut | undefined>(undefined)
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString()
-}
-
 watch(
   () => nav.pendingNodeId,
   async (id) => {
@@ -351,7 +352,12 @@ function defaultVersion(mode: ModeOut): number | undefined {
   return mode.versions[0] ?? pendingVersion(mode)
 }
 
-function versionOptions(mode: ModeOut): { version: number; label: string }[] {
+function defaultTarget(mode: ModeOut): VersionTarget | undefined {
+  if (mode.versions.length) return mode.versions[0]
+  return pendingVersion(mode) !== undefined ? 'pending' : undefined
+}
+
+function versionOptions(mode: ModeOut): { version: VersionTarget; label: string }[] {
   const committed = mode.versions.map((v, i) => ({
     version: v,
     label: i === 0 ? `v${v} (latest)` : `v${v}`,
@@ -359,16 +365,25 @@ function versionOptions(mode: ModeOut): { version: number; label: string }[] {
   const pending = pendingVersion(mode)
   return pending === undefined
     ? committed
-    : [{ version: pending, label: `v${pending} (pending)` }, ...committed]
+    : [{ version: 'pending' as const, label: `v${pending} (pending)` }, ...committed]
 }
 
-async function activate(mode: ModeOut, version: number | undefined) {
+async function activate(mode: ModeOut, target: VersionTarget | undefined) {
   const d = detail.value
-  if (!d || version === undefined) return
+  if (!d || target === undefined) return
   if (!(await changes.confirmDiscard())) return
 
-  nav.bundleRoot = { subsystem: d.subsystem_name, name: d.name, mode: mode.name, version }
-  router.push(keyRoute(d.subsystem_name, d.name, mode.name, version))
+  const version = target === 'pending' ? pendingVersion(mode) : target
+  if (version === undefined) return
+
+  nav.bundleRoot = {
+    subsystem: d.subsystem_name,
+    name: d.name,
+    mode: mode.name,
+    version,
+    pending: target === 'pending',
+  }
+  router.push(keyRoute(d.subsystem_name, d.name, mode.name, target))
 }
 </script>
 

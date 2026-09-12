@@ -3,10 +3,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import Key, Mode, Node, Subsystem
+from app.db.models import AppUser, Key, Mode, Node, Subsystem
 
 router = APIRouter(
     prefix="/nodes",
@@ -20,8 +21,11 @@ class ModeOut(BaseModel):
     name: str
     description: str
     created_by: str
+    created_by_display_name: str
     created_at: datetime
     archived_by: str | None
+    """None while active."""
+    archived_by_display_name: str | None
     """None while active."""
     archived_at: datetime | None
     """None while active."""
@@ -48,6 +52,7 @@ def _build_node_detail(
     subsystem_name: str,
     modes: list[Mode],
     keys: list[Key],
+    display_names: dict[str, str],
 ) -> NodeOut:
     """Assemble a node's modes and their versions (newest first) from flat rows."""
     versions_by_mode: dict[int, list[int]] = {}
@@ -68,8 +73,12 @@ def _build_node_detail(
                 name=mode.name,
                 description=mode.description,
                 created_by=mode.created_by,
+                created_by_display_name=display_names[mode.created_by],
                 created_at=mode.created_at,
                 archived_by=mode.archived_by,
+                archived_by_display_name=(
+                    display_names[mode.archived_by] if mode.archived_by is not None else None
+                ),
                 archived_at=mode.archived_at,
                 versions=versions_by_mode.get(mode.id, []),
             )
@@ -87,10 +96,25 @@ async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut
     )
     assert subsystem_name is not None
 
-    modes = list(await session.scalars(select(Mode).where(Mode.node_id == node.id)))
+    creator = aliased(AppUser)
+    archiver = aliased(AppUser)
+    mode_rows = (
+        await session.execute(
+            select(Mode, creator.display_name, archiver.display_name)
+            .select_from(Mode)
+            .outerjoin(creator, creator.cern_login == Mode.created_by)
+            .outerjoin(archiver, archiver.cern_login == Mode.archived_by)
+            .where(Mode.node_id == node.id)
+        )
+    ).all()
+    modes = [row[0] for row in mode_rows]
+    display_names = {row[0].created_by: row[1] for row in mode_rows} | {
+        row[0].archived_by: row[2] for row in mode_rows if row[0].archived_by is not None
+    }
+
     keys = list(await session.scalars(select(Key).where(Key.mode_id.in_([m.id for m in modes]))))
 
-    return _build_node_detail(node, subsystem_name, modes, keys)
+    return _build_node_detail(node, subsystem_name, modes, keys, display_names)
 
 
 @router.get("/by-path/{subsystem_name}/{node_name}")

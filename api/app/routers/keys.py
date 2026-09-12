@@ -3,18 +3,24 @@ from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import Key, KeyChild, Mode, Node, NodeEdge, Subsystem
+from app.db.models import AppUser, Key, KeyChild, Mode, Node, NodeEdge, StagedEdit, Subsystem
 
 router = APIRouter(
     prefix="/keys",
     dependencies=[Depends(JWTBearerClaims())],
     tags=["keys"],
 )
+
+
+class KeyRefOut(BaseModel):
+    mode_name: str
+    version: int
+    label: str
 
 
 class KeyOut(BaseModel):
@@ -24,8 +30,11 @@ class KeyOut(BaseModel):
     payload: str | None
     """None for bundles."""
     created_by: str
+    created_by_display_name: str
     created_at: datetime
     comment: str
+    based_on: KeyRefOut | None
+    """The key this was forked/copied from, or its previous version otherwise."""
 
     model_config = {"from_attributes": True}
 
@@ -89,13 +98,59 @@ async def key_or_404(
     return key
 
 
+def _build_key_detail(
+    key: Key,
+    display_name: str,
+    ancestor_mode_name: str | None,
+    ancestor_version: int | None,
+    ancestor_label: str | None,
+) -> KeyOut:
+    """Attaches the key's author display name and fork/copy ancestor to its flat row."""
+    return KeyOut(
+        id=key.id,
+        label=key.label,
+        version=key.version,
+        payload=key.payload,
+        created_by=key.created_by,
+        created_by_display_name=display_name,
+        created_at=key.created_at,
+        comment=key.comment,
+        based_on=(
+            KeyRefOut(mode_name=ancestor_mode_name, version=ancestor_version, label=ancestor_label)
+            if ancestor_mode_name is not None
+            else None
+        ),
+    )
+
+
 @router.get("/{subsystem_name}/{node_name}/{mode_name}/{version}")
 async def get_key(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
 ) -> KeyOut:
     """Fetches a single key by (subsystem, node, mode, version)."""
     key = await key_or_404(subsystem_name, node_name, mode_name, version, session)
-    return KeyOut.model_validate(key)
+
+    ancestor = aliased(Key)
+    ancestor_mode = aliased(Mode)
+    row = (
+        await session.execute(
+            select(AppUser.display_name, ancestor_mode.name, ancestor.version, ancestor.label)
+            .select_from(StagedEdit)
+            .outerjoin(
+                ancestor,
+                ancestor.id == func.coalesce(StagedEdit.copied_from_key_id, StagedEdit.base_key_id),
+            )
+            .outerjoin(ancestor_mode, ancestor_mode.id == ancestor.mode_id)
+            .outerjoin(AppUser, AppUser.cern_login == key.created_by)
+            .where(StagedEdit.id == key.staged_edit_id)
+        )
+    ).first()
+    assert row is not None
+    display_name, ancestor_mode_name, ancestor_version, ancestor_label = row
+    assert display_name is not None
+    return _build_key_detail(
+        key, display_name, ancestor_mode_name, ancestor_version, ancestor_label
+    )
 
 
 _ChildRow = tuple[str, Key | None, int, str, str, str | None, str | None]

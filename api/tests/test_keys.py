@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from app.db.models import Key
-from app.routers.keys import _build_child_meta
+from app.routers.keys import _build_child_meta, _build_key_detail
 
 
 def _key() -> Key:
@@ -56,3 +56,20 @@ def test_build_child_meta_lists_empty_alias_with_null_key():
     assert meta.created_at is None
     assert meta.comment is None
     assert meta.payload is None
+
+
+def test_build_key_detail_fills_display_name_and_ancestor():
+    out = _build_key_detail(_key(), "Jane Doe", "default", 3, "ugt/l1_menu/default/v3")
+
+    assert out.created_by_display_name == "Jane Doe"
+    assert out.based_on is not None
+    assert out.based_on.mode_name == "default"
+    assert out.based_on.version == 3
+    assert out.based_on.label == "ugt/l1_menu/default/v3"
+
+
+def test_build_key_detail_has_no_ancestor_for_a_fresh_key():
+    """A key with no fork/copy source and no previous version has nothing to point 'based on' at."""
+    out = _build_key_detail(_key(), "Jane Doe", None, None, None)
+
+    assert out.based_on is None

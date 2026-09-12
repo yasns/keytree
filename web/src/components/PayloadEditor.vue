@@ -7,6 +7,7 @@
       :version="version"
       :payload="key"
       :staged="staged"
+      :pending="pending"
     ></KeyMetadata>
 
     <EditorToolbar
@@ -17,7 +18,7 @@
       :subsystem="subsystem"
       :name="name"
       :mode="mode"
-      :committed="isCommitted(staged)"
+      :committed="!pending"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
@@ -35,7 +36,7 @@ import { useTheme } from 'vuetify'
 import * as monaco from 'monaco-editor'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { useNavStore } from '@/stores/nav'
-import { isCommitted, useChangesStore, useDirtySource } from '@/stores/changes'
+import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { CATEGORY } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
@@ -45,13 +46,14 @@ import EditorToolbar from './EditorToolbar.vue'
   getWorker: () => new EditorWorker(),
 }
 
-const { subsystem, name, mode, version, category, canQueue } = defineProps<{
+const { subsystem, name, mode, version, category, canQueue, pending } = defineProps<{
   subsystem: string
   name: string
   mode: string
   version: number
   category?: string | null
   canQueue?: boolean
+  pending?: boolean
 }>()
 
 const emit = defineEmits<{ queue: [] }>()
@@ -69,7 +71,11 @@ useDirtySource(dirty, Infinity)
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let baseValue = ''
 
-const staged = computed(() => changes.stagedFor(subsystem, name, mode, version))
+const staged = computed(() =>
+  pending
+    ? changes.stagedForMode(subsystem, name, mode)
+    : changes.stagedFor(subsystem, name, mode, version),
+)
 
 function resetToBaseline() {
   if (!editor) return
@@ -98,15 +104,13 @@ onMounted(() => {
 
 async function loadPayload() {
   if (!editor) return
-  key.value = isCommitted(staged.value)
-    ? await nav.fetchKeyPayload(subsystem, name, mode, version)
-    : undefined
+  key.value = pending ? undefined : await nav.fetchKeyPayload(subsystem, name, mode, version)
   resetToBaseline()
   const model = editor.getModel()
   if (model) monaco.editor.setModelLanguage(model, languageFor(category))
 }
 
-watch(() => [subsystem, name, mode, version], loadPayload)
+watch(() => [subsystem, name, mode, version, pending], loadPayload)
 
 // Reload committed data after a commit, unless it would throw away an unsaved payload
 watch(

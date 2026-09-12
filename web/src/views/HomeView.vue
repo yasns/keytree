@@ -8,7 +8,7 @@
       <v-row>
         <v-col cols="12" md="6">
           <v-card
-            prepend-icon="mdi-script-text-key"
+            prepend-icon="mdi-key-chain"
             text="Explore the subsystem tree and pick a key to view or edit."
             title="Browse / Edit Keys"
             @click="browseKeys"

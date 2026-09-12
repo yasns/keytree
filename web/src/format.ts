@@ -1,0 +1,17 @@
+export const LOCALE = new Intl.Locale('en-GB')
+
+const RTF = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' })
+const RTF_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 31536000],
+  ['month', 2592000],
+  ['week', 604800],
+  ['day', 86400],
+  ['hour', 3600],
+  ['minute', 60],
+]
+
+export function relativeTime(iso: string): string {
+  const diffSeconds = (new Date(iso).getTime() - Date.now()) / 1000
+  const [unit, secs] = RTF_UNITS.find(([, secs]) => Math.abs(diffSeconds) >= secs) ?? ['second', 1]
+  return RTF.format(Math.round(diffSeconds / secs), unit)
+}

@@ -7,13 +7,19 @@
           <div class="d-flex align-center ga-1">
             <span class="text-title-medium">{{ mode }}</span>
             <v-chip size="small" density="compact" label variant="outlined"
-              >v{{ displayVersion }}</v-chip
+              >v{{ version }}</v-chip
             >
-            <v-chip v-if="staged" size="small" density="compact" label variant="tonal" color="info"
+            <v-chip
+              v-if="pendingEdit"
+              size="small"
+              density="compact"
+              label
+              variant="tonal"
+              color="info"
               >pending</v-chip
             >
             <v-chip
-              v-if="isLatest !== undefined && !staged"
+              v-if="isLatest !== undefined && !pendingEdit"
               size="small"
               density="compact"
               label
@@ -27,35 +33,48 @@
             class="text-body-small text-medium-emphasis text-truncate"
             style="width: 100%"
           >
-            {{ relativeTime((staged?.created_at ?? payload?.created_at)!)
-            }}<template v-if="staged?.comment ?? payload?.comment">
-              | {{ staged?.comment ?? payload?.comment }}</template
+            {{ relativeTime((pendingEdit?.created_at ?? payload?.created_at)!)
+            }}<template v-if="pendingEdit?.comment ?? payload?.comment">
+              | {{ pendingEdit?.comment ?? payload?.comment }}</template
             >
           </div>
         </div>
       </v-expansion-panel-title>
-      <v-expansion-panel-text v-if="hasDetail" class="text-caption">
-        <label class="text-body-medium">
+      <v-expansion-panel-text v-if="hasDetail" class="text-caption text-body-medium">
+        <label>
           <div class="font-weight-medium">Key label</div>
-
           <div class="d-flex align-center ga-1">
-            <code class="v-code text-truncate">{{ displayLabel }}</code>
             <CopyButton :text="displayLabel!"></CopyButton>
+            <code class="v-code text-truncate">{{ displayLabel }}</code>
           </div>
         </label>
 
-        <div class="meta-grid text-body-medium mt-2">
+        <div class="meta-grid mt-2">
           <span class="font-weight-medium">Created at:</span>
           <span>{{
-            new Date((staged?.created_at ?? payload?.created_at)!).toLocaleString(LOCALE)
+            new Date((pendingEdit?.created_at ?? payload?.created_at)!).toLocaleString(LOCALE)
           }}</span>
 
           <span class="font-weight-medium">Created by:</span>
-          <span>{{ staged?.created_by ?? payload?.created_by }}</span>
+          <span>
+            <template v-if="createdByDisplayName"
+              >{{ createdByDisplayName }} ({{ createdBy }})</template
+            >
+            <template v-else>
+              {{ createdBy }}
+            </template>
+          </span>
 
           <span class="font-weight-medium">Comment:</span>
-          <span>{{ staged?.comment ?? payload?.comment }}</span>
+          <span>{{ pendingEdit?.comment ?? payload?.comment }}</span>
         </div>
+
+        <template v-if="basedOn">
+          <div class="font-weight-medium mt-2">Based on</div>
+          <a :href="basedOnHref" target="_blank" rel="noopener">
+            <code class="v-code">{{ basedOn.label }}</code>
+          </a>
+        </template>
       </v-expansion-panel-text>
     </v-expansion-panel>
   </v-expansion-panels>
@@ -63,29 +82,16 @@
 
 <script setup lang="ts">
 import { computed, ref, toRef } from 'vue'
+import { useRouter } from 'vue-router'
 import type { components } from '@/api-types'
 import { useModesByPath } from '@/composables/useModesByPath'
+import { LOCALE, relativeTime } from '@/format'
+import { keyRoute } from '@/router'
+import { useAuthStore } from '@/stores/auth'
 import CopyButton from './CopyButton.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']
-
-const LOCALE = new Intl.Locale('en-GB')
-const RTF = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' })
-const RTF_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31536000],
-  ['month', 2592000],
-  ['week', 604800],
-  ['day', 86400],
-  ['hour', 3600],
-  ['minute', 60],
-]
-
-function relativeTime(iso: string): string {
-  const diffSeconds = (new Date(iso).getTime() - Date.now()) / 1000
-  const [unit, secs] = RTF_UNITS.find(([, secs]) => Math.abs(diffSeconds) >= secs) ?? ['second', 1]
-  return RTF.format(Math.round(diffSeconds / secs), unit)
-}
 
 const props = defineProps<{
   subsystem: string
@@ -94,9 +100,27 @@ const props = defineProps<{
   version: number
   payload?: KeyOut
   staged?: StagedEditOut
+  pending?: boolean
 }>()
 
 const panel = ref(undefined)
+
+const auth = useAuthStore()
+const router = useRouter()
+
+const pendingEdit = computed(() => (props.pending ? props.staged : undefined))
+
+const createdBy = computed(() => pendingEdit.value?.created_by ?? props.payload?.created_by)
+const createdByDisplayName = computed(() =>
+  pendingEdit.value ? auth.displayName : props.payload?.created_by_display_name,
+)
+
+const basedOn = computed(() => pendingEdit.value?.based_on ?? props.payload?.based_on)
+const basedOnHref = computed(() => {
+  const b = basedOn.value
+  if (!b) return undefined
+  return router.resolve(keyRoute(props.subsystem, props.name, b.mode_name, b.version)).href
+})
 
 const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
 
@@ -105,15 +129,12 @@ const isLatest = computed(() => {
   return latest === undefined ? undefined : latest === props.version
 })
 
-const displayVersion = computed(() =>
-  props.staged ? props.staged.expected_version : props.version,
-)
 const displayLabel = computed(() =>
-  props.staged
-    ? `${props.subsystem}/${props.name}/${props.mode}/v${displayVersion.value}`
+  pendingEdit.value
+    ? `${props.subsystem}/${props.name}/${props.mode}/v${props.version}`
     : props.payload?.label,
 )
-const hasDetail = computed(() => !!props.staged || !!props.payload)
+const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
 </script>
 
 <style scoped>
