@@ -172,6 +172,24 @@ def upgrade() -> None:
     op.execute("GRANT USAGE ON SEQUENCE mode_id_seq TO keytree_app")
 
     _ = op.create_table(
+        "staged_archival",
+        sa.Column("changeset_id", sa.Integer(), nullable=False),
+        sa.Column("mode_id", sa.Integer(), nullable=False),
+        sa.Column("archived", sa.Boolean(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["changeset_id"],
+            ["changeset.id"],
+            name=op.f("fk_staged_archival_changeset_id_changeset"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["mode_id"], ["mode.id"], name=op.f("fk_staged_archival_mode_id_mode")
+        ),
+        sa.PrimaryKeyConstraint("changeset_id", "mode_id", name=op.f("pk_staged_archival")),
+    )
+    op.execute("GRANT SELECT, INSERT, DELETE ON staged_archival TO keytree_app")
+
+    _ = op.create_table(
         "node_edge",
         sa.Column("parent_node_id", sa.Integer(), nullable=False),
         sa.Column("child_node_id", sa.Integer(), nullable=False),
@@ -207,12 +225,6 @@ def upgrade() -> None:
         sa.Column("proposed_children", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("comment", sa.Text(), nullable=False),
         sa.Column("validation_status", sa.String(length=255), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
         sa.CheckConstraint(
             "validation_status IN ('skipped', 'passed', 'failed')",
             name=op.f("ck_staged_edit_validation_status_enum"),
@@ -325,6 +337,7 @@ def downgrade() -> None:
     op.drop_table("key")
     op.drop_table("staged_edit")
     op.drop_table("node_edge")
+    op.drop_table("staged_archival")
     op.drop_table("mode")
     op.drop_table("node")
     op.drop_table("role_subsystem")

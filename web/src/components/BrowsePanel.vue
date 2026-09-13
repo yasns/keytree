@@ -87,13 +87,23 @@
       <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
         <v-list v-if="filteredModes.length" density="compact" class="py-0">
           <v-list-item
-            v-for="mode in filteredModes"
-            :key="mode.id"
-            :active="isSelected(mode)"
-            @click="activate(mode, defaultTarget(mode))"
+            v-for="row in filteredModes"
+            :key="row.mode.id"
+            :active="isSelected(row.mode)"
+            @click="activate(row.mode, defaultTarget(row.mode))"
           >
-            <v-list-item-title class="d-flex align-center">
-              {{ mode.name }}
+            <v-list-item-title class="d-flex align-center ga-1">
+              {{ row.mode.name }}
+              <v-chip
+                v-if="row.archived"
+                size="small"
+                density="compact"
+                label
+                variant="tonal"
+                :color="row.pending ? 'warning' : undefined"
+              >
+                {{ row.pending ? 'archive pending' : 'archived' }}
+              </v-chip>
             </v-list-item-title>
             <template v-slot:append>
               <v-menu>
@@ -105,7 +115,7 @@
                     v-bind="props"
                     density="compact"
                   >
-                    v{{ selectedVersion(mode) }}
+                    v{{ selectedVersion(row.mode) }}
                   </v-chip>
                   <v-tooltip location="top">
                     <template v-slot:activator="{ props }">
@@ -117,23 +127,27 @@
                         @click.stop
                       ></v-icon>
                     </template>
-                    <div class="text-label-large">{{ mode.description || 'No description.' }}</div>
-                    <div>
-                      Created by {{ mode.created_by_display_name }} ({{ mode.created_by }})
-                      {{ relativeTime(mode.created_at) }}
+                    <div class="text-label-large">
+                      {{ row.mode.description || 'No description.' }}
                     </div>
-                    <div v-if="mode.archived_at">
-                      Archived by {{ mode.archived_by_display_name }} ({{ mode.archived_by }})
-                      {{ relativeTime(mode.archived_at) }}
+                    <div>
+                      Created by {{ row.mode.created_by_display_name }} ({{ row.mode.created_by }})
+                      {{ relativeTime(row.mode.created_at) }}
+                    </div>
+                    <div v-if="row.mode.archived_at">
+                      Archived by {{ row.mode.archived_by_display_name }} ({{
+                        row.mode.archived_by
+                      }})
+                      {{ relativeTime(row.mode.archived_at) }}
                     </div>
                   </v-tooltip>
                 </template>
                 <v-list density="compact">
                   <v-list-item
-                    v-for="opt in versionOptions(mode)"
+                    v-for="opt in versionOptions(row.mode)"
                     :key="opt.version"
                     :title="opt.label"
-                    @click="activate(mode, opt.version)"
+                    @click="activate(row.mode, opt.version)"
                   ></v-list-item>
                 </v-list>
               </v-menu>
@@ -167,7 +181,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { relativeTime } from '@/format'
 import { keyRoute, type VersionTarget } from '@/router'
-import { useNavStore, walk, type Row } from '@/stores/nav'
+import { type Row, useNavStore, walk } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { components } from '@/api-types'
@@ -327,9 +341,19 @@ watch(
 )
 
 const filteredModes = computed(() =>
-  (detail.value?.modes ?? []).filter(
-    (m) => filter.value === 'all' || (m.archived_at === null) === (filter.value === 'active'),
-  ),
+  (detail.value?.modes ?? [])
+    .map((mode) => {
+      const staged = changes.stagedArchival(mode.id)
+      return {
+        mode,
+        archived: staged?.archived ?? mode.archived_at !== null,
+        pending: !!staged,
+        committedArchived: mode.archived_at !== null,
+      }
+    })
+    .filter(
+      (row) => filter.value === 'all' || !row.committedArchived === (filter.value === 'active'),
+    ),
 )
 
 function isSelected(mode: ModeOut) {

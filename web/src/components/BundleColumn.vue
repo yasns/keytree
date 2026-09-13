@@ -18,6 +18,7 @@
       :subsystem="subsystem"
       :name="name"
       :mode="mode"
+      :version="version"
       :committed="!pending"
       @save="save"
       @save-and-queue="saveAndQueue"
@@ -69,7 +70,7 @@
                 <v-select
                   class="key-select"
                   :model-value="modeValue(childChoice.get(row.child.alias))"
-                  :items="modeItems(row.child)"
+                  :items="row.items"
                   :label="row.child.alias"
                   placeholder="Select key"
                   hide-details
@@ -100,6 +101,15 @@
                     @click.stop.prevent="updateToLatest(row.child, row.upgrade)"
                     >Update to v{{ row.upgrade.version }}</a
                   >
+                </div>
+
+                <div v-if="row.archived" class="text-label-medium text-error">
+                  <v-icon
+                    icon="mdi-archive-outline"
+                    size="x-small"
+                    style="vertical-align: baseline"
+                  ></v-icon>
+                  This mode is archived.
                 </div>
               </div>
             </template>
@@ -145,7 +155,7 @@ const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const { navigateToStaged } = useStagedNavigation()
+const { navigateToStaged, showStaged } = useStagedNavigation()
 
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
@@ -200,7 +210,6 @@ function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   return { version, staged: committed !== undefined && version > committed }
 }
 
-/** Value contains the tip version so reselecting a newer tip is a value change. */
 function modeItems(child: KeyChildMetaOut) {
   return [
     { title: 'None', value: '' },
@@ -214,7 +223,13 @@ function modeItems(child: KeyChildMetaOut) {
   ]
 }
 
-/** Undefined for a cleared row so a placeholder is shown. */
+function archivedMode(child: KeyChildMetaOut): boolean {
+  const mode = childChoice.get(child.alias)?.mode
+  if (!mode) return false
+  const option = modeOptions(child).find((m) => m.name === mode)
+  return !!option && changes.archived(option)
+}
+
 function modeValue(choice: ChildChoice | undefined): string | undefined {
   if (!choice?.mode) return undefined
   return `${choice.mode}/${choice.version ?? ''}`
@@ -253,15 +268,17 @@ function baselineChild(child: KeyChildMetaOut): ChildChoice {
   return { keyId: proposed.key_id, mode: proposed.mode_name, version: proposed.version }
 }
 
+function applyBaselineRow(child: KeyChildMetaOut) {
+  if (child.category === 'external') {
+    externalChoice.set(child.alias, baselineExternal(child))
+  } else {
+    childChoice.set(child.alias, baselineChild(child))
+  }
+}
+
 function applyBaseline() {
   if (!children.value) return
-  for (const child of children.value) {
-    if (child.category === 'external') {
-      externalChoice.set(child.alias, baselineExternal(child))
-    } else {
-      childChoice.set(child.alias, baselineChild(child))
-    }
-  }
+  for (const child of children.value) applyBaselineRow(child)
 }
 
 async function onModeSelect(child: KeyChildMetaOut, value: string) {
@@ -352,9 +369,8 @@ function resolvedChild(child: KeyChildMetaOut): KeyChildMetaOut {
   return { ...child, id: choice.keyId, mode_name: choice.mode, version: choice.version }
 }
 
-// Clicking the already-open row toggles it closed; clicking any other row opens it at its current selection
+// Clicking the already-open row toggles it closed. Clicking any other row opens it at its current selection
 async function onRowClick(child: KeyChildMetaOut) {
-  // External children have no nested key to open a column for
   if (child.category === 'external') return
   if (child.alias !== props.selectedAlias) {
     emit('select', resolvedChild(child))
@@ -378,6 +394,8 @@ const rows = computed(() =>
     upgrade: upgrade(child),
     changed: changedFromOriginal(child),
     dirty: rowDirty(child),
+    archived: archivedMode(child),
+    items: child.category === 'external' ? [] : modeItems(child),
   })),
 )
 
@@ -437,6 +455,15 @@ async function save(comment: string) {
   if (!children.value) return
   const { childEdits, proposedChildren } = buildEdits(comment)
   await changes.stage([...childEdits, baseEdit(comment, proposedChildren)])
+  if (props.pending) return
+  if (!props.canQueue) {
+    // Without a parent column to queue into, this column owns the route, so it shows the new version
+    showStaged(props.subsystem, props.name, props.mode)
+    return
+  }
+  // Point this column's own bundle-path entry at what it just staged, so it shows pending immediately
+  const edit = changes.stagedForMode(props.subsystem, props.name, props.mode)
+  if (edit) nav.markPathStaged(props.depth - 1, edit.expected_version)
 }
 
 async function saveAndQueue(comment: string) {

@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import AppUser, Changeset, Key, Mode, Node, StagedEdit, Subsystem
+from app.db.models import AppUser, Changeset, Key, Mode, Node, StagedArchival, StagedEdit, Subsystem
 from app.routers.commit import (
     _build_key_children,
     _build_keys,
@@ -16,6 +16,7 @@ from app.routers.commit import (
 )
 from app.routers.staging import (
     ProposedChildOut,
+    StagedArchivalOut,
     StagedEditIn,
     _build_changeset,
     _get_or_create_open_changeset,
@@ -41,7 +42,6 @@ def test_build_changeset_assembles_edits_and_ripple():
         proposed_children=None,
         comment="switch clock source",
         validation_status="skipped",
-        created_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
     rebundle_edit = StagedEdit(
         id=2,
@@ -53,13 +53,15 @@ def test_build_changeset_assembles_edits_and_ripple():
         proposed_children={"clock_source": None, "other_child": 9},
         comment="point at the new clock source",
         validation_status="skipped",
-        created_at=datetime(2026, 1, 3, tzinfo=UTC),
     )
 
     rows = [
         (payload_edit, "cms_run", "clock_source", "default", 3, "external"),
         (rebundle_edit, "cms_run", "conf", "default", 1, "algo"),
     ]
+
+    archival = StagedArchival(changeset_id=7, mode_id=120, archived=True)
+    archival_rows = [(archival, "cms_run", "conf", "retired")]
 
     out = _build_changeset(
         changeset,
@@ -69,19 +71,27 @@ def test_build_changeset_assembles_edits_and_ripple():
                 key_id=9, mode_name="special", version=5, label="cms_run/conf/special/v5"
             )
         },
+        archival_rows,
     )
 
     assert out.id == 7
     assert out.created_by == "jdoe"
     assert [e.node_name for e in out.edits] == ["clock_source", "conf"]
 
+    assert out.archivals == [
+        StagedArchivalOut(
+            mode_id=120,
+            subsystem_name="cms_run",
+            node_name="conf",
+            mode_name="retired",
+            archived=True,
+        )
+    ]
+
     external_edit, bundle_edit = out.edits
     assert external_edit.base_version == 3
     assert external_edit.category == "external"
     assert external_edit.proposed_payload == "LHC"
-    # Edits and changeset track their own timestamps
-    assert external_edit.created_at == datetime(2026, 1, 2, tzinfo=UTC)
-    assert bundle_edit.created_at == datetime(2026, 1, 3, tzinfo=UTC)
 
     assert bundle_edit.base_version == 1
     assert bundle_edit.proposed_children is not None
@@ -106,12 +116,11 @@ def test_build_changeset_handles_a_fork_with_no_base_key():
         proposed_children=None,
         comment="fork",
         validation_status="skipped",
-        created_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
 
     rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
 
-    out = _build_changeset(changeset, rows, {})
+    out = _build_changeset(changeset, rows, {}, [])
 
     assert out.edits[0].base_version is None
     assert out.edits[0].expected_version == 1
@@ -132,7 +141,6 @@ def test_build_changeset_reports_the_fork_source():
         proposed_children=None,
         comment="fork",
         validation_status="skipped",
-        created_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
 
     rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
@@ -144,6 +152,7 @@ def test_build_changeset_reports_the_fork_source():
                 key_id=42, mode_name="default", version=3, label="cms_run/clock_source/default/v3"
             )
         },
+        [],
     )
 
     assert out.edits[0].copied_from == ProposedChildOut(

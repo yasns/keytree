@@ -18,6 +18,7 @@
       :subsystem="subsystem"
       :name="name"
       :mode="mode"
+      :version="version"
       :committed="!pending"
       @save="save"
       @save-and-queue="saveAndQueue"
@@ -46,7 +47,7 @@ import EditorToolbar from './EditorToolbar.vue'
   getWorker: () => new EditorWorker(),
 }
 
-const { subsystem, name, mode, version, category, canQueue, pending } = defineProps<{
+const { subsystem, name, mode, version, category, canQueue, pending, depth } = defineProps<{
   subsystem: string
   name: string
   mode: string
@@ -54,6 +55,8 @@ const { subsystem, name, mode, version, category, canQueue, pending } = definePr
   category?: string | null
   canQueue?: boolean
   pending?: boolean
+  /** This leaf's bundle-path index, when rendered inside a bundle rather than as the routed key. */
+  depth?: number
 }>()
 
 const emit = defineEmits<{ queue: [] }>()
@@ -61,7 +64,7 @@ const emit = defineEmits<{ queue: [] }>()
 const nav = useNavStore()
 const changes = useChangesStore()
 const theme = useTheme()
-const { navigateToStaged } = useStagedNavigation()
+const { navigateToStaged, showStaged } = useStagedNavigation()
 
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
@@ -139,6 +142,14 @@ async function save(comment: string) {
   if (!editor) return
   await changes.stage([baseEdit(comment)])
   resetToBaseline()
+  if (pending) return
+  if (!canQueue) {
+    showStaged(subsystem, name, mode)
+    return
+  }
+  if (depth === undefined) return
+  const edit = changes.stagedForMode(subsystem, name, mode)
+  if (edit) nav.markPathStaged(depth - 1, edit.expected_version)
 }
 
 async function saveAndQueue(comment: string) {

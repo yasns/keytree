@@ -24,12 +24,13 @@
 import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { keyRoute, parseVersion } from '@/router'
-import { useNavStore, type BundleRoot } from '@/stores/nav'
+import { type BundleRoot, useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import BundleBrowser from '@/components/BundleBrowser.vue'
 import BrowsePanel from '@/components/BrowsePanel.vue'
+import Spinner from '@/components/Spinner.vue'
 
 const { subsystem, name, mode, version } = defineProps<{
   subsystem: string

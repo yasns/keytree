@@ -5,7 +5,7 @@
         variant="outlined"
         color="error"
         prepend-icon="mdi-cancel"
-        :disabled="!changes.visibleEdits.length"
+        :disabled="!changes.pendingCount"
         @click="confirmDiscardAll = true"
       >
         Discard All
@@ -21,7 +21,7 @@
     ></ConfirmDialog>
 
     <div
-      v-if="!changes.visibleEdits.length"
+      v-if="!changes.pendingCount"
       class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4 mt-2"
       style="min-height: 0"
     >
@@ -39,6 +39,16 @@
             </code>
           </v-list-item-title>
           <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
+        </v-list-item>
+        <v-list-item v-for="archival in changes.archivals" :key="`archival-${archival.mode_id}`">
+          <v-list-item-title class="text-body-medium">
+            <code
+              >{{ archival.subsystem_name }}/{{ archival.node_name }}/{{ archival.mode_name }}</code
+            >
+          </v-list-item-title>
+          <v-list-item-subtitle>
+            {{ archival.archived ? 'Archive mode' : 'Unarchive mode' }}
+          </v-list-item-subtitle>
         </v-list-item>
       </v-list>
     </div>
@@ -88,14 +98,14 @@
         maxlength="255"
         density="compact"
         hide-details
-        :disabled="!changes.visibleEdits.length"
+        :disabled="!changes.pendingCount"
       ></v-textarea>
       <v-btn
         block
         class="mt-2"
         color="primary"
         prepend-icon="mdi-source-commit"
-        :disabled="!changes.visibleEdits.length || !comment.trim()"
+        :disabled="!changes.pendingCount || !comment.trim()"
         :loading="committing"
         @click="commit()"
       >
@@ -109,7 +119,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { keyRoute, parseVersion } from '@/router'
-import { conflictsFrom, pendingSource, useChangesStore, type Conflict } from '@/stores/changes'
+import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import ConfirmDialog from './ConfirmDialog.vue'

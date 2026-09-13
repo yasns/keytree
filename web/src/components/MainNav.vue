@@ -86,7 +86,7 @@ import { useTheme } from 'vuetify'
 import { useAuthStore } from '@/stores/auth'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
-import { computed, type Component } from 'vue'
+import { type Component, computed } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
 import VersionControlPanel from './VersionControlPanel.vue'
 
@@ -101,9 +101,9 @@ const menuItems = computed(() => [
     icon: 'mdi-source-branch',
     title:
       'Version Control' +
-      (changes.visibleEdits.length > 0 ? ` – ${changes.visibleEdits.length} pending changes` : ''),
+      (changes.pendingCount > 0 ? ` – ${changes.pendingCount} pending changes` : ''),
     component: VersionControlPanel,
-    badge: changes.visibleEdits.length,
+    badge: changes.pendingCount,
   },
 ])
 

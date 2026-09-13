@@ -1,4 +1,5 @@
-import { ref, watch, type Ref } from 'vue'
+import { computed, ref, type Ref, watch } from 'vue'
+import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import type { components } from '@/api-types'
 
@@ -22,4 +23,17 @@ export function useModesByPath(
   )
 
   return modes
+}
+
+/** The mode matching `name` out of a `useModesByPath` list, if any. */
+export function useCurrentMode(
+  modes: Ref<ModeOut[]>,
+  name: Ref<string | undefined>,
+): Ref<ModeOut | undefined> {
+  return computed(() => modes.value.find((m) => m.name === name.value))
+}
+
+export function useIsArchived(mode: Ref<ModeOut | undefined>): Ref<boolean> {
+  const changes = useChangesStore()
+  return computed(() => !!mode.value && changes.archived(mode.value))
 }

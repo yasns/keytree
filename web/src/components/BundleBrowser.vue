@@ -35,6 +35,7 @@
             :name="column.name"
             :mode="column.mode"
             :version="column.version"
+            :pending="column.pending"
             :depth="column.index + 1"
             :selected-alias="nav.bundlePath[column.index + 1]?.alias"
             :can-queue="true"
@@ -73,7 +74,9 @@
             :name="leafEntry.name"
             :mode="leafEntry.mode"
             :version="leafEntry.version"
+            :pending="leafEntry.pending"
             :category="leafEntry.category"
+            :depth="nav.bundlePath.length"
             :can-queue="true"
             @queue="() => rippleTo(nav.bundlePath.length - 1)"
           ></PayloadEditor>

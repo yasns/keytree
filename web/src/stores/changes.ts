@@ -1,11 +1,12 @@
-import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, type Ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { api, unwrap, type ApiError } from '@/api'
+import { api, type ApiError, unwrap } from '@/api'
 import type { components } from '@/api-types'
 
 type ChangesetOut = components['schemas']['ChangesetOut']
 type StagedEditIn = components['schemas']['StagedEditIn']
 type StagedEditOut = components['schemas']['StagedEditOut']
+type StagedArchivalOut = components['schemas']['StagedArchivalOut']
 type ForkIn = components['schemas']['ForkIn']
 type CopyIn = components['schemas']['CopyIn']
 export type Conflict = components['schemas']['ConflictOut']
@@ -64,9 +65,12 @@ export const useChangesStore = defineStore('changes', () => {
   }
 
   const edits = computed(() => changeset.value?.edits ?? [])
+  const archivals = computed(() => changeset.value?.archivals ?? [])
 
   // Hide external leaf edits
   const visibleEdits = computed(() => edits.value.filter((e) => e.category !== 'external'))
+
+  const pendingCount = computed(() => visibleEdits.value.length + archivals.value.length)
 
   async function load() {
     changeset.value = unwrap(await api.GET('/api/staging/'))
@@ -94,6 +98,18 @@ export const useChangesStore = defineStore('changes', () => {
     const edit = stagedForMode(subsystem, name, mode)
     if (!edit) return undefined
     return (edit.base_version ?? edit.expected_version) === baseVersion ? edit : undefined
+  }
+
+  function stagedArchival(modeId: number): StagedArchivalOut | undefined {
+    return archivals.value.find((a) => a.mode_id === modeId)
+  }
+
+  function archived(mode: { id: number; archived_at: string | null }): boolean {
+    return stagedArchival(mode.id)?.archived ?? mode.archived_at !== null
+  }
+
+  async function toggleArchival(modeId: number) {
+    changeset.value = unwrap(await api.POST('/api/staging/archive', { body: { mode_id: modeId } }))
   }
 
   async function stage(newEdits: StagedEditIn[]) {
@@ -129,10 +145,15 @@ export const useChangesStore = defineStore('changes', () => {
 
   return {
     visibleEdits,
+    archivals,
+    pendingCount,
     load,
     stagedFor,
     stagedForNode,
     stagedForMode,
+    stagedArchival,
+    archived,
+    toggleArchival,
     stage,
     fork,
     copyTo,

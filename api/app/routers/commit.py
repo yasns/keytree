@@ -7,8 +7,18 @@ from sqlalchemy import delete, func, select, tuple_
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import Changeset, Key, KeyChild, Mode, Node, NodeEdge, StagedEdit, Subsystem
-from app.routers.staging import ChangesetOut, changeset_out, open_changeset
+from app.db.models import (
+    Changeset,
+    Key,
+    KeyChild,
+    Mode,
+    Node,
+    NodeEdge,
+    StagedArchival,
+    StagedEdit,
+    Subsystem,
+)
+from app.routers.staging import ChangesetOut, changeset_out, join_mode_names, open_changeset
 
 router = APIRouter(
     prefix="/commit",
@@ -130,6 +140,15 @@ def _build_key_children(
     return children
 
 
+def _archive_modes(
+    archivals: list[StagedArchival], modes: dict[int, Mode], cern_login: str
+) -> None:
+    for archival in archivals:
+        mode = modes[archival.mode_id]
+        mode.archived_by = cern_login if archival.archived else None
+        mode.archived_at = datetime.now(UTC) if archival.archived else None
+
+
 async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRow]:
     """Every staged edit with the names to label it, and its mode's current tip version."""
     tip_versions = (
@@ -143,18 +162,18 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
         .subquery()
     )
     result = await session.execute(
-        select(
-            StagedEdit,
-            Subsystem.name,
-            Node.name,
-            Mode.name,
-            Node.id,
-            Key.version,
-            func.coalesce(tip_versions.c.tip_version, 0),
+        join_mode_names(
+            select(
+                StagedEdit,
+                Subsystem.name,
+                Node.name,
+                Mode.name,
+                Node.id,
+                Key.version,
+                func.coalesce(tip_versions.c.tip_version, 0),
+            ),
+            StagedEdit.mode_id,
         )
-        .join(Mode, Mode.id == StagedEdit.mode_id)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
         .outerjoin(Key, Key.id == StagedEdit.base_key_id)
         .outerjoin(tip_versions, tip_versions.c.mode_id == StagedEdit.mode_id)
         .where(StagedEdit.changeset_id == changeset_id)
@@ -244,7 +263,12 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
         raise HTTPException(status_code=404, detail="no open changeset")
 
     rows = await _commit_rows(changeset.id, session)
-    if not rows:
+    archivals = list(
+        await session.scalars(
+            select(StagedArchival).where(StagedArchival.changeset_id == changeset.id)
+        )
+    )
+    if not rows and not archivals:
         raise HTTPException(status_code=400, detail="changeset has no staged edits")
 
     if not body.overwrite_conflicts and (conflicts := _conflicts(rows)):
@@ -271,6 +295,15 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
         node_of_key = dict(id_rows.tuples().all())
 
     session.add_all(_build_key_children(rows, keys, child_node_of, node_of_key))
+
+    if archivals:
+        modes = {
+            mode.id: mode
+            for mode in await session.scalars(
+                select(Mode).where(Mode.id.in_({a.mode_id for a in archivals}))
+            )
+        }
+        _archive_modes(archivals, modes, cern_login)
 
     changeset.comment = body.comment
     changeset.committed_at = datetime.now(UTC)
