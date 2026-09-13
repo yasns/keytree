@@ -236,10 +236,6 @@ class StagedEdit(Base):
 
     validation_status: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(["base_key_id", "mode_id"], ["key.id", "key.mode_id"], use_alter=True),
         CheckConstraint(
@@ -251,6 +247,18 @@ class StagedEdit(Base):
         ),
         CheckConstraint("expected_version > 0", name="expected_version_positive"),
     )
+
+
+class StagedArchival(Base):
+    __tablename__: str = "staged_archival"
+
+    changeset_id: Mapped[int] = mapped_column(
+        ForeignKey("changeset.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    mode_id: Mapped[int] = mapped_column(ForeignKey("mode.id"), primary_key=True)
+
+    archived: Mapped[bool] = mapped_column(nullable=False)
 
 
 class AppUser(Base):

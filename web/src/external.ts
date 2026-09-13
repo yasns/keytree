@@ -1,3 +1,4 @@
+import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 
 // Dummy values until the external DBs that own these lists are defined.
@@ -118,9 +119,10 @@ function externalOptions(key: string): string[] {
 }
 
 async function fetchL1HltModes(): Promise<string[]> {
+  const changes = useChangesStore()
   return useNavStore()
     .fetchModesByPath('l1_hlt', 'conf')
-    .then((modes) => modes.filter((m) => m.archived_at === null).map((m) => m.name))
+    .then((modes) => modes.filter((m) => !changes.archived(m)).map((m) => m.name))
 }
 
 // Subsystem+node keys whose option list must be fetched rather than read from EXTERNAL_OPTIONS

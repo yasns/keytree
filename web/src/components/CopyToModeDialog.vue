@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { components } from '@/api-types'
+import { useChangesStore } from '@/stores/changes'
 import FormDialog from './FormDialog.vue'
 
 type ModeOut = components['schemas']['ModeOut']
@@ -41,12 +42,14 @@ const props = defineProps<{ modes: ModeOut[]; current: string }>()
 
 const emit = defineEmits<{ copy: [mode: string, comment: string] }>()
 
+const changes = useChangesStore()
+
 const targetMode = ref('')
 const comment = ref('')
 const menuOpen = ref(false)
 
 const modes = computed(() =>
-  props.modes.filter((m) => m.archived_at === null && m.name !== props.current),
+  props.modes.filter((m) => !changes.archived(m) && m.name !== props.current),
 )
 
 watch(open, (isOpen) => {

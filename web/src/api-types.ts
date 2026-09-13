@@ -133,6 +133,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/staging/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Archival
+         * @description Stages a mode's archive/unarchive, flipped from current state. A second toggle cancels it.
+         */
+        post: operations["toggle_archival_api_staging_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/staging/fork": {
         parameters: {
             query?: never;
@@ -399,6 +419,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ArchivalIn */
+        ArchivalIn: {
+            /** Mode Id */
+            mode_id: number;
+        };
         /** ChangesetOut */
         ChangesetOut: {
             /** Id */
@@ -414,6 +439,8 @@ export interface components {
             created_at: string;
             /** Edits */
             edits: components["schemas"]["StagedEditOut"][];
+            /** Archivals */
+            archivals: components["schemas"]["StagedArchivalOut"][];
         };
         /** CommitIn */
         CommitIn: {
@@ -605,6 +632,19 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** StagedArchivalOut */
+        StagedArchivalOut: {
+            /** Mode Id */
+            mode_id: number;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Archived */
+            archived: boolean;
+        };
         /** StagedEditIn */
         StagedEditIn: {
             /** Subsystem Name */
@@ -652,11 +692,6 @@ export interface components {
             comment: string;
             /** Created By */
             created_by: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
         };
         /** SubsystemOut */
         SubsystemOut: {
@@ -979,6 +1014,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    toggle_archival_api_staging_archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchivalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

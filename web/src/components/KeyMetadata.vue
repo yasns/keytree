@@ -6,9 +6,7 @@
           <div class="text-body-small text-medium-emphasis">{{ subsystem }} / {{ name }}</div>
           <div class="d-flex align-center ga-1">
             <span class="text-title-medium">{{ mode }}</span>
-            <v-chip size="small" density="compact" label variant="outlined"
-              >v{{ version }}</v-chip
-            >
+            <v-chip size="small" density="compact" label variant="outlined">v{{ version }}</v-chip>
             <v-chip
               v-if="pendingEdit"
               size="small"
@@ -27,15 +25,25 @@
               :color="isLatest ? 'success' : undefined"
               >{{ isLatest ? 'latest' : 'old' }}</v-chip
             >
+            <v-chip
+              v-if="archived"
+              size="small"
+              density="compact"
+              label
+              variant="tonal"
+              :color="archivalPending ? 'warning' : 'error'"
+              >{{ archivalPending ? 'archive pending' : 'archived' }}</v-chip
+            >
           </div>
           <div
             v-if="hasDetail"
             class="text-body-small text-medium-emphasis text-truncate"
             style="width: 100%"
           >
-            {{ relativeTime((pendingEdit?.created_at ?? payload?.created_at)!)
-            }}<template v-if="pendingEdit?.comment ?? payload?.comment">
-              | {{ pendingEdit?.comment ?? payload?.comment }}</template
+            <template v-if="!pendingEdit">{{ relativeTime(payload?.created_at!) }}</template
+            ><template v-if="pendingEdit?.comment ?? payload?.comment"
+              >{{ pendingEdit ? '' : ' | '
+              }}{{ pendingEdit?.comment ?? payload?.comment }}</template
             >
           </div>
         </div>
@@ -50,20 +58,20 @@
         </label>
 
         <div class="meta-grid mt-2">
-          <span class="font-weight-medium">Created at:</span>
-          <span>{{
-            new Date((pendingEdit?.created_at ?? payload?.created_at)!).toLocaleString(LOCALE)
-          }}</span>
+          <template v-if="!pendingEdit">
+            <span class="font-weight-medium">Created at:</span>
+            <span>{{ new Date(payload?.created_at!).toLocaleString(LOCALE) }}</span>
 
-          <span class="font-weight-medium">Created by:</span>
-          <span>
-            <template v-if="createdByDisplayName"
-              >{{ createdByDisplayName }} ({{ createdBy }})</template
-            >
-            <template v-else>
-              {{ createdBy }}
-            </template>
-          </span>
+            <span class="font-weight-medium">Created by:</span>
+            <span>
+              <template v-if="createdByDisplayName"
+                >{{ createdByDisplayName }} ({{ createdBy }})</template
+              >
+              <template v-else>
+                {{ createdBy }}
+              </template>
+            </span>
+          </template>
 
           <span class="font-weight-medium">Comment:</span>
           <span>{{ pendingEdit?.comment ?? payload?.comment }}</span>
@@ -84,10 +92,11 @@
 import { computed, ref, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import type { components } from '@/api-types'
-import { useModesByPath } from '@/composables/useModesByPath'
+import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { LOCALE, relativeTime } from '@/format'
 import { keyRoute } from '@/router'
 import { useAuthStore } from '@/stores/auth'
+import { useChangesStore } from '@/stores/changes'
 import CopyButton from './CopyButton.vue'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -106,6 +115,7 @@ const props = defineProps<{
 const panel = ref(undefined)
 
 const auth = useAuthStore()
+const changes = useChangesStore()
 const router = useRouter()
 
 const pendingEdit = computed(() => (props.pending ? props.staged : undefined))
@@ -123,11 +133,17 @@ const basedOnHref = computed(() => {
 })
 
 const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
+const currentMode = useCurrentMode(modes, toRef(props, 'mode'))
 
 const isLatest = computed(() => {
-  const latest = modes.value.find((m) => m.name === props.mode)?.versions[0]
+  const latest = currentMode.value?.versions[0]
   return latest === undefined ? undefined : latest === props.version
 })
+
+const archived = useIsArchived(currentMode)
+const archivalPending = computed(
+  () => !!currentMode.value && !!changes.stagedArchival(currentMode.value.id),
+)
 
 const displayLabel = computed(() =>
   pendingEdit.value

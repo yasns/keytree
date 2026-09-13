@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import NamedTuple, cast
+from typing import Any, NamedTuple, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import ColumnElement, Select, delete, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import InstrumentedAttribute
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import Changeset, Key, Mode, Node, StagedEdit, Subsystem
+from app.db.models import Changeset, Key, Mode, Node, StagedArchival, StagedEdit, Subsystem
 from app.routers.keys import key_or_404, keys_by_locator
 from app.routers.user import upsert_app_user
 
@@ -46,6 +47,10 @@ class CopyIn(StagedEditIn):
     target_mode_name: str
 
 
+class ArchivalIn(BaseModel):
+    mode_id: int
+
+
 class ProposedChildOut(BaseModel):
     key_id: int
     mode_name: str
@@ -69,7 +74,14 @@ class StagedEditOut(BaseModel):
     """The fork/copy source, or its previous version otherwise."""
     comment: str
     created_by: str
-    created_at: datetime
+
+
+class StagedArchivalOut(BaseModel):
+    mode_id: int
+    subsystem_name: str
+    node_name: str
+    mode_name: str
+    archived: bool
 
 
 class ChangesetOut(BaseModel):
@@ -78,9 +90,11 @@ class ChangesetOut(BaseModel):
     created_by: str
     created_at: datetime
     edits: list[StagedEditOut]
+    archivals: list[StagedArchivalOut]
 
 
 _EditRow = tuple[StagedEdit, str, str, str, int | None, str | None]
+_ArchivalRow = tuple[StagedArchival, str, str, str]
 
 
 def _build_children(
@@ -95,13 +109,26 @@ def _build_children(
 
 
 def _build_changeset(
-    changeset: Changeset, rows: list[_EditRow], child_modes: dict[int, ProposedChildOut]
+    changeset: Changeset,
+    rows: list[_EditRow],
+    child_modes: dict[int, ProposedChildOut],
+    archival_rows: list[_ArchivalRow],
 ) -> ChangesetOut:
     return ChangesetOut(
         id=changeset.id,
         comment=changeset.comment,
         created_by=changeset.created_by,
         created_at=changeset.created_at,
+        archivals=[
+            StagedArchivalOut(
+                mode_id=archival.mode_id,
+                subsystem_name=subsystem_name,
+                node_name=node_name,
+                mode_name=mode_name,
+                archived=archival.archived,
+            )
+            for archival, subsystem_name, node_name, mode_name in archival_rows
+        ],
         edits=[
             StagedEditOut(
                 id=edit.id,
@@ -121,7 +148,6 @@ def _build_changeset(
                 else None,
                 comment=edit.comment,
                 created_by=changeset.created_by,
-                created_at=edit.created_at,
             )
             for edit, subsystem_name, node_name, mode_name, base_version, category in rows
         ],
@@ -152,12 +178,23 @@ async def _get_or_create_open_changeset(cern_login: str, session: SessionDep) ->
     return changeset
 
 
-async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
-    rows = await session.execute(
-        select(StagedEdit, Subsystem.name, Node.name, Mode.name, Key.version, Node.category)
-        .join(Mode, Mode.id == StagedEdit.mode_id)
+def join_mode_names(
+    stmt: Select[Any], mode_id: ColumnElement[int] | InstrumentedAttribute[int]
+) -> Select[Any]:
+    """Joins Mode -> Node -> Subsystem for display names, from any FK column pointing at Mode.id."""
+    return (
+        stmt.join(Mode, Mode.id == mode_id)
         .join(Node, Node.id == Mode.node_id)
         .join(Subsystem, Subsystem.id == Node.subsystem_id)
+    )
+
+
+async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
+    rows = await session.execute(
+        join_mode_names(
+            select(StagedEdit, Subsystem.name, Node.name, Mode.name, Key.version, Node.category),
+            StagedEdit.mode_id,
+        )
         .outerjoin(Key, Key.id == StagedEdit.base_key_id)
         .where(StagedEdit.changeset_id == changeset_id)
     )
@@ -187,9 +224,19 @@ async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, P
     }
 
 
+async def _archival_rows(changeset_id: int, session: SessionDep) -> list[_ArchivalRow]:
+    rows = await session.execute(
+        join_mode_names(
+            select(StagedArchival, Subsystem.name, Node.name, Mode.name), StagedArchival.mode_id
+        ).where(StagedArchival.changeset_id == changeset_id)
+    )
+    return list(rows.tuples())
+
+
 async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetOut:
     rows = await _edit_rows(changeset.id, session)
-    return _build_changeset(changeset, rows, await _child_modes(rows, session))
+    archival_rows = await _archival_rows(changeset.id, session)
+    return _build_changeset(changeset, rows, await _child_modes(rows, session), archival_rows)
 
 
 async def _tip_keys(mode_ids: set[int], session: SessionDep) -> dict[int, tuple[int, int]]:
@@ -309,6 +356,35 @@ async def stage_edits(
     return await changeset_out(changeset, session)
 
 
+@router.post("/archive")
+async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDep) -> ChangesetOut:
+    """Stages a mode's archive/unarchive, flipped from current state. A second toggle cancels it."""
+    claims = request.state.claims
+    cern_login = claims["cern_upn"]
+    await upsert_app_user(claims, session)
+
+    mode = await session.get(Mode, body.mode_id)
+    if mode is None:
+        raise HTTPException(status_code=404, detail="mode not found")
+
+    changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    existing = await session.get(StagedArchival, (changeset.id, body.mode_id))
+    if existing is not None:
+        await session.delete(existing)
+    else:
+        session.add(
+            StagedArchival(
+                changeset_id=changeset.id,
+                mode_id=body.mode_id,
+                archived=mode.archived_at is None,
+            )
+        )
+
+    await session.commit()
+    return await changeset_out(changeset, session)
+
+
 async def _login_and_source(
     body: StagedEditIn, request: Request, session: SessionDep
 ) -> tuple[str, Key]:
@@ -372,10 +448,16 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
     )
     if target is None:
         raise HTTPException(status_code=404, detail="target mode not found")
-    if target.archived_at is not None:
-        raise HTTPException(status_code=400, detail="target mode is archived")
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    # A staged archival on the target overrides its committed state
+    staged_archival = await session.get(StagedArchival, (changeset.id, target.id))
+    effective_archived = (
+        staged_archival.archived if staged_archival is not None else target.archived_at is not None
+    )
+    if effective_archived:
+        raise HTTPException(status_code=400, detail="target mode is archived")
 
     _ = await session.execute(
         delete(StagedEdit).where(
@@ -416,6 +498,7 @@ async def discard_changeset(request: Request, session: SessionDep) -> None:
             Mode.created_by == cern_login,
             ~select(Key.id).where(Key.mode_id == Mode.id).exists(),
             ~select(StagedEdit.id).where(StagedEdit.mode_id == Mode.id).exists(),
+            ~select(StagedArchival.mode_id).where(StagedArchival.mode_id == Mode.id).exists(),
         )
     )
     await session.commit()

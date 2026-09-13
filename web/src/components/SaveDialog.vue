@@ -2,6 +2,7 @@
   <v-dialog v-model="open" max-width="480" persistent>
     <v-card :title="title">
       <v-card-text>
+        <div v-if="warning" class="text-error text-body-small mb-2">{{ warning }}</div>
         <v-textarea
           v-model="comment"
           :label="label"
@@ -33,6 +34,7 @@ const props = withDefaults(
     label?: string
     confirmText?: string
     initialComment?: string
+    warning?: string
   }>(),
   { title: 'Save changes', label: 'Comment', confirmText: 'Save', initialComment: '' },
 )

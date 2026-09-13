@@ -1,7 +1,8 @@
-import { computed, ref, shallowRef, watch, type Component } from 'vue'
+import { type Component, computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { api, unwrap } from '@/api'
 import { iconFor, sortByKind } from '@/category'
+import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
@@ -17,19 +18,20 @@ export type BundleRoot = {
   name: string
   mode: string
   version: number
-  /** True when `version` is the mode's staged edit rather than a committed key. */
+  // True when `version` is the mode's staged edit rather than a committed key.
   pending: boolean
 }
 
-/** The key filling a child alias, or undefined when the alias is empty (KeyChildMetaOut nulls its key fields together). */
+/** The key filling a child alias, or undefined when the alias is empty */
 export function childLocator(child: KeyChildMetaOut): BundleRoot | undefined {
-  if (child.id === null || child.mode_name === null || child.version === null) return undefined
+  if (child.mode_name === null || child.version === null) return undefined
   return {
     subsystem: child.subsystem_name,
     name: child.node_name,
     mode: child.mode_name,
     version: child.version,
-    pending: false,
+    // A mode and version with no key id is the version this changeset will produce
+    pending: child.id === null,
   }
 }
 
@@ -94,7 +96,16 @@ export const useNavStore = defineStore('nav', () => {
   const bundleRoot = ref<BundleRoot | null>(null)
   const bundlePath = ref<KeyChildMetaOut[]>([])
 
-  watch(bundleRoot, () => {
+  watch(bundleRoot, (next, prev) => {
+    // Only the version/pending relabeled on the same key: the open path's selections are still valid
+    if (
+      next &&
+      prev &&
+      next.subsystem === prev.subsystem &&
+      next.name === prev.name &&
+      next.mode === prev.mode
+    )
+      return
     bundlePath.value = []
   })
 
@@ -224,6 +235,46 @@ export const useNavStore = defineStore('nav', () => {
     }))
   }
 
+  /** The committed key a pending version's rows come from, since it has no key of its own to fetch. */
+  function sourceOf(locator: BundleRoot): BundleRoot {
+    if (!locator.pending) return locator
+    const based = useChangesStore().stagedForMode(
+      locator.subsystem,
+      locator.name,
+      locator.mode,
+    )?.based_on
+    if (!based) return locator
+    return { ...locator, mode: based.mode_name, version: based.version }
+  }
+
+  /** Repoints a committed child at whatever its parent's staged edit proposes for that alias. */
+  function stagedChild(parent: BundleRoot, child: KeyChildMetaOut): KeyChildMetaOut {
+    const changes = useChangesStore()
+    const proposed = changes.stagedForMode(
+      parent.subsystem,
+      parent.name,
+      parent.mode,
+    )?.proposed_children
+    if (!proposed) return child
+    const target = proposed[child.alias]
+    // An alias the map leaves out is one the changeset clears, so it fills nothing
+    if (target === undefined) return { ...child, id: null, mode_name: null, version: null }
+    if (target)
+      return { ...child, id: target.key_id, mode_name: target.mode_name, version: target.version }
+    // null points at the key this changeset will produce, so read it back off the staged edit
+    const edit = changes.stagedForNode(child.subsystem_name, child.node_name)
+    return edit
+      ? { ...child, id: null, mode_name: edit.mode_name, version: edit.expected_version }
+      : child
+  }
+
+  /** Points a bundle-path entry at its own newly staged version. */
+  function markPathStaged(index: number, version: number) {
+    const entry = bundlePath.value[index]
+    if (!entry) return
+    bundlePath.value.splice(index, 1, { ...entry, id: null, version })
+  }
+
   async function resolveBundlePath(
     root: BundleRoot,
     aliases: string[],
@@ -231,14 +282,16 @@ export const useNavStore = defineStore('nav', () => {
     const path: KeyChildMetaOut[] = []
     let locator: BundleRoot = root
     for (const alias of aliases) {
+      const source = sourceOf(locator)
       const children = await fetchKeyChildren(
-        locator.subsystem,
-        locator.name,
-        locator.mode,
-        locator.version,
+        source.subsystem,
+        source.name,
+        source.mode,
+        source.version,
       )
-      const child = children.find((c) => c.alias === alias)
-      if (!child) break
+      const found = children.find((c) => c.alias === alias)
+      if (!found) break
+      const child = stagedChild(locator, found)
       path.push(child)
       if (child.category !== null) break // leaf: nothing further to descend into
       const next = childLocator(child)
@@ -320,6 +373,7 @@ export const useNavStore = defineStore('nav', () => {
     fetchModesByPath,
     fetchKeyPayload,
     fetchKeyChildren,
+    markPathStaged,
     resolveBundlePath,
     findRow,
     findRowByNodeId,
