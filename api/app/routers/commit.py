@@ -55,12 +55,11 @@ class _CommitRow(NamedTuple):
 
 
 def _is_conflicted(row: _CommitRow) -> bool:
-    """True once someone committed the mode between staging and now, taking the target version."""
+    """True once another commit has taken the target version since staging."""
     return row.edit.expected_version != row.tip_version + 1
 
 
 def _conflicts(rows: list[_CommitRow]) -> list[ConflictOut]:
-    """Edits that no longer land on top, i.e. someone committed the mode between staging and now."""
     return [
         ConflictOut(
             subsystem_name=row.subsystem_name,
@@ -76,7 +75,7 @@ def _conflicts(rows: list[_CommitRow]) -> list[ConflictOut]:
 
 
 def _build_keys(rows: list[_CommitRow], changeset: Changeset) -> list[Key]:
-    """One new key per edit, landing on the tip of the mode whatever version it was based on."""
+    """Always lands on the tip, regardless of the edit's base version."""
     keys: list[Key] = []
     for row in rows:
         version = row.tip_version + 1
@@ -101,8 +100,8 @@ def _build_key_children(
     child_node_of: dict[tuple[int, str], int],
     node_of_key: dict[int, int],
 ) -> list[KeyChild]:
-    """Resolves each edit's alias -> key id map into KEY_CHILD rows. None resolves to the key this
-    changeset produces for that alias's node, and an alias left out of the map gets cleared."""
+    """None means the key this changeset produces for that alias's node; alias absent from map
+    means cleared."""
     by_mode = {key.mode_id: key for key in keys}
     by_node = {key.node_id: key for key in keys}
     children: list[KeyChild] = []
@@ -150,7 +149,6 @@ def _archive_modes(
 
 
 async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRow]:
-    """Every staged edit with the names to label it, and its mode's current tip version."""
     tip_versions = (
         select(Key.mode_id, func.max(Key.version).label("tip_version"))
         .where(
@@ -182,8 +180,8 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
 
 
 def _proposed_child_refs(rows: list[_CommitRow]) -> tuple[set[tuple[int, str]], set[int]]:
-    """Splits every edit's proposed_children into (node_id, alias) pairs that need a
-    NodeEdge lookup (None target) and concrete key ids that need a Key -> node_id lookup."""
+    """(node_id, alias) pairs needing a NodeEdge lookup, and key ids needing a Key -> node_id
+    lookup."""
     none_aliases: set[tuple[int, str]] = set()
     concrete_ids: set[int] = set()
     for row in rows:
@@ -199,7 +197,6 @@ def _proposed_child_refs(rows: list[_CommitRow]) -> tuple[set[tuple[int, str]], 
 def _rebased_edits(
     conflicted: list[_CommitRow], tip_keys: dict[int, tuple[int, int]]
 ) -> list[StagedEdit]:
-    """Re-stages conflicting edits onto the mode's current tip, keeping the proposed content."""
     return [
         StagedEdit(
             changeset_id=row.edit.changeset_id,
@@ -218,8 +215,8 @@ def _rebased_edits(
 
 @router.post("/rebase")
 async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOut:
-    """Moves every conflicting edit onto the version committed since it was staged. The proposed
-    payload and children are preserved."""
+    """Moves every conflicting edit onto the version committed since it was staged, keeping its
+    proposed payload and children."""
     changeset = await open_changeset(request.state.claims["cern_upn"], session)
     if changeset is None:
         raise HTTPException(status_code=404, detail="no open changeset")

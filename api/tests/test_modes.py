@@ -36,8 +36,6 @@ async def _seeded_mode(
 def test_toggle_archival_stages_then_cancels_on_a_second_click(
     session_factory: async_sessionmaker[AsyncSession],
 ):
-    """A second toggle discards the staged flip instead of stacking one."""
-
     async def run() -> tuple[bool, list]:
         mode_id = await _seeded_mode(
             session_factory, cern_login="archiver_toggle", mode_name="toggle_test"
@@ -62,8 +60,7 @@ def test_toggle_archival_stages_then_cancels_on_a_second_click(
 def test_committing_a_staged_archival_updates_the_mode(
     session_factory: async_sessionmaker[AsyncSession],
 ):
-    """Archiving then unarchiving, each staged then committed, must clear archived_by/archived_at
-    together."""
+    """archived_by/archived_at clear together on unarchive."""
 
     async def run() -> tuple[str | None, object, str | None, object]:
         mode_id = await _seeded_mode(
@@ -102,8 +99,6 @@ def test_committing_a_staged_archival_updates_the_mode(
 def test_discarding_an_open_changeset_clears_its_staged_archival(
     session_factory: async_sessionmaker[AsyncSession],
 ):
-    """Discarding the changeset must not leave an orphaned staged_archival row behind."""
-
     async def run() -> int:
         mode_id = await _seeded_mode(
             session_factory, cern_login="archiver_discard", mode_name="discard_test"

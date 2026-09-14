@@ -204,8 +204,8 @@ export interface paths {
         put?: never;
         /**
          * Rebase Changeset
-         * @description Moves every conflicting edit onto the version committed since it was staged. The proposed
-         *     payload and children are preserved.
+         * @description Moves every conflicting edit onto the version committed since it was staged, keeping its
+         *     proposed payload and children.
          */
         post: operations["rebase_changeset_api_commit_rebase_post"];
         delete?: never;
@@ -303,7 +303,7 @@ export interface paths {
         };
         /**
          * Get Key Children
-         * @description Returns one level of a bundle. One row per alias, whether emptied or not. Crosses subsystem
+         * @description One level of a bundle: one row per alias, whether emptied or not, crossing subsystem
          *     boundaries freely.
          */
         get: operations["get_key_children_api_keys__subsystem_name___node_name___mode_name___version__children_get"];

@@ -38,11 +38,10 @@ def test_build_child_meta_carries_external_payload():
 
 
 def test_build_child_meta_lists_empty_alias_with_null_key():
-    """An alias the parent leaves empty still lists, so it stays selectable."""
     meta = _build_child_meta(("l1_menu", None, 42, "l1_menu", "ugt", "menu", None))
 
     assert meta.alias == "l1_menu"
-    # Structural fields come off the edge, so the row can still be rendered and re-filled
+    # structural fields come off the edge: row still renders/refills
     assert meta.node_id == 42
     assert meta.node_name == "l1_menu"
     assert meta.subsystem_name == "ugt"
@@ -68,8 +67,7 @@ def test_build_key_detail_fills_display_name_and_ancestor():
     assert out.based_on.label == "ugt/l1_menu/default/v3"
 
 
-def test_build_key_detail_has_no_ancestor_for_a_fresh_key():
-    """A key with no fork/copy source and no previous version has nothing to point 'based on' at."""
+def test_build_key_detail_has_no_ancestor_without_fork_source_or_prior_version():
     out = _build_key_detail(_key(), "Jane Doe", None, None, None)
 
     assert out.based_on is None

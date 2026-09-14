@@ -1,7 +1,7 @@
-"""seed roles and their subsystem access for the legacy catalog
+"""seed roles and their subsystem access for the L1CE catalog
 
-Revision ID: data_legacy_roles
-Revises: data_legacy_catalog
+Revision ID: data_seed_legacy_roles
+Revises: data_seed_legacy_catalog
 Create Date: 2026-08-26 11:26:56.807619
 
 """
@@ -14,8 +14,8 @@ from sqlalchemy import column, select, table
 from migrations.seed import seed
 
 # revision identifiers, used by Alembic
-revision: str = "data_legacy_roles"
-down_revision: str | Sequence[str] | None = "data_legacy_catalog"
+revision: str = "data_seed_legacy_roles"
+down_revision: str | Sequence[str] | None = "data_seed_legacy_catalog"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = "schema_tables"
 

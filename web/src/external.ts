@@ -1,7 +1,7 @@
 import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 
-// Dummy values until the external DBs that own these lists are defined.
+// placeholder until the owning external DBs are defined
 const EXTERNAL_OPTIONS: Record<string, string[]> = {
   'cms_run/clock_source': ['LHC', 'LOCAL'],
   'l1_hlt/hlt_key': [

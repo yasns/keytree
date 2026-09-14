@@ -55,7 +55,7 @@ const { subsystem, name, mode, version, category, canQueue, pending, depth } = d
   category?: string | null
   canQueue?: boolean
   pending?: boolean
-  /** This leaf's bundle-path index, when rendered inside a bundle rather than as the routed key. */
+  /** Bundle-path index when rendered inside a bundle, not as the routed key. */
   depth?: number
 }>()
 
@@ -115,7 +115,7 @@ async function loadPayload() {
 
 watch(() => [subsystem, name, mode, version, pending], loadPayload)
 
-// Reload committed data after a commit, unless it would throw away an unsaved payload
+// reload after commit, unless it would discard an unsaved payload
 watch(
   () => nav.keysToken,
   () => {

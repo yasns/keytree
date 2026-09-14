@@ -1,6 +1,6 @@
-"""seed legacy subsystems, nodes, node edges
+"""seed L1CE subsystems, nodes, node edges
 
-Revision ID: data_legacy_catalog
+Revision ID: data_seed_legacy_catalog
 Revises: data_base
 Create Date: 2026-08-26 11:26:56.807619
 
@@ -15,7 +15,7 @@ from sqlalchemy import column, select, table
 from migrations.seed import seed
 
 # revision identifiers, used by Alembic
-revision: str = "data_legacy_catalog"
+revision: str = "data_seed_legacy_catalog"
 down_revision: str | Sequence[str] | None = "data_base"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = "schema_tables"
@@ -39,8 +39,7 @@ class SubsystemSpec(TypedDict):
     nodes: list[NodeSpec]
 
 
-# The root node for a subsystem key.
-# A leaf directly under it keeps its original name. Anywhere else the parent's name is prefixed.
+# leaf directly under root keeps its name; elsewhere the parent's name is prefixed
 ROOT_NODE = "conf"
 
 CATALOG: dict[str, SubsystemSpec] = {
@@ -256,12 +255,9 @@ CATALOG: dict[str, SubsystemSpec] = {
     },
 }
 
-# (parent subsystem, node, child subsystem, node, alias)
-#
-# Containment crossing a subsystem boundary.
-#
-# alias is a legacy column name.
-# It is spelled out where one parent needs several distinctly-named pointers at the same child node.
+# (parent subsystem, node, child subsystem, node, alias): cross-subsystem containment.
+# alias is the legacy column name; set where one parent needs several distinct pointers to the same
+# child node.
 REFERENCES: list[tuple[str, str, str, str, str | None]] = [
     ("l1_hlt", "conf", "l1_trg", "conf", None),
     ("l1_hlt", "conf", "l1_trg", "rs", None),
@@ -274,8 +270,6 @@ REFERENCES: list[tuple[str, str, str, str, str | None]] = [
     ("l1_trg", "tcds", "tcds", "conf", "emtf"),
     ("l1_trg", "tcds", "tcds", "conf", "omtf"),
     ("l1_trg", "tcds", "tcds", "conf", "twinmux"),
-    # l1_trg bundles each subsystem's config and run settings directly
-    # ugt/rs is pointed at twice so we need an alias for spare_ugt_rs
     ("l1_trg", "conf", "ugt", "conf", None),
     ("l1_trg", "conf", "ugmt", "conf", None),
     ("l1_trg", "conf", "calol1", "conf", None),
@@ -294,6 +288,7 @@ REFERENCES: list[tuple[str, str, str, str, str | None]] = [
     ("l1_trg", "rs", "omtf", "rs", None),
     ("l1_trg", "rs", "twinmux", "rs", None),
     ("l1_trg", "rs", "cppf", "rs", None),
+    # ugt/rs pointed at twice: alias distinguishes this one
     ("l1_trg", "rs", "ugt", "rs", "spare_ugt_rs"),
     ("spare_ugt", "conf", "ugt", "infra", None),
     ("spare_ugt", "conf", "ugt", "algo", None),

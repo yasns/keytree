@@ -19,7 +19,7 @@ def who_am_i(request: Request) -> dict[str, object]:
 
 
 async def upsert_app_user(claims: dict[str, object], session: SessionDep) -> None:
-    """Creates or refreshes an app_user row from JWT claims. Does not commit."""
+    """Does not commit — caller must."""
     stmt = insert(AppUser).values(cern_login=claims["cern_upn"], display_name=claims["name"])
     stmt = stmt.on_conflict_do_update(
         index_elements=[AppUser.cern_login], set_={"display_name": stmt.excluded.display_name}

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> URL:
-        """The API connects as the least-privileged app user, migrations as the owner."""
+        """API: least-privileged user. Migrations: owner."""
         return URL.create(
             "postgresql+psycopg",
             username=self.postgres_user,

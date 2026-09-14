@@ -102,7 +102,7 @@ def test_build_changeset_assembles_edits_and_ripple():
 
 
 def test_build_changeset_handles_a_fork_with_no_base_key():
-    """A forked mode's v1 edit has no base key, so its row's base version is None."""
+    """base_version is None when there's no base key."""
     changeset = Changeset(
         id=7, created_by="jdoe", comment="", created_at=datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -161,7 +161,7 @@ def test_build_changeset_reports_the_fork_source():
 
 
 def _fresh_mode_row() -> _CommitRow:
-    """A fresh mode (tip_version 0, no base key), whose edit commits as v1."""
+    """tip_version 0, no base key; commits as v1."""
     edit = StagedEdit(
         id=1,
         changeset_id=7,
@@ -183,7 +183,7 @@ def test_build_keys_lands_on_v1_for_a_fresh_mode():
 
 
 def test_conflicts_is_empty_for_a_fresh_mode():
-    """expected_version=1 against tip_version=0 is not a conflict, it's the mode's first key."""
+    """v1 vs tip 0 isn't a conflict, it's the first key."""
     assert _conflicts([_fresh_mode_row()]) == []
 
 
@@ -191,8 +191,6 @@ def test_conflicts_is_empty_for_a_fresh_mode():
 def test_get_or_create_open_changeset_is_race_safe(
     session_factory: async_sessionmaker[AsyncSession],
 ):
-    """Two concurrent requests for the same user's open changeset must not create two rows."""
-
     async def run() -> tuple[int, int, list[int]]:
         async with session_factory() as setup:
             setup.add(AppUser(cern_login="racer", display_name="Racer"))
@@ -222,8 +220,7 @@ def test_get_or_create_open_changeset_is_race_safe(
 async def _forked_mode(
     session_factory: async_sessionmaker[AsyncSession], *, cern_login: str, mode_name: str
 ) -> tuple[int, int]:
-    """A freshly forked mode with no key yet, staged as its v1, on the seeded cms_run/clock_source
-    node. Returns (changeset_id, mode_id)."""
+    """Fresh fork, no key yet, staged as v1 on the seeded cms_run/clock_source node."""
     async with session_factory() as session:
         session.add(AppUser(cern_login=cern_login, display_name=cern_login))
         node_id = await session.scalar(
@@ -256,8 +253,7 @@ async def _forked_mode(
 def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
     session_factory: async_sessionmaker[AsyncSession],
 ):
-    """A fork's v1 has no key to resolve through keys_by_locator, so an edit against it must
-    match up with the fork's own staged edit instead of 404ing."""
+    """Fork's v1 has no key for keys_by_locator; must match its own staged edit, not 404."""
     changeset_id, mode_id = asyncio.run(
         _forked_mode(session_factory, cern_login="forker", mode_name="collisions2026")
     )
@@ -287,8 +283,7 @@ def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
 
 
 def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
-    """Staging v1 edit while v3 exists is fine; conflicts only once someone else commits v4
-    first."""
+    """v1 staged while v3 exists is fine; conflict only once v4 is committed."""
     promoting_edit = StagedEdit(
         id=1, changeset_id=7, mode_id=118, base_key_id=5, expected_version=4, proposed_payload="x"
     )
@@ -297,9 +292,9 @@ def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
     )
 
     rows = [
-        # Based on v1, targeting v4, and the mode is still on v3. Good.
+        # base v1, targets v4, mode still on v3: fine
         _CommitRow(promoting_edit, "cms_run", "clock_source", "default", 10, 1, 3),
-        # Targeted v2, but the tip has moved to v2 since. Bad.
+        # targeted v2, tip moved to v2 since: conflict
         _CommitRow(taken_edit, "cms_run", "conf", "default", 11, 1, 2),
     ]
 
@@ -313,7 +308,7 @@ def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
 
 
 def test_build_keys_lands_on_the_tip_not_the_base():
-    """A key promoted from v1 while the mode is on v3 is committed as v4."""
+    """v1 edit promoted while the mode's on v3 commits as v4."""
     edit = StagedEdit(
         id=1, changeset_id=7, mode_id=118, base_key_id=5, expected_version=4, proposed_payload="x"
     )
@@ -403,8 +398,7 @@ def test_build_key_children_raises_when_none_has_no_target():
 
 
 def test_build_key_children_keys_parent_by_mode_not_node():
-    """Two modes edited on the same node in one changeset must each get their own parent key, not
-    whichever one was built last."""
+    """Same node, two modes edited: each gets its own parent key, not whichever built last."""
     default_key = Key(id=100, mode_id=1, node_id=11, version=2, label="cms_run/conf/default/v2")
     algo_key = Key(id=200, mode_id=2, node_id=11, version=4, label="cms_run/conf/algo/v4")
 

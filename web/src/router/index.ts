@@ -30,7 +30,7 @@ router.beforeEach(async (to, from) => {
   if (!(await changes.confirmDiscard())) return false
 })
 
-/** A committed version number, or 'pending' for the version a mode's staged edit would produce. */
+/** 'pending' = the version a mode's staged edit would produce. */
 export type VersionTarget = number | 'pending'
 
 export function keyRoute(

@@ -23,7 +23,7 @@ def test_build_tree_roots_aliases_and_subsystem_boundary():
         (10, "ugt_conf", foreign_conf),
         (11, "ugt_rs", foreign_rs),
         (11, "spare_ugt_rs", foreign_rs),
-        # Not reachable from subsystem 1's roots. Proves recursion stops at the subsystem boundary
+        # unreachable from subsystem 1's roots: recursion stops at the boundary
         (20, "hw", foreign_hw),
     ]
 
@@ -43,7 +43,7 @@ def test_build_tree_roots_aliases_and_subsystem_boundary():
     ugt_conf_out = conf_out.children[1]
     assert ugt_conf_out.id == 20
     assert ugt_conf_out.subsystem_id == 2
-    # Boundary crossed. No recursion even though children_by_parent has an entry for id 20.
+    # boundary crossed: no recursion despite an entry for id 20
     assert ugt_conf_out.children == []
 
     rs_out = next(r for r in roots if r.alias == "rs")

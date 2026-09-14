@@ -15,7 +15,7 @@ config = context.config
 
 url = config.get_main_option("sqlalchemy.url") or settings.database_url
 
-# Import models here, or autogenerate will propose dropping every table
+# import needed or autogenerate proposes dropping every table
 target_metadata = Base.metadata
 
 

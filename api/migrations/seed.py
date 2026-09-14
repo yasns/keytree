@@ -9,7 +9,6 @@ from sqlalchemy.dialects.postgresql import insert
 
 
 def seed(table: str, rows: Sequence[Mapping[str, Any]], key: list[str]) -> None:
-    """Insert or update rows into <table>, matching existing rows on <key>."""
     if not rows:
         return
     bind = op.get_bind()

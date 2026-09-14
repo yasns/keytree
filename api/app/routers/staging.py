@@ -181,7 +181,7 @@ async def _get_or_create_open_changeset(cern_login: str, session: SessionDep) ->
 def join_mode_names(
     stmt: Select[Any], mode_id: ColumnElement[int] | InstrumentedAttribute[int]
 ) -> Select[Any]:
-    """Joins Mode -> Node -> Subsystem for display names, from any FK column pointing at Mode.id."""
+    """mode_id can be any FK column pointing at Mode.id."""
     return (
         stmt.join(Mode, Mode.id == mode_id)
         .join(Node, Node.id == Mode.node_id)
@@ -202,8 +202,7 @@ async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
 
 
 async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, ProposedChildOut]:
-    """Mode name and version for every child key or fork/copy source the given edits point at, in
-    one query."""
+    """Covers proposed children plus fork/copy/base key refs, in one query."""
     key_ids = {
         key_id
         for edit, *_ in rows
@@ -240,7 +239,7 @@ async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetO
 
 
 async def _tip_keys(mode_ids: set[int], session: SessionDep) -> dict[int, tuple[int, int]]:
-    """Newest key id and version per mode. Modes with no keys yet are not returned."""
+    """Modes with no keys yet are absent from the result."""
     rows = await session.execute(
         select(Key.mode_id, Key.id, Key.version)
         .where(Key.mode_id.in_(mode_ids))
@@ -269,7 +268,7 @@ class _ResolvedBase(NamedTuple):
 async def _resolve_bases(
     edits: list[StagedEditIn], changeset_id: int, session: SessionDep
 ) -> list[_ResolvedBase]:
-    """Resolves each edit's base, in request order."""
+    """In request order."""
     locators = [(e.subsystem_name, e.node_name, e.mode_name, e.base_version) for e in edits]
     keys = await keys_by_locator(locators, session)
 
@@ -451,7 +450,7 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
-    # A staged archival on the target overrides its committed state
+    # staged archival on target overrides its committed state
     staged_archival = await session.get(StagedArchival, (changeset.id, target.id))
     effective_archived = (
         staged_archival.archived if staged_archival is not None else target.archived_at is not None
