@@ -3,3 +3,16 @@
  *
  * Application styles
  */
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 4px;
+  row-gap: 4px;
+}
+
+.comment-block {
+  border-left: 3px solid rgb(var(--v-theme-primary));
+  padding-left: 8px;
+}

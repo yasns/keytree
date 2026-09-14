@@ -4,7 +4,7 @@
       <v-btn
         variant="outlined"
         color="error"
-        prepend-icon="mdi-cancel"
+        prepend-icon="mdi-trash-can-outline"
         :disabled="!changes.pendingCount"
         @click="confirmDiscardAll = true"
       >
@@ -30,19 +30,41 @@
 
     <div v-else class="overflow-y-auto flex-grow-1 mt-2" style="min-height: 0">
       <v-list density="compact" class="py-0">
-        <v-list-item v-for="edit in changes.visibleEdits" :key="edit.id">
+        <v-list-item
+          v-for="edit in changes.visibleEdits"
+          :key="edit.id"
+          slim
+          @click="goToEdit(edit)"
+        >
+          <template #prepend>
+            <v-icon :icon="keyIcon(edit)" size="small"></v-icon>
+          </template>
           <v-list-item-title class="text-body-medium">
             <code>
-              {{ edit.subsystem_name }}/{{ edit.node_name }}/{{ edit.mode_name }}/v{{
-                edit.expected_version
-              }}
+              {{ edit.subsystem_name }}/{{ edit.node_name }}/{{ edit.mode_name }}/<template
+                v-if="edit.base_version !== null"
+              >
+                <s class="text-medium-emphasis">v{{ edit.base_version }}</s>
+                <v-icon icon="mdi-arrow-right" size="x-small"></v-icon> </template
+              >v{{ edit.expected_version }}
             </code>
           </v-list-item-title>
           <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
         </v-list-item>
-        <v-list-item v-for="archival in changes.archivals" :key="`archival-${archival.mode_id}`">
+        <v-list-item
+          v-for="archival in changes.archivals"
+          :key="`archival-${archival.mode_id}`"
+          slim
+          @click="goToArchival(archival)"
+        >
+          <template #prepend>
+            <v-icon
+              :icon="archival.archived ? 'mdi-archive-outline' : 'mdi-archive-off-outline'"
+              size="small"
+            ></v-icon>
+          </template>
           <v-list-item-title class="text-body-medium">
-            <code
+            <code :class="{ 'text-decoration-line-through': archival.archived }"
               >{{ archival.subsystem_name }}/{{ archival.node_name }}/{{ archival.mode_name }}</code
             >
           </v-list-item-title>
@@ -53,42 +75,14 @@
       </v-list>
     </div>
 
-    <v-dialog v-model="conflictsOpen" max-width="560" persistent>
-      <v-card title="Versions taken since you staged">
-        <v-card-text>
-          <p class="mb-3">
-            Someone else committed these keys while your changes were staged. Overwrite to put your
-            changes on top as new versions, or rebase them onto the new versions to review first.
-          </p>
-          <v-list density="compact" class="py-0">
-            <v-list-item
-              v-for="conflict in conflicts"
-              :key="`${conflict.subsystem_name}/${conflict.node_name}/${conflict.mode_name}`"
-              class="px-0"
-            >
-              <v-list-item-title class="text-body-medium">
-                <code>
-                  {{ conflict.subsystem_name }}/{{ conflict.node_name }}/{{ conflict.mode_name }}
-                </code>
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                staged as v{{ conflict.expected_version }} from
-                {{ conflict.base_version === null ? 'new mode' : `v${conflict.base_version}` }}, now
-                on v{{ conflict.tip_version }}
-              </v-list-item-subtitle>
-            </v-list-item>
-          </v-list>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="conflictsOpen = false">Cancel</v-btn>
-          <v-btn variant="text" :loading="rebasing" @click="rebase">Rebase</v-btn>
-          <v-btn variant="flat" color="warning" :loading="committing" @click="commit(true)">
-            Overwrite
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <CommitConflictsDialog
+      v-model="conflictsOpen"
+      :conflicts="conflicts"
+      :rebasing="rebasing"
+      :committing="committing"
+      @rebase="rebase"
+      @overwrite="commit(true)"
+    ></CommitConflictsDialog>
 
     <div class="px-2 py-2 border-t-sm">
       <v-textarea
@@ -118,11 +112,16 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { components } from '@/api-types'
 import { keyRoute, parseVersion } from '@/router'
 import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import ConfirmDialog from './ConfirmDialog.vue'
+import CommitConflictsDialog from './CommitConflictsDialog.vue'
+
+type StagedEditOut = components['schemas']['StagedEditOut']
+type StagedArchivalOut = components['schemas']['StagedArchivalOut']
 
 const changes = useChangesStore()
 const nav = useNavStore()
@@ -136,6 +135,24 @@ const committing = ref(false)
 const rebasing = ref(false)
 const conflicts = ref<Conflict[]>([])
 const conflictsOpen = ref(false)
+
+function keyIcon(edit: StagedEditOut) {
+  return edit.base_version === null && edit.copied_from ? 'mdi-source-fork' : 'mdi-key-plus'
+}
+
+async function goToEdit(edit: StagedEditOut) {
+  if (!(await changes.confirmDiscard())) return
+  router.push(keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, 'pending'))
+}
+
+async function goToArchival(archival: StagedArchivalOut) {
+  if (!(await changes.confirmDiscard())) return
+  const modes = await nav.fetchModesByPath(archival.subsystem_name, archival.node_name)
+  const tip = modes.find((m) => m.name === archival.mode_name)?.versions[0]
+  if (tip !== undefined) {
+    router.push(keyRoute(archival.subsystem_name, archival.node_name, archival.mode_name, tip))
+  }
+}
 
 function routedKey() {
   const { subsystem, name, mode, version } = route.params as Record<string, string | undefined>
