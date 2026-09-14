@@ -26,13 +26,15 @@
               >{{ isLatest ? 'latest' : 'old' }}</v-chip
             >
             <v-chip
-              v-if="archived"
+              v-if="archived || archivalPending"
               size="small"
               density="compact"
               label
               variant="tonal"
               :color="archivalPending ? 'warning' : 'error'"
-              >{{ archivalPending ? 'archive pending' : 'archived' }}</v-chip
+              >{{
+                archivalPending ? (archived ? 'archive pending' : 'unarchive pending') : 'archived'
+              }}</v-chip
             >
           </div>
           <div
@@ -57,8 +59,26 @@
           </div>
         </label>
 
-        <div class="meta-grid mt-2">
-          <template v-if="!pendingEdit">
+        <v-divider class="my-2"></v-divider>
+
+        <div class="meta-grid">
+          <span class="font-weight-medium">Subsystem:</span>
+          <span>{{ subsystem }}</span>
+
+          <span class="font-weight-medium">Name:</span>
+          <span>{{ name }}</span>
+
+          <span class="font-weight-medium">Mode:</span>
+          <span>{{ mode }}</span>
+
+          <span class="font-weight-medium">Version:</span>
+          <span>{{ version }}</span>
+        </div>
+
+        <template v-if="!pendingEdit">
+          <v-divider class="my-2"></v-divider>
+
+          <div class="meta-grid">
             <span class="font-weight-medium">Created at:</span>
             <span>{{ new Date(payload?.created_at!).toLocaleString(LOCALE) }}</span>
 
@@ -71,17 +91,34 @@
                 {{ createdBy }}
               </template>
             </span>
-          </template>
+          </div>
+        </template>
 
-          <span class="font-weight-medium">Comment:</span>
-          <span>{{ pendingEdit?.comment ?? payload?.comment }}</span>
-        </div>
+        <template v-if="pendingEdit?.comment ?? payload?.comment">
+          <div class="comment-block mt-2">
+            <div class="font-weight-medium">Comment</div>
+            <div class="text-body-medium">{{ pendingEdit?.comment ?? payload?.comment }}</div>
+          </div>
+        </template>
 
         <template v-if="basedOn">
-          <div class="font-weight-medium mt-2">Based on</div>
-          <a :href="basedOnHref" target="_blank" rel="noopener">
-            <code class="v-code">{{ basedOn.label }}</code>
-          </a>
+          <v-divider class="my-2"></v-divider>
+
+          <div>
+            <div class="font-weight-medium">Based on</div>
+            <div class="d-flex align-center ga-1">
+              <v-btn
+                icon="mdi-open-in-new"
+                size="small"
+                variant="text"
+                density="comfortable"
+                :href="basedOnHref"
+                target="_blank"
+                rel="noopener"
+              ></v-btn>
+              <code class="v-code text-truncate">{{ basedOn.label }}</code>
+            </div>
+          </div>
         </template>
       </v-expansion-panel-text>
     </v-expansion-panel>
@@ -156,13 +193,5 @@ const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
 <style scoped>
 .v-code {
   font-size: 0.875rem;
-}
-
-.meta-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  column-gap: 4px;
-  row-gap: 4px;
 }
 </style>

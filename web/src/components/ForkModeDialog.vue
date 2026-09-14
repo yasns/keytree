@@ -52,7 +52,7 @@ const rules = computed(() => [
   (v: string) => !!v.trim() || 'A mode name is required',
   (v: string) => /^[a-z0-9_]+$/.test(v) || 'Lowercase letters, digits and underscores only',
   (v: string) => v.length <= 64 || 'At most 64 characters',
-  (v: string) => !props.existing.includes(v) || 'This node already has a mode with that name',
+  (v: string) => !props.existing.includes(v) || 'This path already has a mode with that name',
 ])
 
 const valid = computed(

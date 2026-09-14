@@ -1,9 +1,11 @@
 <template>
   <div class="d-flex flex-column h-100">
     <div class="flex-grow-1" style="min-width: 0; min-height: 0">
-      <BundleBrowser v-if="nav.nodeDetail?.category === null"></BundleBrowser>
+      <BundleBrowser v-if="detailReady && nav.nodeDetail?.category === null"></BundleBrowser>
 
-      <template v-else-if="nav.nodeDetail && selectedMode && selectedVersion !== undefined">
+      <template
+        v-else-if="detailReady && nav.nodeDetail && selectedMode && selectedVersion !== undefined"
+      >
         <PayloadEditor
           :key="nav.nodeDetail.id"
           :subsystem="nav.nodeDetail.subsystem_name"
@@ -44,7 +46,14 @@ const changes = useChangesStore()
 const router = useRouter()
 const snackbar = useSnackbarStore()
 
-const selectedMode = computed(() => nav.nodeDetail?.modes.find((m) => m.name === mode))
+// nav.nodeDetail updates async, so it can briefly still hold the previous route's node.
+const detailReady = computed(
+  () => nav.nodeDetail?.subsystem_name === subsystem && nav.nodeDetail?.name === name,
+)
+
+const selectedMode = computed(() =>
+  detailReady.value ? nav.nodeDetail!.modes.find((m) => m.name === mode) : undefined,
+)
 const requestedVersion = computed(() => parseVersion(version))
 
 const pendingEdit = computed(() => {
@@ -72,7 +81,7 @@ const selectedVersion = computed(() => {
 watch(
   () => [nav.nodeDetail, mode] as const,
   ([detail, mode]) => {
-    if (!detail || detail.name !== name || !mode) return
+    if (!detail || detail.subsystem_name !== subsystem || detail.name !== name || !mode) return
     if (!detail.modes.some((m) => m.name === mode)) {
       if (changes.stagedForMode(subsystem, name, mode)) return
       nav.nodeDetail = null

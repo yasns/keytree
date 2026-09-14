@@ -1,23 +1,20 @@
 <template>
   <v-toolbar density="compact">
     <template v-slot:prepend>
-      <v-tooltip v-if="dirty" text="Discard changes">
-        <template v-slot:activator="{ props }">
-          <v-btn
-            @click="discardDialog = true"
-            icon="mdi-trash-can-outline"
-            density="comfortable"
-            color="error"
-            v-bind="props"
-          ></v-btn>
-        </template>
-      </v-tooltip>
+      <v-btn
+        v-if="dirty"
+        @click="discardDialog = true"
+        prepend-icon="mdi-trash-can-outline"
+        variant="tonal"
+        rounded
+        >Discard</v-btn
+      >
     </template>
 
     <template v-slot:append>
       <v-btn
         v-if="dirty"
-        :prepend-icon="canQueue ? 'mdi-tray-plus' : 'mdi-tray-full'"
+        :prepend-icon="canQueue ? 'mdi-check' : 'mdi-check-all'"
         @click="saveDialog = true"
         variant="flat"
         color="primary"
@@ -29,7 +26,7 @@
 
       <v-divider v-if="dirty" vertical inset class="mx-1"></v-divider>
 
-      <v-tooltip v-if="dirty" text="Unsaved (click to stage)">
+      <v-tooltip v-if="dirty" text="Unsaved (click to save)">
         <template v-slot:activator="{ props }">
           <v-btn
             icon="mdi-cloud-alert-outline"
@@ -55,23 +52,27 @@
           <v-btn icon="mdi-dots-vertical" density="comfortable" v-bind="props"></v-btn>
         </template>
         <v-list density="compact">
-          <v-tooltip
-            v-for="item in kebabItems"
-            :key="item.title"
-            :disabled="committed"
-            text="Commit the changes first"
-          >
-            <template v-slot:activator="{ props }">
-              <div v-bind="props">
-                <v-list-item
-                  :title="item.title"
-                  :disabled="!committed"
-                  @click="item.onClick"
-                  :prepend-icon="item.icon"
-                ></v-list-item>
-              </div>
-            </template>
-          </v-tooltip>
+          <template v-for="group in menuGroups" :key="group.label">
+            <v-divider v-if="group.divider"></v-divider>
+            <v-list-subheader>{{ group.label }}</v-list-subheader>
+            <v-tooltip
+              v-for="item in group.items"
+              :key="item.title"
+              :disabled="committed"
+              text="Commit the changes first"
+            >
+              <template v-slot:activator="{ props }">
+                <div v-bind="props">
+                  <v-list-item
+                    :title="item.title"
+                    :disabled="!committed"
+                    @click="item.onClick"
+                    :prepend-icon="item.icon"
+                  ></v-list-item>
+                </div>
+              </template>
+            </v-tooltip>
+          </template>
         </v-list>
       </v-menu>
     </template>
@@ -170,36 +171,47 @@ const pendingWarning = computed(() => {
 })
 
 type KebabItem = { title: string; icon: string; onClick: () => void }
+type MenuGroup = { label: string; divider: boolean; items: KebabItem[] }
 
-const kebabItems = computed(() => {
-  const items: KebabItem[] = [
+const menuGroups = computed(() => {
+  const versionControlItems: KebabItem[] = [
     {
-      title: 'Fork to New Mode…',
+      title: 'Fork to New Mode...',
       icon: 'mdi-source-fork',
       onClick: () => (forkDialog.value = true),
     },
     {
-      title: 'Copy to Existing Mode…',
+      title: 'Copy to Existing Mode...',
       icon: 'mdi-source-pull',
       onClick: () => (copyDialog.value = true),
     },
   ]
   if (isOldVersion.value) {
-    items.push({
-      title: 'Copy to Latest Version…',
-      icon: 'mdi-arrow-up-bold-box-outline',
+    versionControlItems.push({
+      title: 'Copy to Latest Version...',
+      icon: 'mdi-update',
       onClick: () => (copyLatestDialog.value = true),
     })
   }
+
+  const groups: MenuGroup[] = [{ label: 'Duplicate', divider: false, items: versionControlItems }]
+
   if (currentMode.value) {
     const modeId = currentMode.value.id
-    items.push({
-      title: archived.value ? 'Unarchive Mode' : 'Archive Mode',
-      icon: archived.value ? 'mdi-archive-off-outline' : 'mdi-archive-outline',
-      onClick: () => void changes.toggleArchival(modeId),
+    groups.push({
+      label: 'Mode',
+      divider: true,
+      items: [
+        {
+          title: archived.value ? 'Unarchive Mode' : 'Archive Mode',
+          icon: archived.value ? 'mdi-archive-off-outline' : 'mdi-archive-outline',
+          onClick: () => void changes.toggleArchival(modeId),
+        },
+      ],
     })
   }
-  return items
+
+  return groups
 })
 
 function onSaveConfirmed(comment: string) {
