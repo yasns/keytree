@@ -52,8 +52,7 @@ const pendingEdit = computed(() => {
   return m ? changes.stagedForMode(subsystem, name, m.name) : undefined
 })
 
-// Either the route explicitly asks for the mode's staged edit, or it has no committed key to fall
-// back to
+// route asks for the staged edit, or there's no committed key to fall back to
 const isPending = computed(() => {
   const m = selectedMode.value
   if (m?.versions.length === 0) return true

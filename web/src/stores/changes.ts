@@ -11,14 +11,14 @@ type ForkIn = components['schemas']['ForkIn']
 type CopyIn = components['schemas']['CopyIn']
 export type Conflict = components['schemas']['ConflictOut']
 
-/** A commit rejected because someone else committed these modes since they were staged. */
+/** Commit rejected: someone else committed these modes since staging. */
 export function conflictsFrom(err: unknown): Conflict[] | undefined {
   if (!err || typeof err !== 'object') return undefined
   const { status, detail } = err as ApiError
   return status === 409 && Array.isArray(detail) ? (detail as Conflict[]) : undefined
 }
 
-/** The mode a pending fork/copy's rows come from, until it has a key of its own. */
+/** Fork/copy source, until it has a key of its own. */
 export function pendingSource(edit: StagedEditOut | undefined) {
   return edit?.base_version === null ? edit.copied_from : null
 }
@@ -26,7 +26,7 @@ export function pendingSource(edit: StagedEditOut | undefined) {
 export const useChangesStore = defineStore('changes', () => {
   const changeset = ref<ChangesetOut | null>(null)
 
-  // Bundle-path depth each dirty source belongs to, so a column can ask whether anything deeper is dirty
+  // depth per dirty source, so a column can check whether anything deeper is dirty
   const dirtyDepths = reactive(new Map<symbol, number>())
 
   function setDirty(key: symbol, value: boolean, depth: number) {
@@ -42,7 +42,7 @@ export const useChangesStore = defineStore('changes', () => {
   const confirmOpen = ref(false)
   let resolveConfirmOpen: ((leave: boolean) => void) | null = null
 
-  /** Confirms discarding dirty sources deeper than `depth` (default: any depth, i.e. anything dirty at all). */
+  /** Default `depth`: any depth, i.e. anything dirty at all. */
   function confirmDiscardBeyond(depth: number = -Infinity): Promise<boolean> {
     if (!dirtyBeyond(depth)) return Promise.resolve(true)
     confirmOpen.value = true
@@ -81,7 +81,7 @@ export const useChangesStore = defineStore('changes', () => {
     return edits.value.find((e) => e.subsystem_name === subsystem && e.node_name === name)
   }
 
-  /** Staged edit on a mode. At most one edit per mode, whatever version it was based on. */
+  /** At most one edit per mode, whatever version it's based on. */
   function stagedForMode(subsystem: string, name: string, mode: string): StagedEditOut | undefined {
     return edits.value.find(
       (e) => e.subsystem_name === subsystem && e.node_name === name && e.mode_name === mode,
@@ -138,7 +138,7 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = null
   }
 
-  /** Moves conflicting edits onto the versions committed since, keeping their proposed content. */
+  /** Keeps proposed content; moves onto versions committed since. */
   async function rebase() {
     changeset.value = unwrap(await api.POST('/api/commit/rebase'))
   }
@@ -169,7 +169,7 @@ export const useChangesStore = defineStore('changes', () => {
   }
 })
 
-/** Registers a component's unsaved-changes flag with the changes store, tagged with its bundle-path depth. */
+/** Tags the flag with its bundle-path depth. */
 export function useDirtySource(dirty: Ref<boolean>, depth: number) {
   const changes = useChangesStore()
   const source = Symbol('dirty-source')

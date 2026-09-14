@@ -18,7 +18,7 @@ export type BundleRoot = {
   name: string
   mode: string
   version: number
-  // True when `version` is the mode's staged edit rather than a committed key.
+  // true when `version` is the mode's staged edit, not a committed key
   pending: boolean
 }
 
@@ -30,7 +30,7 @@ export function childLocator(child: KeyChildMetaOut): BundleRoot | undefined {
     name: child.node_name,
     mode: child.mode_name,
     version: child.version,
-    // A mode and version with no key id is the version this changeset will produce
+    // no key id means the version this changeset will produce
     pending: child.id === null,
   }
 }
@@ -97,7 +97,7 @@ export const useNavStore = defineStore('nav', () => {
   const bundlePath = ref<KeyChildMetaOut[]>([])
 
   watch(bundleRoot, (next, prev) => {
-    // Only the version/pending relabeled on the same key: the open path's selections are still valid
+    // same key, only version/pending relabeled: open path stays valid
     if (
       next &&
       prev &&
@@ -143,7 +143,7 @@ export const useNavStore = defineStore('nav', () => {
     nodeDetailCache.value.set(data.id, data)
   }
 
-  /** In-flight requests, so columns sharing a child node don't each fire their own. */
+  /** Dedupes concurrent fetches across columns sharing a node. */
   const nodeDetailPending = new Map<number, Promise<NodeOut>>()
 
   async function fetchNodeDetail(nodeId: number): Promise<NodeOut | undefined> {
@@ -163,10 +163,10 @@ export const useNavStore = defineStore('nav', () => {
     return request
   }
 
-  /** Bumped by refreshKeys so key-backed views reload; watch it alongside their own props. */
+  /** Bumped by refreshKeys; watch alongside own props to reload. */
   const keysToken = ref(0)
 
-  /** Drops cached node/mode data and reloads the current node, so freshly committed versions show up. */
+  /** Clears caches, reloads current node: committed versions show up. */
   async function refreshKeys() {
     nodeDetailCache.value.clear()
     nodeDetailPending.clear()
@@ -235,7 +235,7 @@ export const useNavStore = defineStore('nav', () => {
     }))
   }
 
-  /** The committed key a pending version's rows come from, since it has no key of its own to fetch. */
+  /** Pending version has no key of its own: fetch rows from the committed source. */
   function sourceOf(locator: BundleRoot): BundleRoot {
     if (!locator.pending) return locator
     const based = useChangesStore().stagedForMode(
@@ -257,11 +257,11 @@ export const useNavStore = defineStore('nav', () => {
     )?.proposed_children
     if (!proposed) return child
     const target = proposed[child.alias]
-    // An alias the map leaves out is one the changeset clears, so it fills nothing
+    // alias absent from map means changeset clears it
     if (target === undefined) return { ...child, id: null, mode_name: null, version: null }
     if (target)
       return { ...child, id: target.key_id, mode_name: target.mode_name, version: target.version }
-    // null points at the key this changeset will produce, so read it back off the staged edit
+    // null means key this changeset produces; read off the staged edit
     const edit = changes.stagedForNode(child.subsystem_name, child.node_name)
     return edit
       ? { ...child, id: null, mode_name: edit.mode_name, version: edit.expected_version }

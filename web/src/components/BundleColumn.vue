@@ -144,7 +144,7 @@ const props = defineProps<{
   name: string
   mode: string
   version: number
-  /** This column's bundle-path index, i.e. what a row click here writes to. Root is 0. */
+  /** Bundle-path index this column writes on click; root is 0. */
   depth: number
   selectedAlias?: string
   canQueue?: boolean
@@ -201,7 +201,7 @@ function committedTip(child: KeyChildMetaOut, modeName: string): number | undefi
 
 type Upgrade = { version: number; staged: boolean }
 
-/** Newest version of a child's mode, including one staged but not yet committed (`staged` marks that case). */
+/** Includes a staged-but-uncommitted version; `staged` marks that case. */
 function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   const committed = committedTip(child, modeName)
   const edit = changes.stagedForMode(child.subsystem_name, child.node_name, modeName)
@@ -235,7 +235,7 @@ function modeValue(choice: ChildChoice | undefined): string | undefined {
   return `${choice.mode}/${choice.version ?? ''}`
 }
 
-/** The field shows the version this row actually points at, which may be behind its mode's tip. */
+/** May be behind the mode's tip. */
 function selectionLabel(child: KeyChildMetaOut): string {
   const choice = childChoice.get(child.alias)
   if (!choice?.mode) return ''
@@ -250,15 +250,15 @@ function baselineExternal(child: KeyChildMetaOut): string {
   return sibling?.proposed_payload ?? ''
 }
 
-/** Where a row points before the user touches it, i.e. the committed child, or what the changeset stages. */
+/** Committed child, or what the changeset stages. */
 function baselineChild(child: KeyChildMetaOut): ChildChoice {
   const committed = { keyId: child.id, mode: child.mode_name ?? '', version: child.version }
   const proposedChildren = staged.value?.proposed_children
-  // No child map staged for this key, so the row still points where the committed key points
+  // no child map staged: row still points at the committed key
   if (!proposedChildren) return committed
   const proposed = proposedChildren[child.alias]
   if (proposed === undefined) return { keyId: null, mode: '', version: null }
-  // null points at the key this changeset will produce, so read it back off the staged edit
+  // null means key this changeset produces; read off the staged edit
   if (proposed === null) {
     const staged = changes.stagedForNode(child.subsystem_name, child.node_name)
     return staged
@@ -283,7 +283,7 @@ function applyBaseline() {
 
 async function onModeSelect(child: KeyChildMetaOut, value: string) {
   if (value === '') {
-    // Cleared: the map entry for this alias is dropped, so the commit leaves it with no child row
+    // cleared: map entry dropped, commit leaves no child row
     childChoice.set(child.alias, { keyId: null, mode: '', version: null })
   } else {
     const modeName = value.slice(0, value.lastIndexOf('/'))
@@ -304,7 +304,7 @@ async function onModeSelect(child: KeyChildMetaOut, value: string) {
 
 async function selectKeyVersion(child: KeyChildMetaOut, modeName: string, tip: Upgrade) {
   if (tip.staged) {
-    // No key exists yet, null tells the commit to fill in the key it produces for this child
+    // no key yet: null tells the commit to fill it in
     childChoice.set(child.alias, { keyId: null, mode: modeName, version: tip.version })
     return
   }
@@ -317,7 +317,7 @@ async function selectKeyVersion(child: KeyChildMetaOut, modeName: string, tip: U
   if (key) childChoice.set(child.alias, { keyId: key.id, mode: modeName, version: key.version })
 }
 
-/** Tip version of the child's currently selected mode, when it's ahead of the row's own selection. */
+/** When ahead of the row's own selection. */
 function upgrade(child: KeyChildMetaOut): Upgrade | undefined {
   const choice = childChoice.get(child.alias)
   if (!choice || choice.version === null) return undefined
@@ -332,12 +332,12 @@ async function updateToLatest(child: KeyChildMetaOut, tip: Upgrade) {
   await maybeReopen(child)
 }
 
-/** Mode separates a cleared row from one on a staged key, since neither of them has a key id. */
+/** Mode disambiguates a cleared row from a staged one: neither has a key id. */
 function choiceId(choice: ChildChoice): string {
   return `${choice.mode}/${choice.keyId ?? ''}`
 }
 
-/** Current selection for a row, i.e. the external payload string, or the internal mode and key id. */
+/** External payload string, or internal mode + key id. */
 function currentValue(child: KeyChildMetaOut): string | undefined {
   if (child.category === 'external') return externalChoice.get(child.alias)
   const choice = childChoice.get(child.alias)
@@ -369,7 +369,7 @@ function resolvedChild(child: KeyChildMetaOut): KeyChildMetaOut {
   return { ...child, id: choice.keyId, mode_name: choice.mode, version: choice.version }
 }
 
-// Clicking the already-open row toggles it closed. Clicking any other row opens it at its current selection
+// already-open row: closes. any other row: opens at its current selection
 async function onRowClick(child: KeyChildMetaOut) {
   if (child.category === 'external') return
   if (child.alias !== props.selectedAlias) {
@@ -380,7 +380,7 @@ async function onRowClick(child: KeyChildMetaOut) {
   emit('close')
 }
 
-// A dropdown change on the row whose descendant is already open re-navigates it to match, without closing it
+// descendant already open: re-navigate to match, don't close
 async function maybeReopen(child: KeyChildMetaOut) {
   if (child.alias !== props.selectedAlias) return
   if (!(await changes.confirmDiscardBeyond(props.depth))) return
@@ -403,7 +403,7 @@ const dirty = computed(() => rows.value.some((r) => r.dirty))
 
 useDirtySource(dirty, props.depth)
 
-/** Splits the row selections into payload edits on external children and this key's own alias -> child map. */
+/** External payload edits, plus this key's own alias -> child map. */
 function buildEdits(comment: string): {
   childEdits: StagedEditIn[]
   proposedChildren: Record<string, number | null>
@@ -413,7 +413,7 @@ function buildEdits(comment: string): {
 
   for (const child of children.value ?? []) {
     if (child.category === 'external') {
-      // An empty alias has no base key to stage a payload edit against
+      // empty alias: no base key to stage against
       const locator = childLocator(child)
       if (!locator) continue
       const value = externalChoice.get(child.alias) ?? ''
@@ -431,7 +431,7 @@ function buildEdits(comment: string): {
       }
     } else {
       const choice = childChoice.get(child.alias)
-      // Cleared rows stay out of the map, so the commit leaves them with no child row
+      // cleared rows stay out of the map: no child row on commit
       if (!choice?.mode) continue
       proposedChildren[child.alias] = choice.keyId
     }
@@ -457,11 +457,11 @@ async function save(comment: string) {
   await changes.stage([...childEdits, baseEdit(comment, proposedChildren)])
   if (props.pending) return
   if (!props.canQueue) {
-    // Without a parent column to queue into, this column owns the route, so it shows the new version
+    // no parent to queue into: this column owns the route
     showStaged(props.subsystem, props.name, props.mode)
     return
   }
-  // Point this column's own bundle-path entry at what it just staged, so it shows pending immediately
+  // point this column's bundle-path entry at what it just staged
   const edit = changes.stagedForMode(props.subsystem, props.name, props.mode)
   if (edit) nav.markPathStaged(props.depth - 1, edit.expected_version)
 }
@@ -542,7 +542,7 @@ watch(() => [props.subsystem, props.name, props.mode, props.version, props.pendi
   immediate: true,
 })
 
-// Reload committed data after a commit, unless it would throw away unsaved selections
+// reload after commit, unless it would discard unsaved selections
 watch(
   () => nav.keysToken,
   () => {

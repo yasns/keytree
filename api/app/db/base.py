@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 from ..config import settings
 
-# Explicit names so Alembic autogenerate can reliably target constraints later
+# explicit names: alembic autogenerate needs them to target constraints
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",

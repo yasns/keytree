@@ -25,7 +25,7 @@ def alembic_config():
 
 @pytest.fixture(scope="session")
 def postgres(alembic_config):
-    """Ephemeral postgres:17 migrated with `alembic upgrade heads` to preserve grants."""
+    """Migrated via `alembic upgrade heads`, to preserve grants."""
     with PostgresContainer(
         POSTGRES_IMAGE,
         username="keytree",
@@ -43,7 +43,7 @@ def postgres(alembic_config):
 
 @pytest.fixture(scope="session")
 def engine(postgres):
-    """Synchronous, connected as the owner (to enable migrations)."""
+    """Sync, connects as owner: migrations need it."""
     engine = create_engine(postgres.get_connection_url())
     yield engine
     engine.dispose()
@@ -51,7 +51,7 @@ def engine(postgres):
 
 @pytest.fixture(scope="session")
 def app_engine(postgres, engine):
-    """Connected as the app role and only having grants the API needs to run."""
+    """App role only, minimum grants the API needs."""
     with engine.begin() as conn:
         conn.execute(text(f"CREATE USER {APP_USER} PASSWORD '{APP_PASSWORD}' IN ROLE keytree_app"))
     url = postgres.get_connection_url().replace(
@@ -64,15 +64,15 @@ def app_engine(postgres, engine):
 
 @pytest.fixture
 def session_factory(app_engine):
-    """Async sessionmaker bound to the app role, isolated per test."""
-    # NullPool: connections must not outlive the loop they're used on.
+    """App role, isolated per test."""
+    # NullPool: connections mustn't outlive their event loop
     async_engine = create_async_engine(app_engine.url, poolclass=NullPool)
     return async_sessionmaker(async_engine, expire_on_commit=False)
 
 
 @pytest.fixture
 def client(session_factory):
-    """TestClient bound to the container as the app role the API runs as."""
+    """Same app role the API runs as."""
     from fastapi.testclient import TestClient
 
     from app.db.base import get_session

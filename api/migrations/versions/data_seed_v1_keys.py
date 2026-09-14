@@ -1,7 +1,7 @@
 """seed an empty v1 key for every node's default mode
 
 Revision ID: data_seed_v1_keys
-Revises: data_default_modes
+Revises: data_seed_default_modes
 Create Date: 2026-08-31 16:57:10.44725
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic
 revision: str = "data_seed_v1_keys"
-down_revision: str | Sequence[str] | None = "data_default_modes"
+down_revision: str | Sequence[str] | None = "data_seed_default_modes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = "schema_tables"
 
@@ -21,10 +21,7 @@ depends_on: str | Sequence[str] | None = "schema_tables"
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # Bootstraps a commit path that doesn't exist yet, so this seeds tables the API is
-    # granted write access to (key, key_child, staged_edit, changeset) directly with plain
-    # SQL rather than migrations.seed.seed(), whose docstring reserves it for tables the
-    # API cannot write.
+    # raw SQL: no commit path exists yet, and seed() is reserved for tables the API can't write
     if bind.scalar(text("SELECT 1 FROM key LIMIT 1")) is not None:
         return
 
@@ -36,8 +33,7 @@ def upgrade() -> None:
         """)
     )
 
-    # One staged edit per (node, default mode). A bundle node gets a placeholder
-    # `proposed_children`, corrected below once the child keys it should reference exist.
+    # bundle node's proposed_children is a placeholder, backfilled below once child keys exist
     _ = bind.execute(
         text("""
             INSERT INTO staged_edit
@@ -70,8 +66,7 @@ def upgrade() -> None:
         {"changeset_id": changeset_id},
     )
 
-    # Pin every node_edge to the two nodes' v1 keys. A node has exactly one v1 key (one
-    # default mode, one version), so (node_id, version=1) resolves it unambiguously.
+    # (node_id, version=1) is unambiguous: one default mode, one version, per node
     _ = bind.execute(
         text("""
             INSERT INTO key_child
@@ -83,8 +78,7 @@ def upgrade() -> None:
         """)
     )
 
-    # Backfill the bundle staged_edits' proposed_children now that the child keys exist,
-    # so each staged edit matches the key it produced.
+    # backfill proposed_children now that the child keys it references exist
     _ = bind.execute(
         text("""
             UPDATE staged_edit se SET proposed_children = agg.children

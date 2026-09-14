@@ -177,7 +177,7 @@ async function rebase() {
 async function commit(overwriteConflicts = false) {
   if (!comment.value.trim()) return
   committing.value = true
-  // The routed key only moves if this changeset edits it. Capture before commit clears the edits
+  // only moves if this changeset edits it; capture before commit clears the edits
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
   try {
@@ -186,7 +186,7 @@ async function commit(overwriteConflicts = false) {
     conflictsOpen.value = false
     snackbar.notify('Changeset committed', 'success')
     await nav.refreshKeys()
-    // Follow the routed key onto whichever version it landed on, which trails the tip, not the base
+    // follows the version it landed on, which trails the tip, not the base
     const tip = key && nav.nodeDetail?.modes.find((m) => m.name === key.mode)?.versions[0]
     if (key && staged && tip !== undefined && tip !== key.version) {
       await router.replace({

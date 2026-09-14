@@ -54,7 +54,6 @@ def _build_node_detail(
     keys: list[Key],
     display_names: dict[str, str],
 ) -> NodeOut:
-    """Assemble a node's modes and their versions (newest first) from flat rows."""
     versions_by_mode: dict[int, list[int]] = {}
     for key in keys:
         versions_by_mode.setdefault(key.mode_id, []).append(key.version)

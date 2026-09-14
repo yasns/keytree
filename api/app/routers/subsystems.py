@@ -41,8 +41,8 @@ def _build_tree(
     nodes: list[Node],
     edges: list[tuple[int, str, Node]],
 ) -> list[TreeOut]:
-    """Roots are nodes with no parent in this subsystem; recursion stops at the subsystem
-    boundary, rendering the far side as a leaf."""
+    """Roots = no parent in-subsystem; recursion stops at the boundary, far side rendered as a
+    leaf."""
     children_by_parent: dict[int, list[tuple[str, Node]]] = {}
     for parent_id, alias, child in edges:
         children_by_parent.setdefault(parent_id, []).append((alias, child))

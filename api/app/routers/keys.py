@@ -64,8 +64,7 @@ _KeyLocator = tuple[str, str, str, int]
 async def keys_by_locator(
     locators: list[_KeyLocator], session: SessionDep
 ) -> dict[_KeyLocator, Key]:
-    """Resolves multiple (subsystem, node, mode, version) keys in one query. Missing locators are
-    simply absent from the result."""
+    """Missing locators are simply absent from the result."""
     if not locators:
         return {}
     rows = await session.execute(
@@ -80,7 +79,7 @@ async def keys_by_locator(
 
 
 async def keys_or_404(locators: list[_KeyLocator], session: SessionDep) -> list[Key]:
-    """Resolves multiple (subsystem, node, mode, version) keys in one query, in request order."""
+    """In request order."""
     found = await keys_by_locator(locators, session)
     keys: list[Key] = []
     for locator in locators:
@@ -105,7 +104,6 @@ def _build_key_detail(
     ancestor_version: int | None,
     ancestor_label: str | None,
 ) -> KeyOut:
-    """Attaches the key's author display name and fork/copy ancestor to its flat row."""
     return KeyOut(
         id=key.id,
         label=key.label,
@@ -157,7 +155,7 @@ _ChildRow = tuple[str, Key | None, int, str, str, str | None, str | None]
 
 
 def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
-    """Builds a child key's metadata row, keeping it in the bundle with a null key if unset."""
+    """Unset child stays as a row with a null key, not skipped."""
     alias, key, node_id, node_name, subsystem_name, category, mode_name = row
     return KeyChildMetaOut(
         id=key.id if key else None,
@@ -180,7 +178,7 @@ def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
 async def get_key_children(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
 ) -> list[KeyChildMetaOut]:
-    """Returns one level of a bundle. One row per alias, whether emptied or not. Crosses subsystem
+    """One level of a bundle: one row per alias, whether emptied or not, crossing subsystem
     boundaries freely."""
     parent = await key_or_404(subsystem_name, node_name, mode_name, version, session)
 
