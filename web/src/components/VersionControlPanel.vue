@@ -144,7 +144,10 @@ async function goToEdit(edit: StagedEditOut) {
     router.push(keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, 'pending'))
     return
   }
-  nav.preDiffLocation = router.currentRoute.value.fullPath
+  // Already comparing: keep the location from before that comparison started.
+  if (!router.currentRoute.value.query.diff) {
+    nav.preDiffLocation = router.currentRoute.value.fullPath
+  }
   router.push({
     ...keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, edit.base_version),
     query: withDiffQuery({}, { mode: edit.mode_name, version: 'pending' }),

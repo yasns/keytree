@@ -50,7 +50,7 @@
 
             <v-select
               v-if="row.child.category === 'external'"
-              class="key-select"
+              class="key-label"
               :model-value="externalChoice.get(row.child.alias) || undefined"
               :items="externalItems(row.child)"
               :disabled="row.child.id === null"
@@ -63,7 +63,7 @@
             >
               <template #item="{ item, props: itemProps }">
                 <v-divider v-if="'type' in item && item.type === 'divider'"></v-divider>
-                <v-list-item v-else v-bind="itemProps" class="key-select"></v-list-item>
+                <v-list-item v-else v-bind="itemProps" class="key-label"></v-list-item>
               </template>
             </v-select>
             <template v-else>

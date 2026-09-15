@@ -56,7 +56,7 @@ export function parseVersion(v: string | undefined): VersionTarget | undefined {
 /** What a comparison is against: a mode of the routed node, at some version. */
 export type DiffTarget = { mode: string; version: VersionTarget }
 
-export function formatDiffTarget(target: DiffTarget): string {
+function formatDiffTarget(target: DiffTarget): string {
   return `${target.mode}/${target.version === 'pending' ? 'pending' : `v${target.version}`}`
 }
 
@@ -80,7 +80,7 @@ export function withDiffQuery(
   return next
 }
 
-export type ResolvedDiffRoot = {
+type ResolvedDiffRoot = {
   subsystem: string
   name: string
   mode: string
