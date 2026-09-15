@@ -20,6 +20,10 @@ export function iconFor(node: TreeOut | KeyChildMetaOut, isAlias: boolean): stri
   return CATEGORY[node.category]?.icon ?? 'mdi-script-text-key'
 }
 
+export function languageFor(category: string | null | undefined): string {
+  return (category ? CATEGORY[category]?.format : undefined) ?? 'plaintext'
+}
+
 type RankedNode = { isAlias: boolean; category: string | null; alias: string }
 
 function rank(node: RankedNode): number {

@@ -1,7 +1,25 @@
 <template>
   <div class="d-flex flex-column h-100">
-    <div class="flex-grow-1" style="min-width: 0; min-height: 0">
-      <BundleBrowser v-if="detailReady && nav.nodeDetail?.category === null"></BundleBrowser>
+    <div class="d-flex flex-column flex-grow-1" style="min-width: 0; min-height: 0">
+      <div
+        v-if="detailReady && nav.nodeDetail?.category === null && diffTarget"
+        class="d-flex flex-column h-100"
+        style="min-height: 0"
+      >
+        <ComparisonToolbar :diff-target="diffTarget"></ComparisonToolbar>
+        <ComparisonBrowser :diff-target="diffTarget"></ComparisonBrowser>
+      </div>
+
+      <BundleBrowser v-else-if="detailReady && nav.nodeDetail?.category === null"></BundleBrowser>
+
+      <div
+        v-else-if="detailReady && nav.nodeDetail && leafLeft && diffTarget && leafRight"
+        class="d-flex flex-column h-100"
+        style="min-height: 0"
+      >
+        <ComparisonToolbar :diff-target="diffTarget"></ComparisonToolbar>
+        <ComparisonLeafDiff :left="leafLeft" :right="leafRight"></ComparisonLeafDiff>
+      </div>
 
       <template
         v-else-if="detailReady && nav.nodeDetail && selectedMode && selectedVersion !== undefined"
@@ -24,13 +42,16 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { keyRoute, parseVersion } from '@/router'
+import { useRoute, useRouter } from 'vue-router'
+import { keyRoute, parseDiffTarget, parseVersion, resolveDiffRoot } from '@/router'
 import { type BundleRoot, useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import BundleBrowser from '@/components/BundleBrowser.vue'
+import ComparisonBrowser from '@/components/ComparisonBrowser.vue'
+import ComparisonToolbar from '@/components/ComparisonToolbar.vue'
+import ComparisonLeafDiff, { type LeafSide } from '@/components/ComparisonLeafDiff.vue'
 import BrowsePanel from '@/components/BrowsePanel.vue'
 import Spinner from '@/components/Spinner.vue'
 
@@ -43,6 +64,7 @@ const { subsystem, name, mode, version } = defineProps<{
 
 const nav = useNavStore()
 const changes = useChangesStore()
+const route = useRoute()
 const router = useRouter()
 const snackbar = useSnackbarStore()
 
@@ -75,6 +97,37 @@ const selectedVersion = computed(() => {
   const requested = requestedVersion.value
   if (typeof requested === 'number' && m.versions.includes(requested)) return requested
   return m.versions[0]
+})
+
+const diffTarget = computed(() => parseDiffTarget(route.query.diff as string | undefined))
+
+/** The routed leaf itself, as the "original" side of a leaf-only comparison. */
+const leafLeft = computed<LeafSide | undefined>(() => {
+  const detail = nav.nodeDetail
+  if (!detailReady.value || !detail || !selectedMode.value || selectedVersion.value === undefined)
+    return undefined
+  return {
+    root: {
+      subsystem: detail.subsystem_name,
+      name: detail.name,
+      mode: selectedMode.value.name,
+      version: selectedVersion.value,
+      pending: isPending.value,
+    },
+    category: detail.category,
+  }
+})
+
+const leafRight = computed<LeafSide | undefined>(() => {
+  const detail = nav.nodeDetail
+  const target = diffTarget.value
+  if (!detailReady.value || !detail || !target) return undefined
+  const root = resolveDiffRoot(
+    { subsystem: detail.subsystem_name, name: detail.name },
+    target,
+    (mode) => changes.stagedForMode(detail.subsystem_name, detail.name, mode)?.expected_version,
+  )
+  return root && { root, category: detail.category }
 })
 
 // Redirect to 404 when the routed mode is invalid for that node

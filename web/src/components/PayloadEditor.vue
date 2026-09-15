@@ -33,19 +33,14 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useTheme } from 'vuetify'
 import * as monaco from 'monaco-editor'
-import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
-import { CATEGORY } from '@/category'
+import { useMonacoTheme } from '@/composables/useMonaco'
+import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import EditorToolbar from './EditorToolbar.vue'
-
-;(self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
-  getWorker: () => new EditorWorker(),
-}
 
 const { subsystem, name, mode, version, category, canQueue, pending, depth } = defineProps<{
   subsystem: string
@@ -63,7 +58,6 @@ const emit = defineEmits<{ queue: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const theme = useTheme()
 const { navigateToStaged, showStaged } = useStagedNavigation()
 
 const editorElem = ref<HTMLDivElement>()
@@ -87,17 +81,14 @@ function resetToBaseline() {
   dirty.value = false
 }
 
-function languageFor(category: string | null | undefined): string {
-  return (category ? CATEGORY[category]?.format : undefined) ?? 'plaintext'
-}
-
 onMounted(() => {
   if (!editorElem.value) return
+  const initialTheme = useMonacoTheme()
   editor = monaco.editor.create(editorElem.value, {
     value: '',
     language: languageFor(category),
     automaticLayout: true,
-    theme: theme.current.value.dark ? 'vs-dark' : 'vs',
+    theme: initialTheme,
   })
   editor.onDidChangeModelContent(() => {
     dirty.value = editor!.getValue() !== baseValue
@@ -170,11 +161,6 @@ async function copyTo(targetMode: string, comment: string) {
   resetToBaseline()
   await navigateToStaged(subsystem, name, targetMode, `Copied to mode "${targetMode}"`)
 }
-
-watch(
-  () => theme.current.value.dark,
-  (dark) => editor?.updateOptions({ theme: dark ? 'vs-dark' : 'vs' }),
-)
 
 onBeforeUnmount(() => editor?.dispose())
 </script>

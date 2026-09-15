@@ -1,5 +1,5 @@
 <template>
-  <div class="d-flex flex-column h-100" style="min-height: 0">
+  <v-card class="d-flex flex-column h-100 elevation-overlay" style="min-height: 0">
     <KeyMetadata
       :subsystem="subsystem"
       :name="name"
@@ -28,7 +28,7 @@
     ></EditorToolbar>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
-      <v-list v-if="children" activatable>
+      <v-list v-if="children" activatable slim>
         <v-list-item
           v-for="row in rows"
           :key="row.child.alias"
@@ -40,7 +40,7 @@
           }"
           :ripple="row.child.category !== 'external'"
           @click="onRowClick(row.child)"
-          class="py-2 px-2"
+          class="py-4"
         >
           <div class="d-flex align-center ga-2">
             <v-icon
@@ -61,14 +61,15 @@
               @click.stop
               @update:model-value="(v) => externalChoice.set(row.child.alias, v)"
             >
-              <template #item="{ props: itemProps }">
-                <v-list-item v-bind="itemProps" class="key-select"></v-list-item>
+              <template #item="{ item, props: itemProps }">
+                <v-divider v-if="'type' in item && item.type === 'divider'"></v-divider>
+                <v-list-item v-else v-bind="itemProps" class="key-select"></v-list-item>
               </template>
             </v-select>
             <template v-else>
               <div class="d-flex flex-column ga-1 w-100">
                 <v-select
-                  class="key-select"
+                  class="key-label"
                   :model-value="modeValue(childChoice.get(row.child.alias))"
                   :items="row.items"
                   :label="row.child.alias"
@@ -78,13 +79,14 @@
                   @click.stop
                   @update:model-value="(v) => onModeSelect(row.child, v)"
                 >
-                  <template #item="{ props: itemProps }">
-                    <v-list-item v-bind="itemProps" class="key-select"></v-list-item>
+                  <template #item="{ item, props: itemProps }">
+                    <v-divider v-if="'type' in item && item.type === 'divider'"></v-divider>
+                    <v-list-item v-else v-bind="itemProps" class="key-label"></v-list-item>
                   </template>
                   <template #selection>{{ selectionLabel(row.child) }}</template>
                 </v-select>
 
-                <div v-if="row.upgrade" class="text-label-medium text-medium-emphasis">
+                <div v-if="row.upgrade" class="text-label-medium text-info">
                   <v-icon
                     icon="mdi-alert-circle-outline"
                     size="x-small"
@@ -119,7 +121,7 @@
 
       <Spinner v-else></Spinner>
     </div>
-  </div>
+  </v-card>
 </template>
 
 <script setup lang="ts">
@@ -161,9 +163,7 @@ const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
 
 const staged = computed(() =>
-  props.pending
-    ? changes.stagedForMode(props.subsystem, props.name, props.mode)
-    : changes.stagedFor(props.subsystem, props.name, props.mode, props.version),
+  changes.stagedForColumn(props.subsystem, props.name, props.mode, props.version, props.pending),
 )
 
 const externalOptionsCache = reactive(new Map<string, string[]>())
@@ -173,13 +173,21 @@ const externalChoice = reactive(new Map<string, string>())
 type ChildChoice = { keyId: number | null; mode: string; version: number | null }
 const childChoice = reactive(new Map<string, ChildChoice>())
 
+type SelectOption = { title: string; value: string } | { type: 'divider' }
+
 function externalKey(child: KeyChildMetaOut): string {
   return `${child.subsystem_name}/${child.node_name}`
 }
 
-function externalItems(child: KeyChildMetaOut) {
+function withDivider(rest: { title: string; value: string }[]): SelectOption[] {
+  return rest.length
+    ? [{ title: 'None', value: '' }, { type: 'divider' }, ...rest]
+    : [{ title: 'None', value: '' }]
+}
+
+function externalItems(child: KeyChildMetaOut): SelectOption[] {
   const options = externalOptionsCache.get(externalKey(child)) ?? []
-  return [{ title: 'None', value: '' }, ...options.map((o) => ({ title: o, value: o }))]
+  return withDivider(options.map((o) => ({ title: o, value: o })))
 }
 
 function ensureExternalOptions(child: KeyChildMetaOut) {
@@ -210,17 +218,16 @@ function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   return { version, staged: committed !== undefined && version > committed }
 }
 
-function modeItems(child: KeyChildMetaOut) {
-  return [
-    { title: 'None', value: '' },
-    ...modeOptions(child).map((m) => {
+function modeItems(child: KeyChildMetaOut): SelectOption[] {
+  return withDivider(
+    modeOptions(child).map((m) => {
       const version = tipOf(child, m.name)?.version ?? m.versions[0]
       return {
         title: `${child.subsystem_name}/${child.node_name}/${m.name}/v${version}`,
         value: `${m.name}/${version}`,
       }
     }),
-  ]
+  )
 }
 
 function archivedMode(child: KeyChildMetaOut): boolean {
@@ -554,14 +561,11 @@ watch(staged, applyBaseline)
 </script>
 
 <style scoped>
-.key-select {
+.key-label :deep(.v-field__input),
+.key-label :deep(.v-list-item-title) {
   font-family: ui-monospace, monospace;
-  font-size: 0.875rem;
-}
-.key-select :deep(.v-field__input),
-.key-select :deep(.v-list-item-title) {
-  font-family: ui-monospace, monospace;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 .row-changed {
   border-left: 3px solid rgb(var(--v-theme-warning));
@@ -569,10 +573,8 @@ watch(staged, applyBaseline)
 .row-dirty {
   background-color: rgba(var(--v-theme-warning), 0.16);
 }
-.row-external {
-  cursor: default;
-}
-.row-external:hover :deep(.v-list-item__overlay) {
-  opacity: 0;
+.key-label :deep(.v-field-label) {
+  font-weight: 400;
+  font-family: var(--v-font-body, 'Roboto', sans-serif);
 }
 </style>

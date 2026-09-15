@@ -16,3 +16,24 @@
   border-left: 3px solid rgb(var(--v-theme-primary));
   padding-left: 8px;
 }
+
+.key-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-family: ui-monospace, monospace;
+}
+
+.diff-highlight-left {
+  background-color: rgba(var(--v-theme-error), 0.4);
+}
+
+.diff-highlight-right {
+  background-color: rgba(var(--v-theme-success), 0.4);
+}
+
+.row-external {
+  cursor: default;
+}
+.row-external:hover .v-list-item__overlay {
+  opacity: 0;
+}
