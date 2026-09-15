@@ -39,15 +39,13 @@
           <template #prepend>
             <v-icon :icon="keyIcon(edit)" size="small"></v-icon>
           </template>
-          <v-list-item-title class="text-body-medium">
-            <code>
-              {{ edit.subsystem_name }}/{{ edit.node_name }}/{{ edit.mode_name }}/<template
-                v-if="edit.base_version !== null"
-              >
-                <s class="text-medium-emphasis">v{{ edit.base_version }}</s>
-                <v-icon icon="mdi-arrow-right" size="x-small"></v-icon> </template
-              >v{{ edit.expected_version }}
-            </code>
+          <v-list-item-title class="text-body-medium key-label">
+            {{ edit.subsystem_name }}/{{ edit.node_name }}/{{ edit.mode_name }}/<template
+              v-if="edit.base_version !== null"
+            >
+              <s class="text-medium-emphasis">v{{ edit.base_version }}</s>
+              <v-icon icon="mdi-arrow-right" size="x-small"></v-icon> </template
+            >v{{ edit.expected_version }}
           </v-list-item-title>
           <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
         </v-list-item>
@@ -64,8 +62,8 @@
             ></v-icon>
           </template>
           <v-list-item-title class="text-body-medium">
-            <code :class="{ 'text-decoration-line-through': archival.archived }"
-              >{{ archival.subsystem_name }}/{{ archival.node_name }}/{{ archival.mode_name }}</code
+            <span :class="{ 'text-decoration-line-through': archival.archived, 'key-label': true }"
+              >{{ archival.subsystem_name }}/{{ archival.node_name }}/{{ archival.mode_name }}</span
             >
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -113,7 +111,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { components } from '@/api-types'
-import { keyRoute, parseVersion } from '@/router'
+import { keyRoute, parseVersion, withDiffQuery } from '@/router'
 import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
@@ -142,7 +140,15 @@ function keyIcon(edit: StagedEditOut) {
 
 async function goToEdit(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
-  router.push(keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, 'pending'))
+  if (edit.base_version === null) {
+    router.push(keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, 'pending'))
+    return
+  }
+  nav.preDiffLocation = router.currentRoute.value.fullPath
+  router.push({
+    ...keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, edit.base_version),
+    query: withDiffQuery({}, { mode: edit.mode_name, version: 'pending' }),
+  })
 }
 
 async function goToArchival(archival: StagedArchivalOut) {

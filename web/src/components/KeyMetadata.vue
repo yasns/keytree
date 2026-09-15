@@ -5,8 +5,12 @@
         <div class="d-flex flex-column align-start ga-2" style="min-width: 0">
           <div class="text-body-small text-medium-emphasis">{{ subsystem }} / {{ name }}</div>
           <div class="d-flex align-center ga-1">
-            <span class="text-title-medium">{{ mode }}</span>
-            <v-chip size="small" density="compact" label variant="outlined">v{{ version }}</v-chip>
+            <span class="text-title-medium"
+              ><DiffText :runs="modeRuns" :highlight-class="diffHighlightClass"></DiffText
+            ></span>
+            <v-chip size="small" density="compact" label variant="outlined"
+              >v<DiffText :runs="versionRuns" :highlight-class="diffHighlightClass"></DiffText
+            ></v-chip>
             <v-chip
               v-if="pendingEdit"
               size="small"
@@ -54,8 +58,10 @@
         <label>
           <div class="font-weight-medium">Key label</div>
           <div class="d-flex align-center ga-1">
-            <CopyButton :text="displayLabel!"></CopyButton>
-            <code class="v-code text-truncate">{{ displayLabel }}</code>
+            <CopyButton :text="ownFields.displayLabel"></CopyButton>
+            <span class="key-label text-truncate"
+              ><DiffText :runs="displayLabelRuns" :highlight-class="diffHighlightClass"></DiffText
+            ></span>
           </div>
         </label>
 
@@ -65,14 +71,16 @@
           <span class="font-weight-medium">Subsystem:</span>
           <span>{{ subsystem }}</span>
 
-          <span class="font-weight-medium">Name:</span>
+          <span class="font-weight-medium">Path:</span>
           <span>{{ name }}</span>
 
           <span class="font-weight-medium">Mode:</span>
-          <span>{{ mode }}</span>
+          <span><DiffText :runs="modeRuns" :highlight-class="diffHighlightClass"></DiffText></span>
 
           <span class="font-weight-medium">Version:</span>
-          <span>{{ version }}</span>
+          <span
+            ><DiffText :runs="versionRuns" :highlight-class="diffHighlightClass"></DiffText
+          ></span>
         </div>
 
         <template v-if="!pendingEdit">
@@ -80,24 +88,23 @@
 
           <div class="meta-grid">
             <span class="font-weight-medium">Created at:</span>
-            <span>{{ new Date(payload?.created_at!).toLocaleString(LOCALE) }}</span>
+            <span
+              ><DiffText :runs="createdAtRuns" :highlight-class="diffHighlightClass"></DiffText
+            ></span>
 
             <span class="font-weight-medium">Created by:</span>
-            <span>
-              <template v-if="createdByDisplayName"
-                >{{ createdByDisplayName }} ({{ createdBy }})</template
-              >
-              <template v-else>
-                {{ createdBy }}
-              </template>
-            </span>
+            <span
+              ><DiffText :runs="createdByRuns" :highlight-class="diffHighlightClass"></DiffText
+            ></span>
           </div>
         </template>
 
         <template v-if="pendingEdit?.comment ?? payload?.comment">
           <div class="comment-block mt-2">
             <div class="font-weight-medium">Comment</div>
-            <div class="text-body-medium">{{ pendingEdit?.comment ?? payload?.comment }}</div>
+            <div class="text-body-medium">
+              <DiffText :runs="commentRuns" :highlight-class="diffHighlightClass"></DiffText>
+            </div>
           </div>
         </template>
 
@@ -116,7 +123,9 @@
                 target="_blank"
                 rel="noopener"
               ></v-btn>
-              <code class="v-code text-truncate">{{ basedOn.label }}</code>
+              <span class="key-label text-truncate"
+                ><DiffText :runs="basedOnRuns" :highlight-class="diffHighlightClass"></DiffText
+              ></span>
             </div>
           </div>
         </template>
@@ -126,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { computed, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import type { components } from '@/api-types'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
@@ -134,7 +143,10 @@ import { LOCALE, relativeTime } from '@/format'
 import { keyRoute } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useChangesStore } from '@/stores/changes'
+import type { ScrollSide } from '@/composables/useSyncedScroll'
+import { runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useComparisonDiff'
 import CopyButton from './CopyButton.vue'
+import DiffText from './DiffText.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']
@@ -147,20 +159,56 @@ const props = defineProps<{
   payload?: KeyOut
   staged?: StagedEditOut
   pending?: boolean
+  side?: ScrollSide
+  counterpart?: ColumnDiffData
 }>()
 
-const panel = ref(undefined)
+type FieldsInput = {
+  subsystem?: string
+  name?: string
+  mode: string
+  version: number
+  payload?: KeyOut
+  staged?: StagedEditOut
+  pending?: boolean
+}
+
+/** Extracted so "own" and "counterpart" fields are derived identically for diffing. */
+function fieldsOf(input: FieldsInput, authDisplayName: string | undefined) {
+  const { payload, staged, pending, subsystem, name, mode, version } = input
+  const pendingEdit = pending ? staged : undefined
+  const displayLabel = pendingEdit
+    ? `${subsystem}/${name}/${mode}/v${version}`
+    : (payload?.label ?? '')
+  const comment = pendingEdit?.comment ?? payload?.comment ?? ''
+  const basedOnLabel = (pendingEdit?.based_on ?? payload?.based_on)?.label ?? ''
+  const createdBy = pendingEdit?.created_by ?? payload?.created_by
+  const createdByDisplayName = pendingEdit ? authDisplayName : payload?.created_by_display_name
+  const createdByText = createdBy
+    ? createdByDisplayName
+      ? `${createdByDisplayName} (${createdBy})`
+      : createdBy
+    : ''
+  const createdAt = pendingEdit ? undefined : payload?.created_at
+  const createdAtText = createdAt ? new Date(createdAt).toLocaleString(LOCALE) : ''
+  return {
+    displayLabel,
+    mode,
+    version: String(version),
+    comment,
+    basedOnLabel,
+    createdByText,
+    createdAtText,
+  }
+}
+
+const panel = defineModel<number | undefined>('panel')
 
 const auth = useAuthStore()
 const changes = useChangesStore()
 const router = useRouter()
 
 const pendingEdit = computed(() => (props.pending ? props.staged : undefined))
-
-const createdBy = computed(() => pendingEdit.value?.created_by ?? props.payload?.created_by)
-const createdByDisplayName = computed(() =>
-  pendingEdit.value ? auth.displayName : props.payload?.created_by_display_name,
-)
 
 const basedOn = computed(() => pendingEdit.value?.based_on ?? props.payload?.based_on)
 const basedOnHref = computed(() => {
@@ -182,16 +230,31 @@ const archivalPending = computed(
   () => !!currentMode.value && !!changes.stagedArchival(currentMode.value.id),
 )
 
-const displayLabel = computed(() =>
-  pendingEdit.value
-    ? `${props.subsystem}/${props.name}/${props.mode}/v${props.version}`
-    : props.payload?.label,
-)
 const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
-</script>
 
-<style scoped>
-.v-code {
-  font-size: 0.875rem;
-}
-</style>
+const ownFields = computed(() => fieldsOf(props, auth.displayName))
+const counterpartFields = computed(
+  () => props.counterpart && fieldsOf(props.counterpart, auth.displayName),
+)
+
+const displayLabelRuns = computed(() =>
+  runsFor(ownFields.value.displayLabel, counterpartFields.value?.displayLabel),
+)
+const modeRuns = computed(() => runsFor(ownFields.value.mode, counterpartFields.value?.mode))
+const versionRuns = computed(() =>
+  runsFor(ownFields.value.version, counterpartFields.value?.version),
+)
+const commentRuns = computed(() =>
+  runsFor(ownFields.value.comment, counterpartFields.value?.comment),
+)
+const basedOnRuns = computed(() =>
+  runsFor(ownFields.value.basedOnLabel, counterpartFields.value?.basedOnLabel),
+)
+const createdByRuns = computed(() =>
+  runsFor(ownFields.value.createdByText, counterpartFields.value?.createdByText),
+)
+const createdAtRuns = computed(() =>
+  runsFor(ownFields.value.createdAtText, counterpartFields.value?.createdAtText),
+)
+const diffHighlightClass = computed(() => sideHighlightClass(props.side))
+</script>

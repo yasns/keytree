@@ -52,17 +52,13 @@
             <div
               v-ripple
               v-bind="tooltipProps"
-              class="collapse-strip h-100 border-e-sm d-flex align-center justify-center cursor-pointer"
-              style="flex: 0 0 auto; width: 1rem"
+              class="collapse-strip h-100 bg-surface-light d-flex align-center justify-center cursor-pointer"
+              style="flex: 0 0 auto; width: 2rem"
               @click="collapsed = !collapsed"
             >
               <v-icon
-                icon="mdi-chevron-left"
+                :icon="collapsed ? 'mdi-arrow-collapse-right' : 'mdi-arrow-expand-left'"
                 size="small"
-                :style="{
-                  transform: collapsed ? 'rotate(180deg)' : 'none',
-                  transition: 'transform 0.2s',
-                }"
               ></v-icon>
             </div>
           </template>
@@ -99,6 +95,12 @@ export function encodeBundlePath(path: KeyChildMetaOut[]): string {
 
 export function parseBundlePath(at: string | undefined): string[] {
   return at ? at.split('/').map((s) => decodeURIComponent(s)) : []
+}
+
+export function leafLocatorFor(entry: KeyChildMetaOut | undefined) {
+  if (!entry || entry.category === null || entry.category === 'external') return undefined
+  const locator = childLocator(entry)
+  return locator && { locator, category: entry.category }
 }
 </script>
 
@@ -140,10 +142,8 @@ const columns = computed(() =>
 )
 
 const leafEntry = computed(() => {
-  const last = nav.bundlePath.at(-1)
-  if (!last || last.category === null || last.category === 'external') return undefined
-  const locator = childLocator(last)
-  return locator && { ...locator, category: last.category }
+  const leaf = leafLocatorFor(nav.bundlePath.at(-1))
+  return leaf && { ...leaf.locator, category: leaf.category }
 })
 
 function pushPath() {
@@ -193,6 +193,6 @@ watch(
 
 <style scoped>
 .collapse-strip:hover {
-  background: rgba(var(--v-theme-on-surface), 0.08);
+  background: rgba(var(--v-theme-on-surface), 0.25);
 }
 </style>

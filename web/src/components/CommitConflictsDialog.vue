@@ -13,9 +13,9 @@
             class="px-0"
           >
             <v-list-item-title class="text-body-medium">
-              <code>
+              <span class="key-label">
                 {{ conflict.subsystem_name }}/{{ conflict.node_name }}/{{ conflict.mode_name }}
-              </code>
+              </span>
             </v-list-item-title>
             <v-list-item-subtitle>
               staged as v{{ conflict.expected_version }} from

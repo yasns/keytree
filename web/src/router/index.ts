@@ -53,4 +53,54 @@ export function parseVersion(v: string | undefined): VersionTarget | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+/** What a comparison is against: a mode of the routed node, at some version. */
+export type DiffTarget = { mode: string; version: VersionTarget }
+
+export function formatDiffTarget(target: DiffTarget): string {
+  return `${target.mode}/${target.version === 'pending' ? 'pending' : `v${target.version}`}`
+}
+
+/** Reads back the `mode/vN`/`mode/pending` value written by formatDiffTarget. */
+export function parseDiffTarget(raw: string | undefined): DiffTarget | undefined {
+  if (!raw) return undefined
+  const i = raw.lastIndexOf('/')
+  if (i < 0) return undefined
+  const mode = raw.slice(0, i)
+  const version = parseVersion(raw.slice(i + 1))
+  return mode && version !== undefined ? { mode, version } : undefined
+}
+
+export function withDiffQuery(
+  query: Record<string, string>,
+  target: DiffTarget | undefined,
+): Record<string, string> {
+  const next = { ...query }
+  if (target) next.diff = formatDiffTarget(target)
+  else delete next.diff
+  return next
+}
+
+export type ResolvedDiffRoot = {
+  subsystem: string
+  name: string
+  mode: string
+  version: number
+  pending: boolean
+}
+
+/** Resolves a 'pending' target's version; undefined if it has no staged edit to resolve against. */
+export function resolveDiffRoot(
+  base: { subsystem: string; name: string },
+  target: DiffTarget,
+  pendingVersion: (mode: string) => number | undefined,
+): ResolvedDiffRoot | undefined {
+  if (target.version === 'pending') {
+    const version = pendingVersion(target.mode)
+    return version === undefined
+      ? undefined
+      : { ...base, mode: target.mode, version, pending: true }
+  }
+  return { ...base, mode: target.mode, version: target.version, pending: false }
+}
+
 export default router

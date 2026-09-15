@@ -100,6 +100,19 @@ export const useChangesStore = defineStore('changes', () => {
     return (edit.base_version ?? edit.expected_version) === baseVersion ? edit : undefined
   }
 
+  /** Pending version has no committed key of its own: read the mode's changeset instead. */
+  function stagedForColumn(
+    subsystem: string,
+    name: string,
+    mode: string,
+    version: number,
+    pending: boolean | undefined,
+  ): StagedEditOut | undefined {
+    return pending
+      ? stagedForMode(subsystem, name, mode)
+      : stagedFor(subsystem, name, mode, version)
+  }
+
   function stagedArchival(modeId: number): StagedArchivalOut | undefined {
     return archivals.value.find((a) => a.mode_id === modeId)
   }
@@ -151,6 +164,7 @@ export const useChangesStore = defineStore('changes', () => {
     stagedFor,
     stagedForNode,
     stagedForMode,
+    stagedForColumn,
     stagedArchival,
     archived,
     toggleArchival,

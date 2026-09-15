@@ -96,6 +96,9 @@ export const useNavStore = defineStore('nav', () => {
   const bundleRoot = ref<BundleRoot | null>(null)
   const bundlePath = ref<KeyChildMetaOut[]>([])
 
+  /** Full path to return to on comparison exit; set when comparison is entered. */
+  const preDiffLocation = ref<string | null>(null)
+
   watch(bundleRoot, (next, prev) => {
     // same key, only version/pending relabeled: open path stays valid
     if (
@@ -361,6 +364,7 @@ export const useNavStore = defineStore('nav', () => {
     pendingNodeId,
     bundleRoot,
     bundlePath,
+    preDiffLocation,
     keysToken,
     rows,
     fetchSubsystems,

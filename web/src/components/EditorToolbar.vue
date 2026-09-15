@@ -1,12 +1,11 @@
 <template>
-  <v-toolbar density="compact">
+  <v-toolbar density="compact" class="bg-surface border-b-sm">
     <template v-slot:prepend>
       <v-btn
         v-if="dirty"
         @click="discardDialog = true"
         prepend-icon="mdi-trash-can-outline"
         variant="tonal"
-        rounded
         >Discard</v-btn
       >
     </template>
@@ -18,7 +17,6 @@
         @click="saveDialog = true"
         variant="flat"
         color="primary"
-        rounded
       >
         Save
         <span v-if="props.canQueue">&nbsp;and Queue</span>
@@ -52,9 +50,17 @@
           <v-btn icon="mdi-dots-vertical" density="comfortable" v-bind="props"></v-btn>
         </template>
         <v-list density="compact">
+          <template v-if="subsystem && name && mode">
+            <v-list-item
+              title="Compare with..."
+              prepend-icon="mdi-compare-horizontal"
+              @click="compareDialog = true"
+            ></v-list-item>
+            <v-divider></v-divider>
+          </template>
+
           <template v-for="group in menuGroups" :key="group.label">
             <v-divider v-if="group.divider"></v-divider>
-            <v-list-subheader>{{ group.label }}</v-list-subheader>
             <v-tooltip
               v-for="item in group.items"
               :key="item.title"
@@ -113,16 +119,30 @@
     :warning="pendingWarning"
     @save="(comment) => emit('copy-to', mode ?? '', comment)"
   ></SaveDialog>
+
+  <CompareDialog
+    v-if="subsystem && name"
+    v-model="compareDialog"
+    :subsystem="subsystem"
+    :name="name"
+    :current-mode="mode"
+    :current-version="currentVersionTarget"
+    @compare="onCompare"
+  ></CompareDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, toRef } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmDialog from './ConfirmDialog.vue'
 import SaveDialog from './SaveDialog.vue'
 import ForkModeDialog from './ForkModeDialog.vue'
 import CopyToModeDialog from './CopyToModeDialog.vue'
+import CompareDialog from './CompareDialog.vue'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useChangesStore } from '@/stores/changes'
+import { useNavStore } from '@/stores/nav'
+import { keyRoute, withDiffQuery, type DiffTarget } from '@/router'
 
 const props = withDefaults(
   defineProps<{
@@ -147,12 +167,15 @@ const emit = defineEmits<{
 }>()
 
 const changes = useChangesStore()
+const nav = useNavStore()
+const router = useRouter()
 
 const saveDialog = ref(false)
 const discardDialog = ref(false)
 const forkDialog = ref(false)
 const copyDialog = ref(false)
 const copyLatestDialog = ref(false)
+const compareDialog = ref(false)
 const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
 
 const currentMode = useCurrentMode(modes, toRef(props, 'mode'))
@@ -217,5 +240,21 @@ const menuGroups = computed(() => {
 function onSaveConfirmed(comment: string) {
   if (props.canQueue) emit('save-and-queue', comment)
   else emit('save', comment)
+}
+
+const currentVersionTarget = computed<DiffTarget['version'] | undefined>(() => {
+  if (props.version === undefined) return undefined
+  return props.committed ? props.version : ('pending' as const)
+})
+
+async function onCompare(target: DiffTarget) {
+  const { subsystem, name, mode } = props
+  if (!subsystem || !name || !mode || currentVersionTarget.value === undefined) return
+  if (!(await changes.confirmDiscard())) return
+  nav.preDiffLocation = router.currentRoute.value.fullPath
+  router.push({
+    ...keyRoute(subsystem, name, mode, currentVersionTarget.value),
+    query: withDiffQuery({}, target),
+  })
 }
 </script>
