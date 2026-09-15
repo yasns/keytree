@@ -50,8 +50,8 @@
 
 <script setup lang="ts">
 import { useNavStore } from '@/stores/nav'
-import BrowsePanel from '@/components/BrowsePanel.vue'
-import VersionControlPanel from '@/components/VersionControlPanel.vue'
+import BrowsePanel from '@/components/sidebar/BrowsePanel.vue'
+import VersionControlPanel from '@/components/sidebar/VersionControlPanel.vue'
 
 const nav = useNavStore()
 

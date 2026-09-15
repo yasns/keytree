@@ -53,7 +53,7 @@ export function sideHighlightClass(side: ScrollSide | undefined): string | undef
 }
 
 /** Lets same-depth columns on each side publish their data and read the counterpart's back. */
-export function useComparisonDiff() {
+export function useDiff() {
   const entries = reactive(new Map<string, ColumnDiffData>())
 
   function publish(depth: number, side: ScrollSide, data: ColumnDiffData) {

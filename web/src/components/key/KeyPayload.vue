@@ -10,7 +10,7 @@
       :pending="pending"
     ></KeyMetadata>
 
-    <EditorToolbar
+    <KeyToolbar
       :dirty="dirty"
       :staged="!!staged"
       :staged-comment="staged?.comment"
@@ -25,7 +25,7 @@
       @discard="resetToBaseline"
       @fork="fork"
       @copy-to="copyTo"
-    ></EditorToolbar>
+    ></KeyToolbar>
 
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
   </div>
@@ -40,7 +40,7 @@ import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { useMonacoTheme } from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
-import EditorToolbar from './EditorToolbar.vue'
+import KeyToolbar from './KeyToolbar.vue'
 
 const { subsystem, name, mode, version, category, canQueue, pending, depth } = defineProps<{
   subsystem: string

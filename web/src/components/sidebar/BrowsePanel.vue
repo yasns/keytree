@@ -92,8 +92,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { type Row, useNavStore, walk } from '@/stores/nav'
 import { useClearPending } from '@/composables/usePendingNode'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
-import ModePanel from '@/components/ModePanel.vue'
+import ConfirmDialog from '@/components/dialog/ConfirmDialog.vue'
+import ModePanel from './ModePanel.vue'
 import type { components } from '@/api-types'
 
 type Subsystem = components['schemas']['SubsystemOut']

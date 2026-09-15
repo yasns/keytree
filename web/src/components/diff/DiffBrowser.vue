@@ -1,12 +1,12 @@
 <template>
   <div class="d-flex flex-column flex-grow-1" style="min-height: 0">
-    <ComparisonLeafDiff
+    <DiffPayload
       v-if="showLeafDiff"
       :left="leftLeaf"
       :right="rightLeaf"
       show-back-to-split
       @back="onBack"
-    ></ComparisonLeafDiff>
+    ></DiffPayload>
 
     <div v-else class="d-flex flex-grow-1" style="min-height: 0">
       <template v-if="sides.length">
@@ -23,7 +23,7 @@
             style="flex: 1 1 50%; min-width: 0"
           >
             <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
-              <ComparisonColumn
+              <DiffColumn
                 :subsystem="side.root.subsystem"
                 :name="side.root.name"
                 :mode="side.root.mode"
@@ -35,7 +35,7 @@
                 v-model:panel="metaPanel"
                 @select="(child) => onSelect(0, child)"
                 @close="() => onClose(0)"
-              ></ComparisonColumn>
+              ></DiffColumn>
             </div>
 
             <div
@@ -44,7 +44,7 @@
               class="h-100 border-e-sm"
               style="flex: 0 0 auto; width: 400px"
             >
-              <ComparisonColumn
+              <DiffColumn
                 v-if="slot.present"
                 :subsystem="slot.locator.subsystem"
                 :name="slot.locator.name"
@@ -57,7 +57,7 @@
                 v-model:panel="metaPanel"
                 @select="(child) => onSelect(slot.index + 1, child)"
                 @close="() => onClose(slot.index + 1)"
-              ></ComparisonColumn>
+              ></DiffColumn>
               <div v-else class="not-present pa-4 text-center text-medium-emphasis">
                 {{
                   slot.reason === 'leaf'
@@ -81,12 +81,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { childLocator, useNavStore, type BundleRoot } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useSyncedScroll, type ScrollSide } from '@/composables/useSyncedScroll'
-import { useComparisonDiff } from '@/composables/useComparisonDiff'
+import { useDiff } from '@/composables/useDiff'
 import { resolveDiffRoot, type DiffTarget } from '@/router'
-import { leafLocatorFor, parseBundlePath } from './BundleBrowser.vue'
-import ComparisonColumn from './ComparisonColumn.vue'
-import ComparisonLeafDiff, { type LeafSide } from './ComparisonLeafDiff.vue'
-import Spinner from './Spinner.vue'
+import { leafLocatorFor, parseBundlePath } from '../key/KeyBrowser.vue'
+import DiffColumn from './DiffColumn.vue'
+import DiffPayload, { type LeafSide } from './DiffPayload.vue'
+import Spinner from '../Spinner.vue'
 import type { components } from '@/api-types'
 
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
@@ -98,7 +98,7 @@ const changes = useChangesStore()
 const route = useRoute()
 const router = useRouter()
 const sync = useSyncedScroll()
-const diff = useComparisonDiff()
+const diff = useDiff()
 const metaPanel = ref<number>()
 
 const aliases = computed(() => parseBundlePath(route.query.at as string | undefined))

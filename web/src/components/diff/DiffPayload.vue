@@ -55,7 +55,7 @@ import { useChangesStore } from '@/stores/changes'
 import { languageFor } from '@/category'
 import { useMonacoTheme } from '@/composables/useMonaco'
 import type { components } from '@/api-types'
-import KeyMetadata from './KeyMetadata.vue'
+import KeyMetadata from '../key/KeyMetadata.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']

@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import type { DiffRun } from '@/composables/useComparisonDiff'
+import type { DiffRun } from '@/composables/useDiff'
 
 defineProps<{ runs: DiffRun[]; highlightClass?: string }>()
 </script>

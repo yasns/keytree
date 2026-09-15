@@ -6,25 +6,25 @@
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
-        <ComparisonToolbar :diff-target="diffTarget"></ComparisonToolbar>
-        <ComparisonBrowser :diff-target="diffTarget"></ComparisonBrowser>
+        <DiffToolbar :diff-target="diffTarget"></DiffToolbar>
+        <DiffBrowser :diff-target="diffTarget"></DiffBrowser>
       </div>
 
-      <BundleBrowser v-else-if="detailReady && nav.nodeDetail?.category === null"></BundleBrowser>
+      <KeyBrowser v-else-if="detailReady && nav.nodeDetail?.category === null"></KeyBrowser>
 
       <div
         v-else-if="detailReady && nav.nodeDetail && leafLeft && diffTarget && leafRight"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
-        <ComparisonToolbar :diff-target="diffTarget"></ComparisonToolbar>
-        <ComparisonLeafDiff :left="leafLeft" :right="leafRight"></ComparisonLeafDiff>
+        <DiffToolbar :diff-target="diffTarget"></DiffToolbar>
+        <DiffPayload :left="leafLeft" :right="leafRight"></DiffPayload>
       </div>
 
       <template
         v-else-if="detailReady && nav.nodeDetail && selectedMode && selectedVersion !== undefined"
       >
-        <PayloadEditor
+        <KeyPayload
           :key="nav.nodeDetail.id"
           :subsystem="nav.nodeDetail.subsystem_name"
           :name="nav.nodeDetail.name"
@@ -32,7 +32,7 @@
           :version="selectedVersion"
           :category="nav.nodeDetail.category"
           :pending="isPending"
-        ></PayloadEditor>
+        ></KeyPayload>
       </template>
 
       <Spinner v-else></Spinner>
@@ -47,12 +47,12 @@ import { keyRoute, parseDiffTarget, parseVersion, resolveDiffRoot } from '@/rout
 import { type BundleRoot, useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
-import PayloadEditor from '@/components/PayloadEditor.vue'
-import BundleBrowser from '@/components/BundleBrowser.vue'
-import ComparisonBrowser from '@/components/ComparisonBrowser.vue'
-import ComparisonToolbar from '@/components/ComparisonToolbar.vue'
-import ComparisonLeafDiff, { type LeafSide } from '@/components/ComparisonLeafDiff.vue'
-import BrowsePanel from '@/components/BrowsePanel.vue'
+import KeyPayload from '@/components/key/KeyPayload.vue'
+import KeyBrowser from '@/components/key/KeyBrowser.vue'
+import DiffBrowser from '@/components/diff/DiffBrowser.vue'
+import DiffToolbar from '@/components/diff/DiffToolbar.vue'
+import DiffPayload, { type LeafSide } from '@/components/diff/DiffPayload.vue'
+import BrowsePanel from '@/components/sidebar/BrowsePanel.vue'
 import Spinner from '@/components/Spinner.vue'
 
 const { subsystem, name, mode, version } = defineProps<{

@@ -10,7 +10,7 @@
       :pending="pending"
     ></KeyMetadata>
 
-    <EditorToolbar
+    <KeyToolbar
       :dirty="dirty"
       :staged="!!staged"
       :staged-comment="staged?.comment"
@@ -25,7 +25,7 @@
       @discard="applyBaseline"
       @fork="fork"
       @copy-to="copyTo"
-    ></EditorToolbar>
+    ></KeyToolbar>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
       <v-list v-if="children" activatable slim>
@@ -133,8 +133,8 @@ import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
 import type { components } from '@/api-types'
 import KeyMetadata from './KeyMetadata.vue'
-import EditorToolbar from './EditorToolbar.vue'
-import Spinner from './Spinner.vue'
+import KeyToolbar from './KeyToolbar.vue'
+import Spinner from '../Spinner.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
