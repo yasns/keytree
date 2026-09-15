@@ -33,9 +33,9 @@ import { onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useChangesStore } from './stores/changes'
 import { useSnackbarStore } from './stores/snackbar'
-import MainNav from './components/MainNav.vue'
+import MainNav from './components/sidebar/MainNav.vue'
 import Spinner from './components/Spinner.vue'
-import ConfirmDialog from './components/ConfirmDialog.vue'
+import ConfirmDialog from './components/dialog/ConfirmDialog.vue'
 
 const auth = useAuthStore()
 const changes = useChangesStore()

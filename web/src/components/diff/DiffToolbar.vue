@@ -15,7 +15,7 @@
         color="error"
         class="ml-1"
         prepend-icon="mdi-close"
-        @click="exitComparison"
+        @click="exitDiff"
       >
         Exit comparison
       </v-btn>
@@ -72,7 +72,7 @@ const keyBLabel = computed(
     `${keyPrefix.value}/${props.diffTarget.mode}/${versionLabel(props.diffTarget.mode, props.diffTarget.version)}`,
 )
 
-function exitComparison() {
+function exitDiff() {
   const returnTo = nav.preDiffLocation
   nav.preDiffLocation = null
   if (returnTo) {

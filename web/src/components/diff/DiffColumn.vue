@@ -57,14 +57,14 @@ import { useChangesStore } from '@/stores/changes'
 import { iconFor } from '@/category'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
 import {
-  useComparisonDiff,
+  useDiff,
   runsFor,
   sideHighlightClass,
   type ColumnDiffData,
-} from '@/composables/useComparisonDiff'
+} from '@/composables/useDiff'
 import type { components } from '@/api-types'
-import KeyMetadata from './KeyMetadata.vue'
-import Spinner from './Spinner.vue'
+import KeyMetadata from '../key/KeyMetadata.vue'
+import Spinner from '../Spinner.vue'
 import DiffText from './DiffText.vue'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -79,7 +79,7 @@ const props = defineProps<{
   selectedAlias?: string
   /** Template-ref callback for the scrollable list, so a parent can sync its scroll position. */
   scrollerRef?: (el: Element | null) => void
-  diffContext?: { diff: ReturnType<typeof useComparisonDiff>; depth: number; side: ScrollSide }
+  diffContext?: { diff: ReturnType<typeof useDiff>; depth: number; side: ScrollSide }
 }>()
 
 const emit = defineEmits<{ select: [child: KeyChildMetaOut]; close: [] }>()

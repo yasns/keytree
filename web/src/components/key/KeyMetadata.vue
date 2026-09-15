@@ -144,9 +144,9 @@ import { keyRoute } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useChangesStore } from '@/stores/changes'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
-import { runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useComparisonDiff'
-import CopyButton from './CopyButton.vue'
-import DiffText from './DiffText.vue'
+import { runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useDiff'
+import CopyButton from '../CopyButton.vue'
+import DiffText from '../diff/DiffText.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']

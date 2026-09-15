@@ -8,7 +8,7 @@
         style="min-width: 0"
       >
         <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
-          <BundleColumn
+          <KeyColumn
             ref="rootColumnRef"
             :subsystem="nav.bundleRoot.subsystem"
             :name="nav.bundleRoot.name"
@@ -20,7 +20,7 @@
             :can-queue="false"
             @select="(child) => onSelect(0, child)"
             @close="() => onClose(0)"
-          ></BundleColumn>
+          ></KeyColumn>
         </div>
 
         <div
@@ -29,7 +29,7 @@
           class="h-100 border-e-sm"
           style="flex: 0 0 auto; width: 400px"
         >
-          <BundleColumn
+          <KeyColumn
             :ref="(el) => setColumnRef(column.index, el)"
             :subsystem="column.subsystem"
             :name="column.name"
@@ -42,7 +42,7 @@
             @select="(child) => onSelect(column.index + 1, child)"
             @close="() => onClose(column.index + 1)"
             @queue="() => rippleTo(column.index)"
-          ></BundleColumn>
+          ></KeyColumn>
         </div>
       </div>
 
@@ -65,7 +65,7 @@
         </v-tooltip>
 
         <div class="h-100" style="flex: 1 1 auto; min-width: 33.3333vw">
-          <PayloadEditor
+          <KeyPayload
             :subsystem="leafEntry.subsystem"
             :name="leafEntry.name"
             :mode="leafEntry.mode"
@@ -75,7 +75,7 @@
             :depth="nav.bundlePath.length"
             :can-queue="true"
             @queue="() => rippleTo(nav.bundlePath.length - 1)"
-          ></PayloadEditor>
+          ></KeyPayload>
         </div>
       </template>
     </template>
@@ -108,20 +108,20 @@ export function leafLocatorFor(entry: KeyChildMetaOut | undefined) {
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { childLocator, useNavStore } from '@/stores/nav'
-import BundleColumn from './BundleColumn.vue'
-import PayloadEditor from './PayloadEditor.vue'
-import Spinner from './Spinner.vue'
+import KeyColumn from './KeyColumn.vue'
+import KeyPayload from './KeyPayload.vue'
+import Spinner from '../Spinner.vue'
 
 const nav = useNavStore()
 const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
 
-const rootColumnRef = ref<InstanceType<typeof BundleColumn>>()
-const columnRefs = new Map<number, InstanceType<typeof BundleColumn>>()
+const rootColumnRef = ref<InstanceType<typeof KeyColumn>>()
+const columnRefs = new Map<number, InstanceType<typeof KeyColumn>>()
 
 function setColumnRef(index: number, el: unknown) {
-  if (el) columnRefs.set(index, el as InstanceType<typeof BundleColumn>)
+  if (el) columnRefs.set(index, el as InstanceType<typeof KeyColumn>)
   else columnRefs.delete(index)
 }
 

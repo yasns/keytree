@@ -115,8 +115,8 @@ import { keyRoute, parseVersion, withDiffQuery } from '@/router'
 import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
-import ConfirmDialog from './ConfirmDialog.vue'
-import CommitConflictsDialog from './CommitConflictsDialog.vue'
+import ConfirmDialog from '../dialog/ConfirmDialog.vue'
+import CommitConflictsDialog from '../dialog/CommitConflictsDialog.vue'
 
 type StagedEditOut = components['schemas']['StagedEditOut']
 type StagedArchivalOut = components['schemas']['StagedArchivalOut']
