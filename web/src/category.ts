@@ -4,7 +4,7 @@ type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 type TreeOut = components['schemas']['TreeOut']
 type CategoryMeta = { icon: string; format?: 'xml' | 'yaml' | 'plaintext' }
 
-export const CATEGORY: Record<string, CategoryMeta> = {
+const CATEGORY: Record<string, CategoryMeta> = {
   algo: { icon: 'mdi-function-variant', format: 'xml' },
   infra: { icon: 'mdi-server-network', format: 'xml' },
   hardware: { icon: 'mdi-memory', format: 'xml' },
@@ -32,7 +32,7 @@ function rank(node: RankedNode): number {
 }
 
 // Direct bundles first, then direct leaf keys, then aliases, alphabetically
-export function compareByKindThenName(a: RankedNode, b: RankedNode): number {
+function compareByKindThenName(a: RankedNode, b: RankedNode): number {
   return rank(a) - rank(b) || a.alias.localeCompare(b.alias)
 }
 

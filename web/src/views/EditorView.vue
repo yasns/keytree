@@ -2,7 +2,7 @@
   <div class="d-flex flex-column h-100">
     <div class="d-flex flex-column flex-grow-1" style="min-width: 0; min-height: 0">
       <div
-        v-if="detailReady && nav.nodeDetail?.category === null && diffTarget"
+        v-if="detailReady && nav.nodeDetail?.category === null && diffTarget && bundleDiffRoot"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
@@ -101,6 +101,17 @@ const selectedVersion = computed(() => {
 
 const diffTarget = computed(() => parseDiffTarget(route.query.diff as string | undefined))
 
+const bundleDiffRoot = computed<BundleRoot | undefined>(() => {
+  const root = nav.bundleRoot
+  const target = diffTarget.value
+  if (!root || !target) return undefined
+  return resolveDiffRoot(
+    { subsystem: root.subsystem, name: root.name },
+    target,
+    (mode) => changes.stagedForMode(root.subsystem, root.name, mode)?.expected_version,
+  )
+})
+
 /** The routed leaf itself, as the "original" side of a leaf-only comparison. */
 const leafLeft = computed<LeafSide | undefined>(() => {
   const detail = nav.nodeDetail
@@ -150,9 +161,9 @@ watch(selectedVersion, (v) => {
   if (v === undefined) return
   if (isPending.value) {
     if (requestedVersion.value !== 'pending')
-      router.replace(keyRoute(subsystem, name, mode, 'pending'))
+      router.replace({ ...keyRoute(subsystem, name, mode, 'pending'), query: route.query })
   } else if (requestedVersion.value !== v) {
-    router.replace(keyRoute(subsystem, name, mode, v))
+    router.replace({ ...keyRoute(subsystem, name, mode, v), query: route.query })
   }
 })
 
@@ -162,7 +173,8 @@ watch(
   () => {
     if (!isPending.value || pendingEdit.value) return
     const tip = selectedMode.value?.versions[0]
-    if (tip !== undefined) router.replace(keyRoute(subsystem, name, mode, tip))
+    if (tip !== undefined)
+      router.replace({ ...keyRoute(subsystem, name, mode, tip), query: route.query })
   },
 )
 

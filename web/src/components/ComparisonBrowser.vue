@@ -59,7 +59,11 @@
                 @close="() => onClose(slot.index + 1)"
               ></ComparisonColumn>
               <div v-else class="not-present pa-4 text-center text-medium-emphasis">
-                Not present at this version
+                {{
+                  slot.reason === 'leaf'
+                    ? 'Not a bundle at this version'
+                    : 'Not present at this version'
+                }}
               </div>
             </div>
           </div>
@@ -128,7 +132,11 @@ watch(
   { immediate: true },
 )
 
-type ColumnSlot = { index: number } & ({ present: true; locator: BundleRoot } | { present: false })
+type ColumnSlot = { index: number } & (
+  | { present: true; locator: BundleRoot }
+  // 'leaf': this side has a key here, it's just not a bundle to drill into further.
+  | { present: false; reason: 'absent' | 'leaf' }
+)
 
 /** One slot per open alias, index-aligned with the other side even where this side has nothing. */
 function slotsFor(path: KeyChildMetaOut[], depth: number): ColumnSlot[] {
@@ -136,9 +144,15 @@ function slotsFor(path: KeyChildMetaOut[], depth: number): ColumnSlot[] {
   let stopped = false
   for (let i = 0; i < depth; i++) {
     const entry = stopped ? undefined : path[i]
-    const locator = entry && entry.category === null ? childLocator(entry) : undefined
+    if (!entry) {
+      slots.push({ index: i, present: false, reason: 'absent' })
+      continue
+    }
+    const locator = entry.category === null ? childLocator(entry) : undefined
     if (!locator) stopped = true
-    slots.push(locator ? { index: i, present: true, locator } : { index: i, present: false })
+    slots.push(
+      locator ? { index: i, present: true, locator } : { index: i, present: false, reason: 'leaf' },
+    )
   }
   return slots
 }

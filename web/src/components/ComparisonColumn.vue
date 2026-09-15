@@ -125,13 +125,19 @@ async function load() {
   const source = staged.value?.based_on
   const sourceMode = source?.mode_name ?? props.mode
   const sourceVersion = source?.version ?? props.version
-  const [p, c] = await Promise.all([
-    nav.fetchKeyPayload(props.subsystem, props.name, sourceMode, sourceVersion),
-    nav.fetchKeyChildren(props.subsystem, props.name, sourceMode, sourceVersion),
-  ])
-  if (token !== loadToken) return
-  payload.value = p
-  children.value = c
+  try {
+    const [p, c] = await Promise.all([
+      nav.fetchKeyPayload(props.subsystem, props.name, sourceMode, sourceVersion),
+      nav.fetchKeyChildren(props.subsystem, props.name, sourceMode, sourceVersion),
+    ])
+    if (token !== loadToken) return
+    payload.value = p
+    children.value = c
+  } catch {
+    // e.g. a freshly forked mode with nothing committed yet: nothing to load
+    if (token !== loadToken) return
+    children.value = []
+  }
 }
 
 watch(
@@ -144,11 +150,21 @@ watch(
 watch(() => nav.keysToken, load)
 
 watch(
-  () => [props.diffContext, payload.value, children.value, staged.value, props.pending] as const,
-  ([ctx]) => {
-    if (ctx === undefined) return
+  // Track diffContext's fields, not its identity: it's a fresh object on every parent render.
+  () =>
+    [
+      props.diffContext?.diff,
+      props.diffContext?.depth,
+      props.diffContext?.side,
+      payload.value,
+      children.value,
+      staged.value,
+      props.pending,
+    ] as const,
+  ([diffInstance, depth, side]) => {
+    if (diffInstance === undefined || depth === undefined || side === undefined) return
     if (payload.value === undefined && children.value === undefined) return
-    ctx.diff.publish(ctx.depth, ctx.side, {
+    diffInstance.publish(depth, side, {
       subsystem: props.subsystem,
       name: props.name,
       mode: props.mode,

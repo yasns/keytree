@@ -29,12 +29,16 @@ export function runsFor(own: string, other: string | undefined): DiffRun[] {
   let start = 0
   const minLen = Math.min(own.length, other.length)
   while (start < minLen && own[start] === other[start]) start++
-  let ownEnd = own.length
-  let otherEnd = other.length
-  while (ownEnd > start && otherEnd > start && own[ownEnd - 1] === other[otherEnd - 1]) {
-    ownEnd--
-    otherEnd--
+  // Equal lengths only: a full suffix match would otherwise mask a real diff (e.g. "5" vs "15").
+  const maxSuffixLen = own.length === other.length ? minLen - start : minLen - start - 1
+  let suffixLen = 0
+  while (
+    suffixLen < maxSuffixLen &&
+    own[own.length - 1 - suffixLen] === other[other.length - 1 - suffixLen]
+  ) {
+    suffixLen++
   }
+  const ownEnd = own.length - suffixLen
   const runs: DiffRun[] = []
   if (start > 0) runs.push({ text: own.slice(0, start), changed: false })
   if (ownEnd > start) runs.push({ text: own.slice(start, ownEnd), changed: true })

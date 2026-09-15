@@ -8,9 +8,9 @@ import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
   getWorker: () => new EditorWorker(),
 }
 
-export type MonacoTheme = 'vs' | 'vs-dark'
+type MonacoTheme = 'vs' | 'vs-dark'
 
-export function monacoTheme(dark: boolean): MonacoTheme {
+function monacoTheme(dark: boolean): MonacoTheme {
   return dark ? 'vs-dark' : 'vs'
 }
 

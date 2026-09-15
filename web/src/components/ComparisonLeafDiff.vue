@@ -166,7 +166,8 @@ onMounted(() => {
   void load()
 })
 
-watch(() => [props.left, props.right], load, { deep: true })
+watch(() => [props.left, props.right, leftStaged.value, rightStaged.value], load, { deep: true })
+watch(() => nav.keysToken, load)
 
 onBeforeUnmount(() => {
   diffEditor?.dispose()

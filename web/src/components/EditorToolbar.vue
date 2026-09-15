@@ -251,7 +251,10 @@ async function onCompare(target: DiffTarget) {
   const { subsystem, name, mode } = props
   if (!subsystem || !name || !mode || currentVersionTarget.value === undefined) return
   if (!(await changes.confirmDiscard())) return
-  nav.preDiffLocation = router.currentRoute.value.fullPath
+  // Already comparing: keep the location from before that comparison started.
+  if (!router.currentRoute.value.query.diff) {
+    nav.preDiffLocation = router.currentRoute.value.fullPath
+  }
   router.push({
     ...keyRoute(subsystem, name, mode, currentVersionTarget.value),
     query: withDiffQuery({}, target),

@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { ApiError } from '@/api'
 
-export type Level = 'success' | 'info' | 'warning' | 'error'
+type Level = 'success' | 'info' | 'warning' | 'error'
 
 const LEVEL_ICON: Record<Level, string> = {
   success: 'mdi-check-circle',
