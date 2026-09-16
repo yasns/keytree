@@ -81,14 +81,25 @@
           </template>
         </v-list-item>
       </v-list>
-      <p v-else class="text-medium-emphasis px-4">No {{ filter }} modes.</p>
+      <p v-else class="text-medium-emphasis px-4">No {{ filter === 'all' ? '' : filter }} modes.</p>
     </div>
 
-    <v-chip-group v-model="filter" mandatory class="px-2">
-      <v-chip value="all" size="small" variant="outlined" filter>All</v-chip>
-      <v-chip value="active" size="small" variant="outlined" filter>Active</v-chip>
-      <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
-    </v-chip-group>
+    <div class="d-flex flex-wrap align-center ga-2">
+      <v-text-field
+        v-model="search"
+        label="Search modes..."
+        density="compact"
+        hide-details
+        clearable
+        style="min-width: 180px"
+      ></v-text-field>
+
+      <v-chip-group v-model="filter" mandatory>
+        <v-chip value="all" size="small" variant="outlined" filter>All</v-chip>
+        <v-chip value="active" size="small" variant="outlined" filter>Active</v-chip>
+        <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
+      </v-chip-group>
+    </div>
   </div>
 
   <v-dialog :model-value="!!infoMode" @update:model-value="infoMode = undefined" width="auto">
@@ -142,6 +153,7 @@ const changes = useChangesStore()
 const { clearPending } = useClearPending()
 
 const filter = ref<'active' | 'archived' | 'all'>('active')
+const search = ref('')
 const detail = ref<NodeOut | undefined>(undefined)
 const infoMode = ref<ModeOut | undefined>(undefined)
 
@@ -171,7 +183,11 @@ const filteredModes = computed(() =>
         pending: !!staged,
       }
     })
-    .filter((row) => filter.value === 'all' || !row.archived === (filter.value === 'active')),
+    .filter(
+      (row) =>
+        (filter.value === 'all' || !row.archived === (filter.value === 'active')) &&
+        row.mode.name.toLowerCase().includes((search.value ?? '').trim().toLowerCase()),
+    ),
 )
 
 function isSelected(mode: ModeOut) {

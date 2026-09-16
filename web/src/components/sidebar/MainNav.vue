@@ -88,6 +88,7 @@ import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { type Component, computed } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
+import SearchPanel from './SearchPanel.vue'
 import VersionControlPanel from './VersionControlPanel.vue'
 
 const auth = useAuthStore()
@@ -97,6 +98,7 @@ const changes = useChangesStore()
 
 const menuItems = computed(() => [
   { icon: 'mdi-key-chain', title: 'Browse', component: BrowsePanel },
+  { icon: 'mdi-magnify', title: 'Search', component: SearchPanel },
   {
     icon: 'mdi-source-branch',
     title:

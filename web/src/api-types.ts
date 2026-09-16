@@ -274,6 +274,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/keys/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Keys
+         * @description Keys whose label or payload matches `q`, restricted to each mode's tip version unless the query already names one.
+         */
+        get: operations["search_keys_api_keys_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/keys/{subsystem_name}/{node_name}/{mode_name}/{version}": {
         parameters: {
             query?: never;
@@ -547,6 +567,19 @@ export interface components {
             created_at: string | null;
             /** Comment */
             comment: string | null;
+        };
+        /** KeyMatchOut */
+        KeyMatchOut: {
+            /** Label */
+            label: string;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Version */
+            version: number;
         };
         /** KeyOut */
         KeyOut: {
@@ -1216,6 +1249,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    search_keys_api_keys_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                field?: "label" | "payload";
+                regex?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyMatchOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
