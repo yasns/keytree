@@ -42,7 +42,18 @@ import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 
-const { subsystem, name, mode, version, category, canQueue, pending, depth } = defineProps<{
+const {
+  subsystem,
+  name,
+  mode,
+  version,
+  category,
+  canQueue,
+  pending,
+  depth,
+  searchQuery,
+  searchRegex,
+} = defineProps<{
   subsystem: string
   name: string
   mode: string
@@ -50,8 +61,11 @@ const { subsystem, name, mode, version, category, canQueue, pending, depth } = d
   category?: string | null
   canQueue?: boolean
   pending?: boolean
-  /** Bundle-path index when rendered inside a bundle, not as the routed key. */
+  /** Bundle-path index when rendered inside a bundle */
   depth?: number
+  /** Prefills Monaco's find widget when arriving from a search. */
+  searchQuery?: string
+  searchRegex?: boolean
 }>()
 
 const emit = defineEmits<{ queue: [] }>()
@@ -93,8 +107,21 @@ onMounted(() => {
   editor.onDidChangeModelContent(() => {
     dirty.value = editor!.getValue() !== baseValue
   })
-  loadPayload()
+  loadPayload().then(() => {
+    if (searchQuery) revealInFind(searchQuery)
+  })
 })
+
+// Selects the first match so Monaco's find action seeds its search box from it.
+function revealInFind(query: string) {
+  const match = editor
+    ?.getModel()
+    ?.findNextMatch(query, { lineNumber: 1, column: 1 }, !!searchRegex, false, null, false)
+  if (!match || !editor) return
+  editor.setSelection(match.range)
+  editor.revealRangeInCenter(match.range)
+  editor.trigger('keyboard', 'actions.find', null)
+}
 
 async function loadPayload() {
   if (!editor) return

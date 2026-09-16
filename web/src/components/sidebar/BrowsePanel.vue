@@ -3,6 +3,7 @@
     <div class="d-flex flex-column" style="flex: 1 1 0; min-height: 0">
       <div>
         <v-autocomplete
+          ref="fieldRef"
           :model-value="nav.selectedSubsystemId"
           :items="autocompleteItems"
           item-title="title"
@@ -10,6 +11,7 @@
           label="Subsystem"
           hide-details
           :disabled="locked"
+          :menu-props="{ maxHeight: menuMaxHeight, attach: true }"
           v-model:menu="nav.subsystemMenuOpen"
           @update:model-value="onSubsystemSelect"
         ></v-autocomplete>
@@ -104,6 +106,14 @@ const { clearPending } = useClearPending()
 const locked = computed(() => nav.pendingNodeId !== null)
 const pendingPath = computed(() => nav.activatedRow[0])
 
+const fieldRef = ref<{ $el: HTMLElement } | null>(null)
+const menuMaxHeight = ref(320)
+
+function updateMenuMaxHeight() {
+  const rect = fieldRef.value?.$el.getBoundingClientRect()
+  if (rect) menuMaxHeight.value = Math.max(100, window.innerHeight - rect.bottom - 8)
+}
+
 function itemProps(item: Record<string, unknown>) {
   const row = item as Row
   return {
@@ -117,14 +127,16 @@ const categoryLabels: Record<string, string> = {
   subsystem: 'L1 Subsystems',
 }
 
-type SelectItem = { type: 'subheader'; title: string } | { title: string; id: number }
+type SelectItem =
+  { type: 'subheader'; title: string } | { type: 'divider' } | { title: string; id: number }
 
 onMounted(() => nav.fetchSubsystems())
 
 watch(
   () => nav.subsystemMenuOpen,
   (open) => {
-    if (!open) (document.activeElement as HTMLElement | null)?.blur()
+    if (open) updateMenuMaxHeight()
+    else (document.activeElement as HTMLElement | null)?.blur()
   },
 )
 
@@ -141,6 +153,7 @@ const autocompleteItems = computed<SelectItem[]>(() => {
 
   const items: SelectItem[] = []
   for (const category of [...known, ...rest]) {
+    if (items.length) items.push({ type: 'divider' })
     items.push({ type: 'subheader', title: categoryLabels[category] ?? category })
     for (const s of groups.get(category) ?? []) {
       items.push({ title: s.display_name ?? s.name, id: s.id })

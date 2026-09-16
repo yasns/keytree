@@ -56,12 +56,7 @@ import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { iconFor } from '@/category'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
-import {
-  useDiff,
-  runsFor,
-  sideHighlightClass,
-  type ColumnDiffData,
-} from '@/composables/useDiff'
+import { useDiff, runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useDiff'
 import type { components } from '@/api-types'
 import KeyMetadata from '../key/KeyMetadata.vue'
 import Spinner from '../Spinner.vue'

@@ -1,9 +1,12 @@
+import re
 from datetime import datetime
-from typing import cast
+from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from psycopg.errors import InvalidRegularExpression, QueryCanceled
 from pydantic import BaseModel
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import func, select, text, tuple_
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
@@ -119,6 +122,77 @@ def _build_key_detail(
             else None
         ),
     )
+
+
+class KeyMatchOut(BaseModel):
+    label: str
+    subsystem_name: str
+    node_name: str
+    mode_name: str
+    version: int
+
+
+_VERSION_SEGMENT = re.compile(r"/v\d+$")
+
+
+@router.get("/search")
+async def search_keys(
+    session: SessionDep,
+    q: Annotated[str, Query(min_length=1)],
+    field: Literal["label", "payload"] = "label",
+    regex: bool = False,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[KeyMatchOut]:
+    """Keys whose label or payload matches `q`, restricted to each mode's tip version unless the
+    query already names one."""
+    column = Key.label if field == "label" else Key.payload
+    names_version = field == "label" and bool(_VERSION_SEGMENT.search(q))
+
+    if regex:
+        match = column.op("~*")(q)
+    elif names_version:
+        # Anchor to end: a plain substring match would also hit v10 when q ends in v1.
+        match = column.op("~*")(f"{re.escape(q)}$")
+    else:
+        match = column.icontains(q, autoescape=True)
+
+    filters = [match, Node.retired_at.is_(None), Subsystem.retired_at.is_(None)]
+
+    if field == "payload" or not names_version:
+        other = aliased(Key)
+        tip_version = (
+            select(func.max(other.version)).where(other.mode_id == Key.mode_id).scalar_subquery()
+        )
+        filters.append(Key.version == tip_version)
+
+    filters.append(Node.category.is_distinct_from("external"))
+
+    stmt = (
+        select(Key.label, Subsystem.name, Node.name, Mode.name, Key.version)
+        .select_from(Key)
+        .join(Mode, Mode.id == Key.mode_id)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .where(*filters)
+        .order_by(Key.label)
+        .limit(limit)
+    )
+
+    if regex:
+        # A user-typed regex can be malformed or pathologically slow; neither may wedge the session.
+        await session.execute(text("SET LOCAL statement_timeout = '3s'"))
+    try:
+        rows = await session.execute(stmt)
+    except DBAPIError as err:
+        if not (regex and isinstance(err.orig, InvalidRegularExpression | QueryCanceled)):
+            raise
+        await session.rollback()
+        return []
+
+    return [
+        KeyMatchOut(label=label, subsystem_name=s, node_name=n, mode_name=m, version=v)
+        for label, s, n, m, v in rows.tuples()
+    ]
 
 
 @router.get("/{subsystem_name}/{node_name}/{mode_name}/{version}")

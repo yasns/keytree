@@ -32,6 +32,8 @@
           :version="selectedVersion"
           :category="nav.nodeDetail.category"
           :pending="isPending"
+          :search-query="(route.query.q as string) || undefined"
+          :search-regex="route.query.regex === '1'"
         ></KeyPayload>
       </template>
 
@@ -68,9 +70,11 @@ const route = useRoute()
 const router = useRouter()
 const snackbar = useSnackbarStore()
 
-// nav.nodeDetail updates async, so it can briefly still hold the previous route's node.
 const detailReady = computed(
-  () => nav.nodeDetail?.subsystem_name === subsystem && nav.nodeDetail?.name === name,
+  () =>
+    nav.nodeDetail?.subsystem_name === subsystem &&
+    nav.nodeDetail?.name === name &&
+    nav.nodeDetail?.category !== 'external',
 )
 
 const selectedMode = computed(() =>
@@ -112,7 +116,7 @@ const bundleDiffRoot = computed<BundleRoot | undefined>(() => {
   )
 })
 
-/** The routed leaf itself, as the "original" side of a leaf-only comparison. */
+/** The routed leaf itself, as the "original" side of a comparison. */
 const leafLeft = computed<LeafSide | undefined>(() => {
   const detail = nav.nodeDetail
   if (!detailReady.value || !detail || !selectedMode.value || selectedVersion.value === undefined)
@@ -146,6 +150,7 @@ watch(
   () => [nav.nodeDetail, mode] as const,
   ([detail, mode]) => {
     if (!detail || detail.subsystem_name !== subsystem || detail.name !== name || !mode) return
+    if (detail.category === 'external') return
     if (!detail.modes.some((m) => m.name === mode)) {
       if (changes.stagedForMode(subsystem, name, mode)) return
       nav.nodeDetail = null
