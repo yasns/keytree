@@ -83,7 +83,11 @@ def test_build_key_detail_has_no_ancestor_without_fork_source_or_prior_version()
 
 
 def _fake_request(cern_login: str) -> SimpleNamespace:
-    claims = {"cern_upn": cern_login, "name": cern_login}
+    claims = {
+        "cern_upn": cern_login,
+        "name": cern_login,
+        "resource_access": {"keytree": {"roles": ["keytree_superuser"]}},
+    }
     return SimpleNamespace(state=SimpleNamespace(claims=claims))
 
 

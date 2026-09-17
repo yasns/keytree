@@ -38,7 +38,7 @@
             :pending="column.pending"
             :depth="column.index + 1"
             :selected-alias="nav.bundlePath[column.index + 1]?.alias"
-            :can-queue="true"
+            :can-queue="canQueueAt(column.index)"
             @select="(child) => onSelect(column.index + 1, child)"
             @close="() => onClose(column.index + 1)"
             @queue="() => rippleTo(column.index)"
@@ -73,7 +73,7 @@
             :pending="leafEntry.pending"
             :category="leafEntry.category"
             :depth="nav.bundlePath.length"
-            :can-queue="true"
+            :can-queue="canQueueAt(nav.bundlePath.length - 1)"
             @queue="() => rippleTo(nav.bundlePath.length - 1)"
           ></KeyPayload>
         </div>
@@ -108,14 +108,22 @@ export function leafLocatorFor(entry: KeyChildMetaOut | undefined) {
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { childLocator, useNavStore } from '@/stores/nav'
+import { useAuthStore } from '@/stores/auth'
 import KeyColumn from './KeyColumn.vue'
 import KeyPayload from './KeyPayload.vue'
 import Spinner from '../Spinner.vue'
 
 const nav = useNavStore()
+const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
+
+/** A column can queue into its parent (root when i===0, else column i-1) iff the parent is editable. */
+function canQueueAt(i: number): boolean {
+  const subsystem = i === 0 ? nav.bundleRoot?.subsystem : nav.bundlePath[i - 1]?.subsystem_name
+  return !!subsystem && auth.canEdit(subsystem)
+}
 
 const rootColumnRef = ref<InstanceType<typeof KeyColumn>>()
 const columnRefs = new Map<number, InstanceType<typeof KeyColumn>>()

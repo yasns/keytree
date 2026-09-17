@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import InstrumentedAttribute
 from tsgauth.fastapi import JWTBearerClaims
 
+from app.authz import require_writable
 from app.db.base import SessionDep
 from app.db.models import Changeset, Key, Mode, Node, StagedArchival, StagedEdit, Subsystem
 from app.routers.keys import key_or_404, keys_by_locator
@@ -323,6 +324,8 @@ async def stage_edits(
     claims = request.state.claims
     cern_login = claims["cern_upn"]
 
+    await require_writable({e.subsystem_name for e in edits}, claims, session)
+
     await upsert_app_user(claims, session)
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
@@ -362,9 +365,19 @@ async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDe
     cern_login = claims["cern_upn"]
     await upsert_app_user(claims, session)
 
-    mode = await session.get(Mode, body.mode_id)
-    if mode is None:
+    mode_row = (
+        await session.execute(
+            select(Mode, Subsystem.name)
+            .join(Node, Node.id == Mode.node_id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(Mode.id == body.mode_id)
+        )
+    ).first()
+    if mode_row is None:
         raise HTTPException(status_code=404, detail="mode not found")
+    mode, subsystem_name = mode_row
+
+    await require_writable({subsystem_name}, claims, session)
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
@@ -389,6 +402,7 @@ async def _login_and_source(
 ) -> tuple[str, Key]:
     claims = request.state.claims
     cern_login = claims["cern_upn"]
+    await require_writable({body.subsystem_name}, claims, session)
     await upsert_app_user(claims, session)
     source = await key_or_404(
         body.subsystem_name, body.node_name, body.mode_name, body.base_version, session

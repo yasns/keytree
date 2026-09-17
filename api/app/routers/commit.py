@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, tuple_
 from tsgauth.fastapi import JWTBearerClaims
 
+from app.authz import claim_roles, require_writable
 from app.db.base import SessionDep
 from app.db.models import (
     Changeset,
@@ -222,6 +223,8 @@ async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOu
         raise HTTPException(status_code=404, detail="no open changeset")
 
     rows = await _commit_rows(changeset.id, session)
+    await require_writable({row.subsystem_name for row in rows}, request.state.claims, session)
+
     conflicted = [row for row in rows if _is_conflicted(row)]
     if not conflicted:
         return await changeset_out(changeset, session)
@@ -268,6 +271,21 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
     if not rows and not archivals:
         raise HTTPException(status_code=400, detail="changeset has no staged edits")
 
+    archival_modes: dict[int, Mode] = {}
+    archival_subsystems: set[str] = set()
+    if archivals:
+        for mode, subsystem_name in await session.execute(
+            select(Mode, Subsystem.name)
+            .join(Node, Node.id == Mode.node_id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(Mode.id.in_({a.mode_id for a in archivals}))
+        ):
+            archival_modes[mode.id] = mode
+            archival_subsystems.add(subsystem_name)
+
+    wanted = {row.subsystem_name for row in rows} | archival_subsystems
+    await require_writable(wanted, claims, session)
+
     if not body.overwrite_conflicts and (conflicts := _conflicts(rows)):
         raise HTTPException(status_code=409, detail=[c.model_dump() for c in conflicts])
 
@@ -294,18 +312,10 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
     session.add_all(_build_key_children(rows, keys, child_node_of, node_of_key))
 
     if archivals:
-        modes = {
-            mode.id: mode
-            for mode in await session.scalars(
-                select(Mode).where(Mode.id.in_({a.mode_id for a in archivals}))
-            )
-        }
-        _archive_modes(archivals, modes, cern_login)
+        _archive_modes(archivals, archival_modes, cern_login)
 
     changeset.comment = body.comment
     changeset.committed_at = datetime.now(UTC)
-    resource_access = cast("dict[str, object]", claims.get("resource_access", {}))
-    keytree_access = cast("dict[str, object]", resource_access.get("keytree", {}))
-    changeset.committed_with_roles = cast("list[str]", keytree_access.get("roles", []))
+    changeset.committed_with_roles = claim_roles(claims)
 
     await session.commit()

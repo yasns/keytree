@@ -11,7 +11,11 @@ from app.routers.staging import ArchivalIn, discard_changeset, toggle_archival
 
 
 def _fake_request(cern_login: str) -> SimpleNamespace:
-    claims = {"cern_upn": cern_login, "name": cern_login}
+    claims = {
+        "cern_upn": cern_login,
+        "name": cern_login,
+        "resource_access": {"keytree": {"roles": ["keytree_superuser"]}},
+    }
     return SimpleNamespace(state=SimpleNamespace(claims=claims))
 
 

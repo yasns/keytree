@@ -283,7 +283,8 @@ export interface paths {
         };
         /**
          * Search Keys
-         * @description Keys whose label or payload matches `q`, restricted to each mode's tip version unless the query already names one.
+         * @description Keys whose label or payload matches `q`, restricted to each mode's tip version unless the
+         *     query already names one.
          */
         get: operations["search_keys_api_keys_search_get"];
         put?: never;
@@ -427,6 +428,26 @@ export interface paths {
          * @description Returns the caller's JWT claims.
          */
         get: operations["who_am_i_api_user_claims_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user/subsystems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Writable Subsystems
+         * @description Subsystem names the caller's roles grant write access to.
+         */
+        get: operations["my_writable_subsystems_api_user_subsystems_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1487,6 +1508,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    my_writable_subsystems_api_user_subsystems_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };

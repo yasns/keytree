@@ -11,14 +11,40 @@ export const useAuthStore = defineStore('auth', () => {
     const parts = (displayName.value ?? '').trim().split(/\s+/).filter(Boolean)
     return (parts[0]?.[0] ?? '') + (parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : '')
   })
+  const roles = computed(() => {
+    const resourceAccess = claims.value?.resource_access as
+      Record<string, { roles?: string[] }> | undefined
+    return resourceAccess?.keytree?.roles ?? []
+  })
+
+  const writableSubsystems = ref<string[]>([])
+
+  function canEdit(subsystem: string): boolean {
+    return writableSubsystems.value.includes(subsystem)
+  }
 
   async function checkAuth() {
-    claims.value = unwrap(await api.GET('/api/user/claims'))
+    const [claimsRes, subsystemsRes] = await Promise.all([
+      api.GET('/api/user/claims'),
+      api.GET('/api/user/subsystems'),
+    ])
+    claims.value = unwrap(claimsRes)
+    writableSubsystems.value = unwrap(subsystemsRes)
   }
 
   function logout() {
     window.location.href = '/api/auth/logout'
   }
 
-  return { claims, username, displayName, initials, checkAuth, logout }
+  return {
+    claims,
+    username,
+    displayName,
+    initials,
+    roles,
+    writableSubsystems,
+    canEdit,
+    checkAuth,
+    logout,
+  }
 })

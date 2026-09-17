@@ -56,16 +56,19 @@
               </template>
             </v-tooltip>
           </template>
-          <v-card>
+          <v-card style="width: 300px" class="elevation-overlay">
             <v-card-text>
               <div class="mx-auto text-center">
                 <v-avatar color="secondary" size="large">
                   <span class="text-headline-small">{{ auth.initials }}</span>
                 </v-avatar>
-                <h3 class="font-weight-bold mt-1">{{ auth.displayName }}</h3>
-                <p class="text-body-small mt-1">
-                  <span class="text-medium-emphasis">@</span>{{ auth.username }}
-                </p>
+                <div class="text-title-medium mt-2">{{ auth.displayName }}</div>
+                <div><span class="text-medium-emphasis">@</span>{{ auth.username }}</div>
+                <div class="mt-2">
+                  <v-chip v-for="role in auth.roles" :key="role" size="small" class="ma-1" label>
+                    {{ role }}
+                  </v-chip>
+                </div>
                 <v-divider class="my-3"></v-divider>
                 <v-btn variant="text" prepend-icon="mdi-logout" @click="auth.logout">Log Out</v-btn>
               </div>
