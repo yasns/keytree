@@ -10,6 +10,8 @@
       :pending="pending"
     ></KeyMetadata>
 
+    <ReadOnlyAlert v-if="readOnly"></ReadOnlyAlert>
+
     <KeyToolbar
       :dirty="dirty"
       :staged="!!staged"
@@ -20,6 +22,7 @@
       :mode="mode"
       :version="version"
       :committed="!pending"
+      :read-only="readOnly"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="applyBaseline"
@@ -53,7 +56,7 @@
               class="key-label"
               :model-value="externalChoice.get(row.child.alias) || undefined"
               :items="externalItems(row.child)"
-              :disabled="row.child.id === null"
+              :disabled="readOnly || row.child.id === null"
               :label="row.child.alias"
               placeholder="Select key"
               hide-details
@@ -76,6 +79,7 @@
                   placeholder="Select key"
                   hide-details
                   density="compact"
+                  :disabled="readOnly"
                   @click.stop
                   @update:model-value="(v) => onModeSelect(row.child, v)"
                 >
@@ -128,12 +132,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { childLocator, useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
+import { useReadOnly } from '@/composables/useReadOnly'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
 import type { components } from '@/api-types'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
+import ReadOnlyAlert from './ReadOnlyAlert.vue'
 import Spinner from '../Spinner.vue'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -158,6 +164,8 @@ const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [
 const nav = useNavStore()
 const changes = useChangesStore()
 const { navigateToStaged, showStaged } = useStagedNavigation()
+
+const readOnly = useReadOnly(() => props.subsystem)
 
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
@@ -561,6 +569,9 @@ watch(staged, applyBaseline)
 </script>
 
 <style scoped>
+.v-list-item + .v-list-item {
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
 .key-label :deep(.v-field__input),
 .key-label :deep(.v-list-item-title) {
   font-family: ui-monospace, monospace;

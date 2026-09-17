@@ -1,26 +1,30 @@
 <template>
   <v-toolbar density="compact" class="bg-surface border-b-sm">
     <template v-slot:prepend>
-      <v-btn
-        v-if="dirty"
-        @click="discardDialog = true"
-        prepend-icon="mdi-trash-can-outline"
-        variant="tonal"
-        >Discard</v-btn
-      >
+      <ReadOnlyTooltip v-if="dirty" :read-only="readOnly">
+        <v-btn
+          @click="discardDialog = true"
+          prepend-icon="mdi-trash-can-outline"
+          variant="tonal"
+          :disabled="readOnly"
+          >Discard</v-btn
+        >
+      </ReadOnlyTooltip>
     </template>
 
     <template v-slot:append>
-      <v-btn
-        v-if="dirty"
-        :prepend-icon="canQueue ? 'mdi-check' : 'mdi-check-all'"
-        @click="saveDialog = true"
-        variant="flat"
-        color="primary"
-      >
-        Save
-        <span v-if="props.canQueue">&nbsp;and Queue</span>
-      </v-btn>
+      <ReadOnlyTooltip v-if="dirty" :read-only="readOnly">
+        <v-btn
+          :prepend-icon="canQueue ? 'mdi-check' : 'mdi-check-all'"
+          @click="saveDialog = true"
+          variant="flat"
+          color="primary"
+          :disabled="readOnly"
+        >
+          Save
+          <span v-if="props.canQueue">&nbsp;and Queue</span>
+        </v-btn>
+      </ReadOnlyTooltip>
 
       <v-divider v-if="dirty" vertical inset class="mx-1"></v-divider>
 
@@ -64,14 +68,14 @@
             <v-tooltip
               v-for="item in group.items"
               :key="item.title"
-              :disabled="committed"
-              text="Commit the changes first"
+              :disabled="!menuDisabledReason"
+              :text="menuDisabledReason"
             >
               <template v-slot:activator="{ props }">
                 <div v-bind="props">
                   <v-list-item
                     :title="item.title"
-                    :disabled="!committed"
+                    :disabled="!!menuDisabledReason"
                     @click="item.onClick"
                     :prepend-icon="item.icon"
                   ></v-list-item>
@@ -140,9 +144,11 @@ import ForkModeDialog from '../dialog/ForkModeDialog.vue'
 import CopyToModeDialog from '../dialog/CopyToModeDialog.vue'
 import CompareDialog from '../dialog/CompareDialog.vue'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
+import { readOnlyReason } from '@/composables/useReadOnly'
 import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { keyRoute, withDiffQuery, type DiffTarget } from '@/router'
+import ReadOnlyTooltip from './ReadOnlyTooltip.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -155,6 +161,7 @@ const props = withDefaults(
     mode?: string
     version?: number
     committed?: boolean
+    readOnly?: boolean
   }>(),
   { committed: true },
 )
@@ -195,6 +202,13 @@ const pendingWarning = computed(() => {
 
 type KebabItem = { title: string; icon: string; onClick: () => void }
 type MenuGroup = { label: string; divider: boolean; items: KebabItem[] }
+
+/** Why the kebab menu's version-control actions are disabled, if at all. */
+const menuDisabledReason = computed(() => {
+  if (props.readOnly) return readOnlyReason
+  if (!props.committed) return 'Commit the changes first'
+  return undefined
+})
 
 const menuGroups = computed(() => {
   const versionControlItems: KebabItem[] = [

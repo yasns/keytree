@@ -20,12 +20,15 @@
       :mode="mode"
       :version="version"
       :committed="!pending"
+      :read-only="readOnly"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
       @fork="fork"
       @copy-to="copyTo"
     ></KeyToolbar>
+
+    <ReadOnlyAlert v-if="readOnly"></ReadOnlyAlert>
 
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
   </div>
@@ -36,11 +39,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as monaco from 'monaco-editor'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
+import { useReadOnly } from '@/composables/useReadOnly'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { useMonacoTheme } from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
+import ReadOnlyAlert from './ReadOnlyAlert.vue'
 
 const {
   subsystem,
@@ -74,6 +79,8 @@ const nav = useNavStore()
 const changes = useChangesStore()
 const { navigateToStaged, showStaged } = useStagedNavigation()
 
+const readOnly = useReadOnly(() => subsystem)
+
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
 const dirty = ref(false)
@@ -103,6 +110,7 @@ onMounted(() => {
     language: languageFor(category),
     automaticLayout: true,
     theme: initialTheme,
+    readOnly: readOnly.value,
   })
   editor.onDidChangeModelContent(() => {
     dirty.value = editor!.getValue() !== baseValue
@@ -132,6 +140,8 @@ async function loadPayload() {
 }
 
 watch(() => [subsystem, name, mode, version, pending], loadPayload)
+
+watch(readOnly, (value) => editor?.updateOptions({ readOnly: value }))
 
 // reload after commit, unless it would discard an unsaved payload
 watch(
