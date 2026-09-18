@@ -45,7 +45,6 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("display_name", sa.String(length=64), nullable=True),
         sa.Column("category", sa.String(length=64), nullable=False),
-        sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "category IN ('top_level', 'subsystem')", name=op.f("ck_subsystem_category_enum")
         ),
@@ -109,7 +108,6 @@ def upgrade() -> None:
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
-        sa.Column("retired_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "category IN "
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",

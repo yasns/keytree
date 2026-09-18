@@ -385,7 +385,7 @@ export interface paths {
         };
         /**
          * List Subsystems
-         * @description Lists all active subsystems.
+         * @description Lists all subsystems.
          */
         get: operations["list_subsystems_api_subsystems__get"];
         put?: never;

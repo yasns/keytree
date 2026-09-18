@@ -87,7 +87,7 @@ def _build_node_detail(
 
 
 async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut:
-    if node is None or node.retired_at is not None:
+    if node is None:
         raise HTTPException(status_code=404, detail="node not found")
 
     subsystem_name = await session.scalar(

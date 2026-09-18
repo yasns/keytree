@@ -74,27 +74,21 @@ def _build_tree(
 
 @router.get("/")
 async def list_subsystems(session: SessionDep) -> list[SubsystemOut]:
-    """Lists all active subsystems."""
-    subsystems = await session.scalars(
-        select(Subsystem).where(Subsystem.retired_at.is_(None)).order_by(Subsystem.name)
-    )
+    """Lists all subsystems."""
+    subsystems = await session.scalars(select(Subsystem).order_by(Subsystem.name))
     return [SubsystemOut.model_validate(s) for s in subsystems]
 
 
 @router.get("/{subsystem_id}/tree")
 async def get_subsystem_tree(subsystem_id: int, session: SessionDep) -> list[TreeOut]:
     """Returns a subsystem's node hierarchy as a forest. Does not cross subsystem boundaries."""
-    nodes = list(
-        await session.scalars(
-            select(Node).where(Node.subsystem_id == subsystem_id, Node.retired_at.is_(None))
-        )
-    )
+    nodes = list(await session.scalars(select(Node).where(Node.subsystem_id == subsystem_id)))
 
     child = aliased(Node)
     edges = await session.execute(
         select(NodeEdge.parent_node_id, NodeEdge.alias, child)
         .join(child, NodeEdge.child_node_id == child.id)
-        .where(NodeEdge.parent_node_id.in_([n.id for n in nodes]), child.retired_at.is_(None))
+        .where(NodeEdge.parent_node_id.in_([n.id for n in nodes]))
     )
 
     return _build_tree(subsystem_id, nodes, list(edges.tuples()))
