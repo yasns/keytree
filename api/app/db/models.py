@@ -30,8 +30,6 @@ class Subsystem(Base):
 
     category: Mapped[str] = mapped_column(String(64), nullable=False)
 
-    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
     __table_args__: tuple[SchemaItem, ...] = (
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint("category IN ('top_level', 'subsystem')", name="category_enum"),
@@ -48,8 +46,6 @@ class Node(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
         UniqueConstraint("subsystem_id", "name"),

@@ -158,7 +158,7 @@ async def search_keys(
     else:
         match = column.icontains(q, autoescape=True)
 
-    filters = [match, Node.retired_at.is_(None), Subsystem.retired_at.is_(None)]
+    filters = [match]
 
     if field == "payload" or not names_version:
         other = aliased(Key)
