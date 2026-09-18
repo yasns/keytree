@@ -41,7 +41,7 @@ def test_build_changeset_assembles_edits_and_ripple():
         proposed_payload="LHC",
         proposed_children=None,
         comment="switch clock source",
-        validation_status="skipped",
+        validation_status="failed",
     )
     rebundle_edit = StagedEdit(
         id=2,
@@ -92,6 +92,7 @@ def test_build_changeset_assembles_edits_and_ripple():
     assert external_edit.base_version == 3
     assert external_edit.category == "external"
     assert external_edit.proposed_payload == "LHC"
+    assert external_edit.validation_status == "failed"
 
     assert bundle_edit.base_version == 1
     assert bundle_edit.proposed_children is not None
@@ -310,7 +311,13 @@ def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
 def test_build_keys_lands_on_the_tip_not_the_base():
     """v1 edit promoted while the mode's on v3 commits as v4."""
     edit = StagedEdit(
-        id=1, changeset_id=7, mode_id=118, base_key_id=5, expected_version=4, proposed_payload="x"
+        id=1,
+        changeset_id=7,
+        mode_id=118,
+        base_key_id=5,
+        expected_version=4,
+        proposed_payload="x",
+        validation_status="passed",
     )
     changeset = Changeset(id=7, created_by="jdoe", comment="")
 
@@ -322,6 +329,7 @@ def test_build_keys_lands_on_the_tip_not_the_base():
     assert keys[0].label == "cms_run/clock_source/default/v4"
     assert keys[0].mode_id == 118
     assert keys[0].node_id == 10
+    assert keys[0].validation_status == "passed"
 
 
 def test_rebased_edits_move_the_base_and_keep_the_proposal():

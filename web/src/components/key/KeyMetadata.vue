@@ -65,6 +65,15 @@
           </div>
         </label>
 
+        <template v-if="pendingEdit?.comment ?? payload?.comment">
+          <div class="comment-block mt-2">
+            <div class="font-weight-medium">Comment</div>
+            <div class="text-body-medium">
+              <DiffText :runs="commentRuns" :highlight-class="diffHighlightClass"></DiffText>
+            </div>
+          </div>
+        </template>
+
         <v-divider class="my-2"></v-divider>
 
         <div class="meta-grid">
@@ -83,10 +92,15 @@
           ></span>
         </div>
 
-        <template v-if="!pendingEdit">
-          <v-divider class="my-2"></v-divider>
+        <v-divider class="my-2"></v-divider>
 
-          <div class="meta-grid">
+        <div class="meta-grid">
+          <span class="font-weight-medium">Validation:</span>
+          <span
+            ><DiffText :runs="validationStatusRuns" :highlight-class="diffHighlightClass"></DiffText
+          ></span>
+
+          <template v-if="!pendingEdit">
             <span class="font-weight-medium">Created at:</span>
             <span
               ><DiffText :runs="createdAtRuns" :highlight-class="diffHighlightClass"></DiffText
@@ -96,15 +110,18 @@
             <span
               ><DiffText :runs="createdByRuns" :highlight-class="diffHighlightClass"></DiffText
             ></span>
-          </div>
-        </template>
+          </template>
+        </div>
 
-        <template v-if="pendingEdit?.comment ?? payload?.comment">
-          <div class="comment-block mt-2">
-            <div class="font-weight-medium">Comment</div>
-            <div class="text-body-medium">
-              <DiffText :runs="commentRuns" :highlight-class="diffHighlightClass"></DiffText>
-            </div>
+        <template v-if="archived">
+          <v-divider class="my-2"></v-divider>
+
+          <div class="meta-grid">
+            <span class="font-weight-medium">Archived at:</span>
+            <span>{{ archivedAtText }}</span>
+
+            <span class="font-weight-medium">Archived by:</span>
+            <span>{{ archivedByText }}</span>
           </div>
         </template>
 
@@ -191,6 +208,7 @@ function fieldsOf(input: FieldsInput, authDisplayName: string | undefined) {
     : ''
   const createdAt = pendingEdit ? undefined : payload?.created_at
   const createdAtText = createdAt ? new Date(createdAt).toLocaleString(LOCALE) : ''
+  const validationStatus = pendingEdit?.validation_status ?? payload?.validation_status ?? ''
   return {
     displayLabel,
     mode,
@@ -199,6 +217,7 @@ function fieldsOf(input: FieldsInput, authDisplayName: string | undefined) {
     basedOnLabel,
     createdByText,
     createdAtText,
+    validationStatus,
   }
 }
 
@@ -229,6 +248,16 @@ const archived = useIsArchived(currentMode)
 const archivalPending = computed(
   () => !!currentMode.value && !!changes.stagedArchival(currentMode.value.id),
 )
+const archivedAtText = computed(() => {
+  const at = currentMode.value?.archived_at
+  return at ? new Date(at).toLocaleString(LOCALE) : ''
+})
+const archivedByText = computed(() => {
+  const by = currentMode.value?.archived_by
+  if (!by) return ''
+  const displayName = currentMode.value?.archived_by_display_name
+  return displayName ? `${displayName} (${by})` : by
+})
 
 const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
 
@@ -255,6 +284,9 @@ const createdByRuns = computed(() =>
 )
 const createdAtRuns = computed(() =>
   runsFor(ownFields.value.createdAtText, counterpartFields.value?.createdAtText),
+)
+const validationStatusRuns = computed(() =>
+  runsFor(ownFields.value.validationStatus, counterpartFields.value?.validationStatus),
 )
 const diffHighlightClass = computed(() => sideHighlightClass(props.side))
 </script>

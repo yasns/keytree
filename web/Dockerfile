@@ -2,6 +2,7 @@ FROM registry.cern.ch/docker.io/library/node:24-slim AS development
 
 WORKDIR /src
 COPY web/package.json web/package-lock.json web/.npmrc ./
+COPY web/patches ./patches
 RUN npm ci
 COPY web/ ./
 
@@ -14,6 +15,7 @@ FROM registry.cern.ch/docker.io/library/node:24-slim AS builder
 
 WORKDIR /src
 COPY web/package.json web/package-lock.json web/.npmrc ./
+COPY web/patches ./patches
 RUN npm ci
 COPY web/ ./
 RUN npm run build-only

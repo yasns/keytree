@@ -36,6 +36,7 @@ class KeyOut(BaseModel):
     created_by_display_name: str
     created_at: datetime
     comment: str
+    validation_status: str
     based_on: KeyRefOut | None
     """The key this was forked/copied from, or its previous version otherwise."""
 
@@ -116,6 +117,7 @@ def _build_key_detail(
         created_by_display_name=display_name,
         created_at=key.created_at,
         comment=key.comment,
+        validation_status=key.validation_status,
         based_on=(
             KeyRefOut(mode_name=ancestor_mode_name, version=ancestor_version, label=ancestor_label)
             if ancestor_mode_name is not None

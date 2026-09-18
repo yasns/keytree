@@ -278,6 +278,11 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("comment", sa.Text(), nullable=False),
+        sa.Column("validation_status", sa.String(length=255), nullable=False),
+        sa.CheckConstraint(
+            "validation_status IN ('skipped', 'passed', 'failed')",
+            name=op.f("ck_key_validation_status_enum"),
+        ),
         sa.CheckConstraint(
             "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name=op.f("ck_key_label_format")
         ),

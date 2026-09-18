@@ -12,13 +12,15 @@
     "type-check": "vue-tsc --build",
     "gen:api-types": "openapi-typescript http://localhost:8080/api/openapi.json -o src/api-types.ts",
     "format": "prettier --write --experimental-cli src/",
-    "lint": "oxlint ."
+    "lint": "oxlint .",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@fontsource/roboto": "^5.2.10",
     "@fontsource/roboto-mono": "^5.2.8",
     "@mdi/font": "7.4.47",
     "monaco-editor": "^0.56.0",
+    "monaco-yaml": "^5.5.1",
     "openapi-fetch": "^0.17.0",
     "pinia": "^4.0.2",
     "vue": "^3.5.40",
@@ -32,10 +34,12 @@
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
+    "ajv": "^8.20.0",
     "jsdom": "^29.1.1",
     "npm-run-all2": "^9.0.2",
     "openapi-typescript": "^7.13.0",
     "oxlint": "~1.78.0",
+    "patch-package": "^8.0.1",
     "prettier": "3.9.5",
     "sass-embedded": "^1.98.0",
     "typescript": "~6.0.0",
@@ -44,7 +48,8 @@
     "vite-plugin-vue-devtools": "^8.1.5",
     "vite-plugin-vuetify": "^2.1.3",
     "vitest": "^4.1.10",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "^3.3.7",
+    "yaml": "^2.9.1"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"

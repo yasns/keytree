@@ -48,6 +48,24 @@
             >v{{ edit.expected_version }}
           </v-list-item-title>
           <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
+          <template v-if="edit.validation_status !== 'skipped'" #append>
+            <v-icon
+              :icon="
+                edit.validation_status === 'passed'
+                  ? 'mdi-check-circle-outline'
+                  : 'mdi-alert-circle-outline'
+              "
+              :color="edit.validation_status === 'passed' ? 'success' : 'error'"
+              size="small"
+            ></v-icon>
+            <v-tooltip
+              activator="parent"
+              location="top"
+              @update:model-value="(open) => open && loadErrors(edit)"
+            >
+              <div v-for="(line, i) in tooltipLines(edit)" :key="i">{{ line }}</div>
+            </v-tooltip>
+          </template>
         </v-list-item>
         <v-list-item
           v-for="archival in changes.archivals"
@@ -72,6 +90,14 @@
         </v-list-item>
       </v-list>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmInvalidCommit"
+      title="Commit with validation errors?"
+      text="Some staged edits failed validation. Commit anyway?"
+      confirm-text="Commit"
+      @confirm="commit()"
+    ></ConfirmDialog>
 
     <CommitConflictsDialog
       v-model="conflictsOpen"
@@ -99,7 +125,7 @@
         prepend-icon="mdi-source-commit"
         :disabled="!changes.pendingCount || !comment.trim()"
         :loading="committing"
-        @click="commit()"
+        @click="onCommitClick"
       >
         Commit
       </v-btn>
@@ -108,9 +134,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { components } from '@/api-types'
+import { validatePayload } from '@/composables/useMonaco'
 import { keyRoute, parseVersion, withDiffQuery } from '@/router'
 import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
@@ -128,11 +155,26 @@ const route = useRoute()
 const router = useRouter()
 
 const confirmDiscardAll = ref(false)
+const confirmInvalidCommit = ref(false)
 const comment = ref('')
 const committing = ref(false)
 const rebasing = ref(false)
 const conflicts = ref<Conflict[]>([])
 const conflictsOpen = ref(false)
+
+const errorCache = reactive(new Map<number, string[]>())
+
+async function loadErrors(edit: StagedEditOut) {
+  if (edit.validation_status !== 'failed' || edit.proposed_payload === null) return
+  if (errorCache.has(edit.id)) return
+  errorCache.set(edit.id, await validatePayload(edit.proposed_payload, edit.category))
+}
+
+function tooltipLines(edit: StagedEditOut): string[] {
+  if (edit.validation_status === 'passed') return ['No validation problems']
+  const errors = errorCache.get(edit.id)
+  return errors?.length ? errors : ['Validation failed']
+}
 
 function keyIcon(edit: StagedEditOut) {
   return edit.base_version === null && edit.copied_from ? 'mdi-source-fork' : 'mdi-key-plus'
@@ -197,6 +239,14 @@ async function rebase() {
     snackbar.notifyError(err)
   } finally {
     rebasing.value = false
+  }
+}
+
+function onCommitClick() {
+  if (changes.visibleEdits.some((e) => e.validation_status === 'failed')) {
+    confirmInvalidCommit.value = true
+  } else {
+    void commit()
   }
 }
 

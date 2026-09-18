@@ -28,25 +28,21 @@
 
       <v-divider v-if="dirty" vertical inset class="mx-1"></v-divider>
 
-      <v-tooltip v-if="dirty" text="Unsaved (click to save)">
+      <v-tooltip v-if="validationErrors">
         <template v-slot:activator="{ props }">
           <v-btn
-            icon="mdi-cloud-alert-outline"
-            color="warning"
-            @click="saveDialog = true"
+            :icon="
+              validationErrors.length ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'
+            "
+            :color="validationErrors.length ? 'error' : 'success'"
             density="comfortable"
             v-bind="props"
           ></v-btn>
         </template>
-      </v-tooltip>
-      <v-tooltip v-else text="Saved">
-        <template v-slot:activator="{ props }">
-          <v-btn
-            icon="mdi-cloud-check-variant-outline"
-            density="comfortable"
-            v-bind="props"
-          ></v-btn>
-        </template>
+        <div v-if="validationErrors.length">
+          <div v-for="(message, i) in validationErrors" :key="i">{{ message }}</div>
+        </div>
+        <span v-else>No validation problems</span>
       </v-tooltip>
 
       <v-menu>
@@ -162,6 +158,8 @@ const props = withDefaults(
     version?: number
     committed?: boolean
     readOnly?: boolean
+    /** Live Monaco marker messages for this key's own payload editor; undefined where not applicable. */
+    validationErrors?: string[]
   }>(),
   { committed: true },
 )

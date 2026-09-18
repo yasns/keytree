@@ -12,10 +12,11 @@
     </div>
 
     <div class="d-flex flex-column flex-grow-1" style="min-height: 0; min-width: 0">
-      <div class="d-flex">
+      <div class="d-flex align-stretch">
         <div v-for="s in sides" :key="s.side" style="flex: 1; min-width: 0">
           <KeyMetadata
             v-if="s.leaf"
+            class="h-100"
             v-model:panel="panel"
             :subsystem="s.leaf.root.subsystem"
             :name="s.leaf.root.name"
@@ -52,8 +53,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as monaco from 'monaco-editor'
 import { useNavStore, type BundleRoot } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
-import { languageFor } from '@/category'
-import { useMonacoTheme } from '@/composables/useMonaco'
+import { useMonacoTheme, createPayloadModel } from '@/composables/useMonaco'
 import type { components } from '@/api-types'
 import KeyMetadata from '../key/KeyMetadata.vue'
 
@@ -148,9 +148,8 @@ async function load() {
   const modifiedValue = textOf(props.right, rightStaged.value?.proposed_payload ?? '', rightKey)
   originalModel?.dispose()
   modifiedModel?.dispose()
-  const language = languageFor(props.left?.category ?? props.right?.category)
-  originalModel = monaco.editor.createModel(originalValue, language)
-  modifiedModel = monaco.editor.createModel(modifiedValue, language)
+  originalModel = createPayloadModel(originalValue, props.left?.category)
+  modifiedModel = createPayloadModel(modifiedValue, props.right?.category)
   diffEditor.setModel({ original: originalModel, modified: modifiedModel })
 }
 
@@ -159,6 +158,7 @@ onMounted(() => {
   const initialTheme = useMonacoTheme()
   diffEditor = monaco.editor.createDiffEditor(editorElem.value, {
     readOnly: true,
+    renderValidationDecorations: 'on',
     renderSideBySide: true,
     automaticLayout: true,
     theme: initialTheme,

@@ -144,6 +144,8 @@ class Key(Base):
 
     comment: Mapped[str] = mapped_column(Text, nullable=False)
 
+    validation_status: Mapped[str] = mapped_column(String(255), nullable=False)
+
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(["mode_id", "node_id"], ["mode.id", "mode.node_id"]),
         UniqueConstraint("mode_id", "version"),
@@ -153,6 +155,9 @@ class Key(Base):
             "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name="label_format"
         ),
         CheckConstraint("version > 0", name="version_positive"),
+        CheckConstraint(
+            "validation_status IN ('skipped', 'passed', 'failed')", name="validation_status_enum"
+        ),
     )
 
 

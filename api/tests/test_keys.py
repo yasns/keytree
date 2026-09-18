@@ -25,6 +25,7 @@ def _key() -> Key:
         created_by="jdoe",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         comment="new menu",
+        validation_status="skipped",
     )
 
 

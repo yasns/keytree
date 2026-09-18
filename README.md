@@ -5,18 +5,17 @@
 
 > Requires [uv](https://docs.astral.sh/uv/getting-started/installation/), Node, and Docker.
 
-Run the database server first:
-```bash
-docker compose up -d db
-```
-
-Then set up the API:
+Set up the API first:
 ```bash
 cd api
 uv sync
 cp .env.example .env  # fill in the required environment variables, remember POSTGRES_PASSWORD
 ```
 
+Then run the database server:
+```bash
+docker compose up -d db
+```
 Connect as the owner, create the app privilege bundle:
 ```bash
 docker compose exec db psql -U keytree -d keytree -c "CREATE ROLE keytree_app NOLOGIN"
@@ -43,7 +42,7 @@ npm install
 
 ### Run the whole stack
 ```bash
-docker compose up
+docker compose up -d
 ```
 Then: <http://localhost:5173/> for the app, <http://localhost:5173/api/docs> for the Swagger API docs.
 

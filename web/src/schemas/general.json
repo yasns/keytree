@@ -1,0 +1,220 @@
+{
+  "title": "ShepHerd configuration file",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "crates": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["building", "rack", "height", "csp_id"],
+            "properties": {
+              "building": { "type": ["string", "integer"] },
+              "rack": { "type": "string" },
+              "height": { "type": "integer" },
+              "description": { "type": "string" },
+              "csp_id": { "type": "integer" }
+            }
+          }
+        },
+        "boards": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hostname", "crate", "slot"],
+            "properties": {
+              "hostname": { "type": "string" },
+              "port": { "type": "integer" },
+              "crate": { "type": "string" },
+              "slot": { "type": "integer" }
+            }
+          }
+        },
+        "external_boards": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["crate", "slot", "outputs"],
+            "properties": {
+              "crate": { "type": "string" },
+              "slot": { "type": "integer" },
+              "outputs": {
+                "type": "object",
+                "additionalProperties": { "$ref": "#/definitions/indexList" }
+              }
+            }
+          }
+        },
+        "daq_boards": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["inputs", "outputs"],
+            "properties": {
+              "inputs": {
+                "type": "object",
+                "additionalProperties": { "$ref": "#/definitions/indexList" }
+              },
+              "outputs": {
+                "type": "object",
+                "additionalProperties": { "$ref": "#/definitions/indexList" }
+              }
+            }
+          }
+        },
+        "frontends": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["serial", "lpgbt_fuseids"],
+            "properties": {
+              "serial": { "type": "string" },
+              "lpgbt_fuseids": { "$ref": "#/definitions/indexList" }
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to"],
+            "properties": {
+              "from": { "$ref": "#/definitions/linkEndpoint" },
+              "to": { "$ref": "#/definitions/linkEndpoint" }
+            }
+          }
+        }
+      }
+    },
+    "link_settings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/linkSettingsEntry" }
+    },
+    "contexts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "propertyNames": { "pattern": "^§?[\\w.*-]+(,[\\w.*-]+)*(:[\\w.*-]+){0,2}$" },
+            "patternProperties": {
+              "^§": {
+                "anyOf": [
+                  { "$ref": "#/definitions/paramValue" },
+                  {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/definitions/paramValue" }
+                  }
+                ]
+              }
+            },
+            "additionalProperties": { "$ref": "#/definitions/paramValue" }
+          }
+        }
+      }
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+    },
+    "include": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "indexList": {
+      "type": "string",
+      "pattern": "^\\s*\\d+(\\s*-\\s*\\d+)?(\\s*,\\s*\\d+(\\s*-\\s*\\d+)?)*\\s*$"
+    },
+    "linkEndpoint": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": [{ "type": "string" }, { "type": "string" }, { "type": ["string", "integer"] }]
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "board": { "type": "string" },
+        "processor": { "type": "string" },
+        "port": { "type": ["string", "integer"] }
+      }
+    },
+    "mode": {
+      "anyOf": [
+        { "enum": ["prbs7", "prbs9", "prbs15", "prbs23", "prbs31"] },
+        {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "additionalItems": false,
+          "items": [{ "const": "csp" }, { "type": "integer" }, { "type": "integer" }]
+        },
+        {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "additionalItems": false,
+          "items": [
+            { "const": "csp" },
+            { "type": "integer" },
+            { "type": "integer" },
+            { "enum": ["idle1", "idle2"] }
+          ]
+        }
+      ]
+    },
+    "linkSettingsEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default": { "type": "null" },
+        "from": { "$ref": "#/definitions/selector" },
+        "to": { "$ref": "#/definitions/selector" },
+        "mask": { "type": "boolean" },
+        "mode": { "$ref": "#/definitions/mode" }
+      }
+    },
+    "replaceWith": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replace_with"],
+      "properties": {
+        "replace_with": { "type": "string" }
+      }
+    },
+    "fileValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "file" },
+        "path": {
+          "anyOf": [{ "type": "string" }, { "$ref": "#/definitions/replaceWith" }]
+        }
+      }
+    },
+    "paramValue": {
+      "anyOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "$ref": "#/definitions/fileValue" },
+        { "$ref": "#/definitions/replaceWith" },
+        { "type": "array", "items": { "$ref": "#/definitions/paramValue" } }
+      ]
+    }
+  }
+}

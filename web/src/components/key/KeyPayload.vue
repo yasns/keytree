@@ -21,6 +21,7 @@
       :version="version"
       :committed="!pending"
       :read-only="readOnly"
+      :validation-errors="validationErrors"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
@@ -41,7 +42,7 @@ import { useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useReadOnly } from '@/composables/useReadOnly'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
-import { useMonacoTheme } from '@/composables/useMonaco'
+import { useMonacoTheme, createPayloadModel, formatMarkers } from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
@@ -88,6 +89,21 @@ const dirty = ref(false)
 useDirtySource(dirty, Infinity)
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let baseValue = ''
+let modelCategory: string | null | undefined
+let loadToken = 0
+let markerListener: monaco.IDisposable | undefined
+
+const isYaml = computed(() => languageFor(category) === 'yaml')
+const markers = ref<monaco.editor.IMarker[]>([])
+const validationErrors = computed(() => (isYaml.value ? formatMarkers(markers.value) : undefined))
+
+function refreshMarkers() {
+  const model = editor?.getModel()
+  markers.value =
+    model && isYaml.value
+      ? monaco.editor.getModelMarkers({ resource: model.uri, owner: 'yaml' })
+      : []
+}
 
 const staged = computed(() =>
   pending
@@ -97,7 +113,7 @@ const staged = computed(() =>
 
 function resetToBaseline() {
   if (!editor) return
-  baseValue = staged.value?.proposed_payload ?? key.value?.payload ?? ''
+  baseValue = pending ? (staged.value?.proposed_payload ?? '') : (key.value?.payload ?? '')
   if (editor.getValue() !== baseValue) editor.setValue(baseValue)
   dirty.value = false
 }
@@ -105,15 +121,19 @@ function resetToBaseline() {
 onMounted(() => {
   if (!editorElem.value) return
   const initialTheme = useMonacoTheme()
+  modelCategory = category
   editor = monaco.editor.create(editorElem.value, {
-    value: '',
-    language: languageFor(category),
+    model: createPayloadModel('', category),
     automaticLayout: true,
     theme: initialTheme,
     readOnly: readOnly.value,
   })
   editor.onDidChangeModelContent(() => {
     dirty.value = editor!.getValue() !== baseValue
+  })
+  markerListener = monaco.editor.onDidChangeMarkers((uris) => {
+    const model = editor?.getModel()
+    if (model && uris.some((uri) => uri.toString() === model.uri.toString())) refreshMarkers()
   })
   loadPayload().then(() => {
     if (searchQuery) revealInFind(searchQuery)
@@ -133,10 +153,18 @@ function revealInFind(query: string) {
 
 async function loadPayload() {
   if (!editor) return
-  key.value = pending ? undefined : await nav.fetchKeyPayload(subsystem, name, mode, version)
+  const token = ++loadToken
+  const fetched = pending ? undefined : await nav.fetchKeyPayload(subsystem, name, mode, version)
+  if (token !== loadToken || !editor) return
+  key.value = fetched
+  if (category !== modelCategory) {
+    modelCategory = category
+    const oldModel = editor.getModel()
+    editor.setModel(createPayloadModel('', category))
+    oldModel?.dispose()
+    markers.value = []
+  }
   resetToBaseline()
-  const model = editor.getModel()
-  if (model) monaco.editor.setModelLanguage(model, languageFor(category))
 }
 
 watch(() => [subsystem, name, mode, version, pending], loadPayload)
@@ -155,6 +183,12 @@ watch(staged, () => {
   if (!dirty.value) resetToBaseline()
 })
 
+// Reads markers as of now; saving within the yaml worker's validation debounce can miss errors just typed.
+function validationStatus(): 'skipped' | 'passed' | 'failed' {
+  if (!isYaml.value) return 'skipped'
+  return markers.value.length > 0 ? 'failed' : 'passed'
+}
+
 function baseEdit(comment: string) {
   return {
     subsystem_name: subsystem,
@@ -163,11 +197,11 @@ function baseEdit(comment: string) {
     base_version: version,
     proposed_payload: editor!.getValue(),
     comment,
+    validation_status: validationStatus(),
   }
 }
 
 async function save(comment: string) {
-  if (!editor) return
   await changes.stage([baseEdit(comment)])
   resetToBaseline()
   if (pending) return
@@ -186,18 +220,24 @@ async function saveAndQueue(comment: string) {
 }
 
 async function fork(newModeName: string, description: string) {
-  if (!editor) return
-  await changes.fork({ ...baseEdit(description), new_mode_name: newModeName, description })
+  await changes.fork({
+    ...baseEdit(description),
+    new_mode_name: newModeName,
+    description,
+  })
   resetToBaseline()
   await navigateToStaged(subsystem, name, newModeName, `Forked to mode "${newModeName}"`)
 }
 
 async function copyTo(targetMode: string, comment: string) {
-  if (!editor) return
   await changes.copyTo({ ...baseEdit(comment), target_mode_name: targetMode })
   resetToBaseline()
   await navigateToStaged(subsystem, name, targetMode, `Copied to mode "${targetMode}"`)
 }
 
-onBeforeUnmount(() => editor?.dispose())
+onBeforeUnmount(() => {
+  markerListener?.dispose()
+  editor?.getModel()?.dispose()
+  editor?.dispose()
+})
 </script>
