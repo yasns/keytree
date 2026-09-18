@@ -442,6 +442,7 @@ function buildEdits(comment: string): {
           base_version: locator.version,
           proposed_payload: value,
           comment,
+          validation_status: 'skipped',
         })
       }
     } else {
@@ -463,6 +464,7 @@ function baseEdit(comment: string, proposedChildren: Record<string, number | nul
     base_version: props.version,
     proposed_children: proposedChildren,
     comment,
+    validation_status: 'skipped' as const,
   }
 }
 

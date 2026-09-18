@@ -1,8 +1,18 @@
 <template>
   <v-toolbar density="compact" class="bg-surface border-b-sm px-4">
     <template v-slot:prepend>
-      <v-icon icon="mdi-alpha-a-box" size="small"></v-icon>
       <span class="key-label ml-1">{{ keyALabel }}</span>
+      <v-btn
+        icon="mdi-pencil"
+        size="small"
+        variant="tonal"
+        class="ml-1"
+        @click="editA"
+        density="comfortable"
+      >
+        <v-icon icon="mdi-pencil" size="small"></v-icon>
+        <v-tooltip activator="parent" location="bottom">Edit</v-tooltip>
+      </v-btn>
     </template>
 
     <template v-slot:default>
@@ -22,8 +32,18 @@
     </template>
 
     <template v-slot:append>
-      <v-icon icon="mdi-alpha-b-box" size="small"></v-icon>
       <span class="key-label ml-1">{{ keyBLabel }}</span>
+      <v-btn
+        icon="mdi-pencil"
+        size="small"
+        variant="tonal"
+        class="ml-1"
+        @click="editB"
+        density="comfortable"
+      >
+        <v-icon icon="mdi-pencil" size="small"></v-icon>
+        <v-tooltip activator="parent" location="bottom">Edit</v-tooltip>
+      </v-btn>
     </template>
   </v-toolbar>
 </template>
@@ -82,6 +102,32 @@ function exitDiff() {
   router.replace({
     name: 'editor',
     params: route.params,
+    query: withDiffQuery(route.query as Record<string, string>, undefined),
+  })
+}
+
+function editA() {
+  const version = parseVersion(route.params.version as string)
+  if (version === undefined) return
+  router.replace({
+    ...keyRoute(
+      route.params.subsystem as string,
+      route.params.name as string,
+      route.params.mode as string,
+      version,
+    ),
+    query: withDiffQuery(route.query as Record<string, string>, undefined),
+  })
+}
+
+function editB() {
+  router.replace({
+    ...keyRoute(
+      route.params.subsystem as string,
+      route.params.name as string,
+      props.diffTarget.mode,
+      props.diffTarget.version,
+    ),
     query: withDiffQuery(route.query as Record<string, string>, undefined),
   })
 }

@@ -1,0 +1,121 @@
+system:
+  crates:
+    l1trigger:
+      building: '904'
+      rack: E1A05
+      height: 42
+      description: Upper crate in E1A05
+      csp_id: 1
+
+  boards:
+    serenity127:
+      hostname: serenity-s1-0127.cern.ch
+      crate: l1trigger
+      slot: '4'
+
+  links:
+    link_N4N4_[0-11]:
+      from: [serenity127, FF_N4_tx, '0-11']
+      to: [serenity127, FF_N4_rx, '0-11']
+    link_N3N3_[0-11]:
+      from: [serenity127, FF_N3_tx, '0-11']
+      to: [serenity127, FF_N3_rx, '0-11']
+    link_N0N0_[0-11]:
+      from: [serenity127, FF_N0_tx, '0-11']
+      to: [serenity127, FF_N0_rx, '0-11']
+    link_N5N5_[0-11]:
+      from: [serenity127, FF_N5_tx, '0-11']
+      to: [serenity127, FF_N5_rx, '0-11']
+    link_N1N1_[0-11]:
+      from: [serenity127, FF_N1_tx, '0-11']
+      to: [serenity127, FF_N1_rx, '0-11']
+    link_N2N2_[0-11]:
+      from: [serenity127, FF_N2_tx, '0-11']
+      to: [serenity127, FF_N2_rx, '0-11']
+    link_S0S0_[0-11]:
+      from: [serenity127, FF_S0_tx, '0-11']
+      to: [serenity127, FF_S0_rx, '0-11']
+    link_S1S1_[0-11]:
+      from: [serenity127, FF_S1_tx, '0-11']
+      to: [serenity127, FF_S1_rx, '0-11']
+    link_S2S2_[0-11]:
+      from: [serenity127, FF_S2_tx, '0-11']
+      to: [serenity127, FF_S2_rx, '0-11']
+    link_S3S3_[0-11]:
+      from: [serenity127, FF_S3_tx, '0-11']
+      to: [serenity127, FF_S3_rx, '0-11']
+
+link_settings:
+  - default:
+    #mode: prbs31 # 2-crate test
+    mode: [csp, 128, 256, idle1] # default
+
+  # Mask link -> EMP ch 89
+  - to:
+      port: 89
+    mask: True
+
+contexts:
+  # Parameters for all boards
+  serenity.processors:
+    # Default parameters for all boards - used if not overriden below for specific boards
+    parameters:
+      # Reset command - clock & TTC source
+      reset:source: internal # tcds2
+
+      # Buffer configuration (default = do nothing)
+      §configureRxBuffers,configureTxBuffers:
+        ids: []
+        mode: []
+        dataURI: []
+        startOffset: []
+        dataFile: [{ type: file }] # Dummy datafile for occasions when not used
+
+      # RX MGTs: Configuration and alignment commands (default = do nothing)
+      §configureRxMGTs: # KW test v0.5.0
+        ids: []
+      §alignMGTs:
+        ids: []
+        target: []
+
+      # TX MGT configuration command (default = do nothing)
+      §configureTxMGTs: # KW test v0.5.0
+        ids: []
+
+      # Firefly configuration commands (auto-deduce channel list from MGT config)
+      §configureFireflyRx,configureFireflyTx:
+        ids: auto
+
+  # Parameters
+  serenity127.fpga:
+    parameters:
+      program:package:
+        type: file
+        # path: https://emp-fwk.web.cern.ch/fw/ci/tags/v0.10.3/pipeline14915303/serenity_s1_vu13p_max-2.tgz
+        # LW TCDS v0.3 with Nyquist = 3
+        path: https://emp-fwk.web.cern.ch/fw/ci/branches/serenity-s1-nyquist/dbc2ba200df8505e6694d7136628ca0e60486175/pipeline14902358/serenity_s1_vu13p_lw_max-2.tgz
+
+      # RX buffers & MGTs
+      #configureRxBuffers,configureRxMGTs,alignMGTs:ids: ['0-123']
+      configureRxBuffers,alignMGTs:ids: ['0-123']
+      §configureRxBuffers:
+        mode: ['Capture']
+        dataURI: ['']
+        startOffset: [54]
+      alignMGTs:target: [54]
+      saveRxBuffers:ids: '0-123' #'60-63,64-87'
+
+      # TX buffers & MGTs
+      #configureTxMGTs,configureTxBuffers:ids: ['0-123']
+      configureTxBuffers:ids: ['0-123']
+      §configureTxBuffers:
+        mode: ['PlayOnce']
+        dataURI: ['file']
+        startOffset: [0]
+        dataFile:
+          - type: file
+            path: src/shep/config/input_data.txt
+      saveTxBuffers:ids: '0-123'
+
+systme:
+  oops: true

@@ -52,11 +52,12 @@ def upgrade() -> None:
     _ = bind.execute(
         text("""
             INSERT INTO key
-                (mode_id, node_id, version, label, payload, staged_edit_id, created_by, comment)
+                (mode_id, node_id, version, label, payload, staged_edit_id, created_by, comment,
+                 validation_status)
             SELECT m.id, n.id, 1,
                    s.name || '/' || n.name || '/' || m.name || '/v1',
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
-                   se.id, 'keytree_app', 'Bootstrap v1 seed'
+                   se.id, 'keytree_app', 'Bootstrap v1 seed', se.validation_status
             FROM staged_edit se
             JOIN mode m ON m.id = se.mode_id
             JOIN node n ON n.id = m.node_id

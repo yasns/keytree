@@ -2,16 +2,16 @@ import type { components } from '@/api-types'
 
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 type TreeOut = components['schemas']['TreeOut']
-type CategoryMeta = { icon: string; format?: 'xml' | 'yaml' | 'plaintext' }
+type CategoryMeta = { icon: string; format?: string }
 
 const CATEGORY: Record<string, CategoryMeta> = {
-  algo: { icon: 'mdi-function-variant', format: 'xml' },
-  infra: { icon: 'mdi-server-network', format: 'xml' },
-  hardware: { icon: 'mdi-memory', format: 'xml' },
-  l1_menu: { icon: 'mdi-menu', format: 'xml' },
-  run_settings: { icon: 'mdi-tune-variant', format: 'xml' },
+  algo: { icon: 'mdi-function-variant', format: 'yaml' },
+  infra: { icon: 'mdi-server-network', format: 'yaml' },
+  hardware: { icon: 'mdi-memory', format: 'yaml' },
+  l1_menu: { icon: 'mdi-menu', format: 'yaml' },
+  run_settings: { icon: 'mdi-tune-variant', format: 'yaml' },
   tcds: { icon: 'mdi-clock-outline', format: 'plaintext' },
-  external: { icon: 'mdi-key' },
+  external: { icon: 'mdi-key' }, // no format, because external keys are not editable
 }
 
 export function iconFor(node: TreeOut | KeyChildMetaOut, isAlias: boolean): string {
@@ -21,7 +21,7 @@ export function iconFor(node: TreeOut | KeyChildMetaOut, isAlias: boolean): stri
 }
 
 export function languageFor(category: string | null | undefined): string {
-  return (category ? CATEGORY[category]?.format : undefined) ?? 'plaintext'
+  return (category && CATEGORY[category]?.format) || 'yaml'
 }
 
 type RankedNode = { isAlias: boolean; category: string | null; alias: string }

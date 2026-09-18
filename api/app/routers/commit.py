@@ -90,6 +90,7 @@ def _build_keys(rows: list[_CommitRow], changeset: Changeset) -> list[Key]:
                 staged_edit_id=row.edit.id,
                 created_by=changeset.created_by,
                 comment=row.edit.comment,
+                validation_status=row.edit.validation_status,
             )
         )
     return keys

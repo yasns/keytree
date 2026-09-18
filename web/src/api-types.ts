@@ -529,6 +529,12 @@ export interface components {
             } | null;
             /** Comment */
             comment: string;
+            /**
+             * Validation Status
+             * @default skipped
+             * @enum {string}
+             */
+            validation_status: "skipped" | "passed" | "failed";
             /** Target Mode Name */
             target_mode_name: string;
         };
@@ -550,6 +556,12 @@ export interface components {
             } | null;
             /** Comment */
             comment: string;
+            /**
+             * Validation Status
+             * @default skipped
+             * @enum {string}
+             */
+            validation_status: "skipped" | "passed" | "failed";
             /** New Mode Name */
             new_mode_name: string;
             /** Description */
@@ -623,6 +635,8 @@ export interface components {
             created_at: string;
             /** Comment */
             comment: string;
+            /** Validation Status */
+            validation_status: string;
             based_on: components["schemas"]["KeyRefOut"] | null;
         };
         /** KeyRefOut */
@@ -717,6 +731,12 @@ export interface components {
             } | null;
             /** Comment */
             comment: string;
+            /**
+             * Validation Status
+             * @default skipped
+             * @enum {string}
+             */
+            validation_status: "skipped" | "passed" | "failed";
         };
         /** StagedEditOut */
         StagedEditOut: {
@@ -746,6 +766,8 @@ export interface components {
             comment: string;
             /** Created By */
             created_by: string;
+            /** Validation Status */
+            validation_status: string;
         };
         /** SubsystemOut */
         SubsystemOut: {

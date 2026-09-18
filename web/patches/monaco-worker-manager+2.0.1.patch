@@ -1,0 +1,37 @@
+diff --git a/node_modules/monaco-worker-manager/index.js b/node_modules/monaco-worker-manager/index.js
+index 6527afa..93a6f9e 100644
+--- a/node_modules/monaco-worker-manager/index.js
++++ b/node_modules/monaco-worker-manager/index.js
+@@ -40,11 +40,16 @@ export function createWorkerManager(monaco, options) {
+             }
+             lastUsedTime = Date.now();
+             if (!worker) {
+-                worker = monaco.editor.createWebWorker({
+-                    createData,
+-                    label,
+-                    moduleId,
+-                });
++                // monaco-editor >=0.53 dropped {label, moduleId, createData}; build the worker
++                // ourselves and deliver createData as the 2nd message (1st is a bootstrap kick).
++                const monacoEnvironment = typeof self === 'object' ? self.MonacoEnvironment : undefined;
++                if (!monacoEnvironment || typeof monacoEnvironment.getWorker !== 'function') {
++                    throw new Error(`MonacoEnvironment.getWorker must be defined to create the "${label}" worker`);
++                }
++                const rawWorker = monacoEnvironment.getWorker(moduleId, label);
++                rawWorker.postMessage('monaco-worker-manager-bootstrap');
++                rawWorker.postMessage(createData);
++                worker = monaco.editor.createWebWorker({ worker: rawWorker });
+             }
+             return worker.withSyncedResources(resources);
+         },
+diff --git a/node_modules/monaco-worker-manager/worker.js b/node_modules/monaco-worker-manager/worker.js
+index 8fe26e5..2d80e35 100644
+--- a/node_modules/monaco-worker-manager/worker.js
++++ b/node_modules/monaco-worker-manager/worker.js
+@@ -1,4 +1,5 @@
+-import { initialize as initializeWorker } from 'monaco-editor/esm/vs/editor/editor.worker.js';
++// monaco-editor >=0.56's exports map rejects the esm/vs-prefixed path; this one resolves correctly.
++import { initialize as initializeWorker } from 'monaco-editor/editor/editor.worker.js';
+ /**
+  * Create a web worker proxy.
+  *

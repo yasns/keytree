@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
@@ -31,6 +31,7 @@ class StagedEditIn(BaseModel):
     proposed_children: dict[str, int | None] | None = None
     """alias -> child key id, or None if this changeset should produce the key."""
     comment: str
+    validation_status: Literal["skipped", "passed", "failed"] = "skipped"
 
     @model_validator(mode="after")
     def _proposes_something(self) -> "StagedEditIn":
@@ -75,6 +76,7 @@ class StagedEditOut(BaseModel):
     """The fork/copy source, or its previous version otherwise."""
     comment: str
     created_by: str
+    validation_status: str
 
 
 class StagedArchivalOut(BaseModel):
@@ -149,6 +151,7 @@ def _build_changeset(
                 else None,
                 comment=edit.comment,
                 created_by=changeset.created_by,
+                validation_status=edit.validation_status,
             )
             for edit, subsystem_name, node_name, mode_name, base_version, category in rows
         ],
@@ -350,7 +353,7 @@ async def stage_edits(
                 proposed_payload=edit_in.proposed_payload,
                 proposed_children=edit_in.proposed_children,
                 comment=edit_in.comment,
-                validation_status="skipped",  # hardcoded until we have validation JSON Schemas
+                validation_status=edit_in.validation_status,
             )
         )
 
@@ -443,7 +446,7 @@ async def fork_mode(body: ForkIn, request: Request, session: SessionDep) -> Chan
             proposed_payload=body.proposed_payload,
             proposed_children=body.proposed_children,
             comment=body.comment,
-            validation_status="skipped",
+            validation_status=body.validation_status,
         )
     )
 
@@ -488,7 +491,7 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
             proposed_payload=body.proposed_payload,
             proposed_children=body.proposed_children,
             comment=body.comment,
-            validation_status="skipped",
+            validation_status=body.validation_status,
         )
     )
 
