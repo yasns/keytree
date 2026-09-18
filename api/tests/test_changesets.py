@@ -28,7 +28,6 @@ def test_build_changeset_assembles_edits_and_ripple():
     changeset = Changeset(
         id=7,
         created_by="jdoe",
-        comment="",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
@@ -104,9 +103,7 @@ def test_build_changeset_assembles_edits_and_ripple():
 
 def test_build_changeset_handles_a_fork_with_no_base_key():
     """base_version is None when there's no base key."""
-    changeset = Changeset(
-        id=7, created_by="jdoe", comment="", created_at=datetime(2026, 1, 1, tzinfo=UTC)
-    )
+    changeset = Changeset(id=7, created_by="jdoe", created_at=datetime(2026, 1, 1, tzinfo=UTC))
     fork_edit = StagedEdit(
         id=1,
         changeset_id=7,
@@ -128,9 +125,7 @@ def test_build_changeset_handles_a_fork_with_no_base_key():
 
 
 def test_build_changeset_reports_the_fork_source():
-    changeset = Changeset(
-        id=7, created_by="jdoe", comment="", created_at=datetime(2026, 1, 1, tzinfo=UTC)
-    )
+    changeset = Changeset(id=7, created_by="jdoe", created_at=datetime(2026, 1, 1, tzinfo=UTC))
     fork_edit = StagedEdit(
         id=1,
         changeset_id=7,
@@ -175,7 +170,7 @@ def _fresh_mode_row() -> _CommitRow:
 
 
 def test_build_keys_lands_on_v1_for_a_fresh_mode():
-    changeset = Changeset(id=7, created_by="jdoe", comment="")
+    changeset = Changeset(id=7, created_by="jdoe")
 
     keys = _build_keys([_fresh_mode_row()], changeset)
 
@@ -232,7 +227,7 @@ async def _forked_mode(
         assert node_id is not None
         mode = Mode(node_id=node_id, name=mode_name, description="d", created_by=cern_login)
         session.add(mode)
-        changeset = Changeset(created_by=cern_login, comment="")
+        changeset = Changeset(created_by=cern_login)
         session.add(changeset)
         await session.flush()
         session.add(
@@ -319,7 +314,7 @@ def test_build_keys_lands_on_the_tip_not_the_base():
         proposed_payload="x",
         validation_status="passed",
     )
-    changeset = Changeset(id=7, created_by="jdoe", comment="")
+    changeset = Changeset(id=7, created_by="jdoe")
 
     rows = [_CommitRow(edit, "cms_run", "clock_source", "default", 10, 1, 3)]
 

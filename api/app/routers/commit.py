@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import NamedTuple, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import delete, func, select, tuple_
 from tsgauth.fastapi import JWTBearerClaims
 
@@ -29,7 +29,6 @@ router = APIRouter(
 
 
 class CommitIn(BaseModel):
-    comment: str = Field(min_length=1, max_length=255)
     overwrite_conflicts: bool = False
     """Commit conflicting edits on top of the newer versions."""
 
@@ -315,7 +314,6 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
     if archivals:
         _archive_modes(archivals, archival_modes, cern_login)
 
-    changeset.comment = body.comment
     changeset.committed_at = datetime.now(UTC)
     changeset.committed_with_roles = claim_roles(claims)
 

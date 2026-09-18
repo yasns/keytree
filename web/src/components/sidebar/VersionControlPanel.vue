@@ -109,21 +109,11 @@
     ></CommitConflictsDialog>
 
     <div class="px-2 py-2 border-t-sm">
-      <v-textarea
-        v-model="comment"
-        label="Changeset comment"
-        rows="2"
-        maxlength="255"
-        density="compact"
-        hide-details
-        :disabled="!changes.pendingCount"
-      ></v-textarea>
       <v-btn
         block
-        class="mt-2"
         color="primary"
         prepend-icon="mdi-source-commit"
-        :disabled="!changes.pendingCount || !comment.trim()"
+        :disabled="!changes.pendingCount"
         :loading="committing"
         @click="onCommitClick"
       >
@@ -156,7 +146,6 @@ const router = useRouter()
 
 const confirmDiscardAll = ref(false)
 const confirmInvalidCommit = ref(false)
-const comment = ref('')
 const committing = ref(false)
 const rebasing = ref(false)
 const conflicts = ref<Conflict[]>([])
@@ -251,14 +240,12 @@ function onCommitClick() {
 }
 
 async function commit(overwriteConflicts = false) {
-  if (!comment.value.trim()) return
   committing.value = true
   // only moves if this changeset edits it; capture before commit clears the edits
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
   try {
-    await changes.commit(comment.value.trim(), overwriteConflicts)
-    comment.value = ''
+    await changes.commit(overwriteConflicts)
     conflictsOpen.value = false
     snackbar.notify('Changeset committed', 'success')
     await nav.refreshKeys()

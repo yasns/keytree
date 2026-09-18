@@ -89,7 +89,6 @@ class StagedArchivalOut(BaseModel):
 
 class ChangesetOut(BaseModel):
     id: int
-    comment: str
     created_by: str
     created_at: datetime
     edits: list[StagedEditOut]
@@ -119,7 +118,6 @@ def _build_changeset(
 ) -> ChangesetOut:
     return ChangesetOut(
         id=changeset.id,
-        comment=changeset.comment,
         created_by=changeset.created_by,
         created_at=changeset.created_at,
         archivals=[
@@ -171,7 +169,7 @@ async def _get_or_create_open_changeset(cern_login: str, session: SessionDep) ->
     if changeset is not None:
         return changeset
 
-    stmt = insert(Changeset).values(created_by=cern_login, comment="")
+    stmt = insert(Changeset).values(created_by=cern_login)
     stmt = stmt.on_conflict_do_nothing(
         index_elements=[Changeset.created_by], index_where=Changeset.committed_at.is_(None)
     )

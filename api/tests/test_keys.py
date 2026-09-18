@@ -112,7 +112,7 @@ async def _forked_key(
         assert node_id is not None
         mode = Mode(node_id=node_id, name=mode_name, description="d", created_by=cern_login)
         session.add(mode)
-        changeset = Changeset(created_by=cern_login, comment="")
+        changeset = Changeset(created_by=cern_login)
         session.add(changeset)
         await session.flush()
         session.add(
@@ -128,7 +128,7 @@ async def _forked_key(
         )
         await session.commit()
     async with session_factory() as session:
-        await commit_changeset(CommitIn(comment="seed"), _fake_request(cern_login), session)
+        await commit_changeset(CommitIn(), _fake_request(cern_login), session)
 
 
 async def _restage_key(
@@ -159,7 +159,7 @@ async def _restage_key(
             session,
         )
     async with session_factory() as session:
-        await commit_changeset(CommitIn(comment="restage"), request, session)
+        await commit_changeset(CommitIn(), request, session)
 
 
 @pytest.mark.docker

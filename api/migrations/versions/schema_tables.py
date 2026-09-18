@@ -59,7 +59,6 @@ def upgrade() -> None:
         "changeset",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("created_by", sa.String(length=64), nullable=False),
-        sa.Column("comment", sa.String(length=255), nullable=False),
         sa.Column("committed_with_roles", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "created_at",
@@ -85,9 +84,7 @@ def upgrade() -> None:
         postgresql_where=sa.text("committed_at IS NULL"),
     )
     op.execute("GRANT SELECT, INSERT, DELETE ON changeset TO keytree_app")
-    op.execute(
-        "GRANT UPDATE (comment, committed_with_roles, committed_at) ON changeset TO keytree_app"
-    )
+    op.execute("GRANT UPDATE (committed_with_roles, committed_at) ON changeset TO keytree_app")
     op.execute("GRANT USAGE ON SEQUENCE changeset_id_seq TO keytree_app")
 
     _ = op.create_table(

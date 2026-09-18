@@ -191,8 +191,6 @@ class Changeset(Base):
 
     created_by: Mapped[str] = mapped_column(ForeignKey("app_user.cern_login"), nullable=False)
 
-    comment: Mapped[str] = mapped_column(String(255), nullable=False)
-
     committed_with_roles: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

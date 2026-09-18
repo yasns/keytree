@@ -27,8 +27,8 @@ def upgrade() -> None:
 
     changeset_id = bind.scalar(
         text("""
-            INSERT INTO changeset (created_by, comment, committed_with_roles, committed_at)
-            VALUES ('keytree_app', 'Bootstrap v1', '["keytree_superuser"]'::jsonb, now())
+            INSERT INTO changeset (created_by, committed_with_roles, committed_at)
+            VALUES ('keytree_app', '["keytree_superuser"]'::jsonb, now())
             RETURNING id
         """)
     )

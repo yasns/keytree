@@ -469,8 +469,6 @@ export interface components {
         ChangesetOut: {
             /** Id */
             id: number;
-            /** Comment */
-            comment: string;
             /** Created By */
             created_by: string;
             /**
@@ -485,8 +483,6 @@ export interface components {
         };
         /** CommitIn */
         CommitIn: {
-            /** Comment */
-            comment: string;
             /**
              * Overwrite Conflicts
              * @default false
