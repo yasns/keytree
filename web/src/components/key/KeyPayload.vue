@@ -16,6 +16,9 @@
     <div v-if="key?.retired_descendants.length" class="flex-shrink-0">
       <RetiredDescendantsAlert :refs="key.retired_descendants"></RetiredDescendantsAlert>
     </div>
+    <div v-if="pendingEditors.length" class="flex-shrink-0">
+      <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
+    </div>
 
     <KeyToolbar
       :dirty="dirty"
@@ -53,12 +56,14 @@ import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useKeyReadOnly } from '@/composables/useReadOnly'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
+import { usePendingEditors } from '@/composables/usePendingEditors'
 import { useMonacoTheme, createPayloadModel, formatMarkers } from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
 import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
+import PendingEditorsAlert from './PendingEditorsAlert.vue'
 
 const {
   subsystem,
@@ -104,6 +109,7 @@ const currentMode = useCurrentMode(
 )
 const archived = useIsArchived(currentMode)
 const { readOnly, readOnlyText } = useKeyReadOnly(() => subsystem, key, archived)
+const pendingEditors = usePendingEditors(computed(() => currentMode.value?.id))
 const dirty = ref(false)
 // Always the rightmost column, so nothing is ever deeper than it
 useDirtySource(dirty, Infinity)

@@ -27,8 +27,11 @@ async def my_writable_subsystems(request: Request, session: SessionDep) -> list[
 
 async def upsert_app_user(claims: dict[str, object], session: SessionDep) -> None:
     """Does not commit — caller must."""
-    stmt = insert(AppUser).values(cern_login=claims["cern_upn"], display_name=claims["name"])
+    stmt = insert(AppUser).values(
+        cern_login=claims["cern_upn"], display_name=claims["name"], email=claims.get("email")
+    )
     stmt = stmt.on_conflict_do_update(
-        index_elements=[AppUser.cern_login], set_={"display_name": stmt.excluded.display_name}
+        index_elements=[AppUser.cern_login],
+        set_={"display_name": stmt.excluded.display_name, "email": stmt.excluded.email},
     )
     _ = await session.execute(stmt)

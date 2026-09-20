@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -32,7 +33,12 @@ from app.routers.staging import (
     _build_changeset,
     _get_or_create_open_changeset,
     _resolve_bases,
+    pending_editors,
 )
+
+
+def _fake_request(cern_login: str) -> SimpleNamespace:
+    return SimpleNamespace(state=SimpleNamespace(claims={"cern_upn": cern_login}))
 
 
 def test_build_changeset_assembles_edits_and_ripple():
@@ -304,6 +310,44 @@ def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
     assert base.base_key_id is None
     assert base.expected_version == 1
     assert base.copied_from_key_id is None
+
+
+@pytest.mark.docker
+def test_pending_editors_excludes_self_and_committed_changesets(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> tuple[list, list, list]:
+        changeset_id, mode_id = await _forked_mode(
+            session_factory, cern_login="editor_a", mode_name="pending_editors_test"
+        )
+        async with session_factory() as session:
+            user = await session.get(AppUser, "editor_a")
+            assert user is not None
+            user.email = "editor_a@cern.ch"
+            await session.commit()
+
+        async with session_factory() as session:
+            seen_by_other = await pending_editors(mode_id, _fake_request("editor_b"), session)
+        async with session_factory() as session:
+            seen_by_self = await pending_editors(mode_id, _fake_request("editor_a"), session)
+
+        async with session_factory() as session:
+            changeset = await session.get(Changeset, changeset_id)
+            assert changeset is not None
+            changeset.committed_at = datetime(2026, 1, 1, tzinfo=UTC)
+            changeset.committed_with_roles = []
+            await session.commit()
+        async with session_factory() as session:
+            seen_after_commit = await pending_editors(mode_id, _fake_request("editor_b"), session)
+
+        return seen_by_other, seen_by_self, seen_after_commit
+
+    seen_by_other, seen_by_self, seen_after_commit = asyncio.run(run())
+    assert [e.cern_login for e in seen_by_other] == ["editor_a"]
+    assert seen_by_other[0].display_name == "editor_a"
+    assert seen_by_other[0].email == "editor_a@cern.ch"
+    assert seen_by_self == []
+    assert seen_after_commit == []
 
 
 def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
