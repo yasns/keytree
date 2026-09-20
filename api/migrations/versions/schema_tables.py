@@ -25,10 +25,11 @@ def upgrade() -> None:
         "app_user",
         sa.Column("cern_login", sa.String(length=64), nullable=False),
         sa.Column("display_name", sa.String(length=64), nullable=False),
+        sa.Column("email", sa.String(length=254), nullable=True),
         sa.PrimaryKeyConstraint("cern_login", name=op.f("pk_app_user")),
     )
     op.execute("GRANT SELECT, INSERT ON app_user TO keytree_app")
-    op.execute("GRANT UPDATE (display_name) ON app_user TO keytree_app")
+    op.execute("GRANT UPDATE (display_name, email) ON app_user TO keytree_app")
 
     _ = op.create_table(
         "role",

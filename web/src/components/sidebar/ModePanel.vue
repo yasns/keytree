@@ -84,6 +84,10 @@
       <p v-else class="text-medium-emphasis px-4">No {{ filter === 'all' ? '' : filter }} modes.</p>
     </div>
 
+    <div v-if="pendingEditors.length" class="flex-shrink-0">
+      <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
+    </div>
+
     <div class="d-flex flex-wrap align-center ga-2">
       <v-text-field
         v-model="search"
@@ -142,8 +146,10 @@ import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useClearPending } from '@/composables/usePendingNode'
+import { usePendingEditors } from '@/composables/usePendingEditors'
 import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
+import PendingEditorsAlert from '../key/PendingEditorsAlert.vue'
 
 type ModeOut = components['schemas']['ModeOut']
 type NodeOut = components['schemas']['NodeOut']
@@ -195,6 +201,9 @@ function isSelected(mode: ModeOut) {
   const root = nav.bundleRoot
   return root !== null && root.name === detail.value?.name && root.mode === mode.name
 }
+
+const selectedMode = computed(() => detail.value?.modes.find(isSelected))
+const pendingEditors = usePendingEditors(computed(() => selectedMode.value?.id))
 
 function pendingVersion(mode: ModeOut): number | undefined {
   const d = detail.value

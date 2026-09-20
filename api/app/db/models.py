@@ -291,6 +291,8 @@ class AppUser(Base):
 
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
 
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+
 
 class Role(Base):
     __tablename__: str = "role"
