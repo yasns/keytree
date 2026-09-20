@@ -64,14 +64,14 @@
             <v-tooltip
               v-for="item in group.items"
               :key="item.title"
-              :disabled="!menuDisabledReason"
-              :text="menuDisabledReason"
+              :disabled="!itemDisabled(item)"
+              :text="itemReason(item)"
             >
               <template v-slot:activator="{ props }">
                 <div v-bind="props">
                   <v-list-item
                     :title="item.title"
-                    :disabled="!!menuDisabledReason"
+                    :disabled="itemDisabled(item)"
                     @click="item.onClick"
                     :prepend-icon="item.icon"
                   ></v-list-item>
@@ -160,6 +160,8 @@ const props = withDefaults(
     readOnly?: boolean
     /** Live Monaco marker messages for this key's own payload editor; undefined where not applicable. */
     validationErrors?: string[]
+    hasPayloadEditor?: boolean
+    payloadFileType?: string
   }>(),
   { committed: true },
 )
@@ -169,6 +171,8 @@ const emit = defineEmits<{
   discard: []
   fork: [name: string, description: string]
   'copy-to': [mode: string, comment: string]
+  'export-payload': []
+  'import-payload': []
 }>()
 
 const changes = useChangesStore()
@@ -198,7 +202,13 @@ const pendingWarning = computed(() => {
     : undefined
 })
 
-type KebabItem = { title: string; icon: string; onClick: () => void }
+type KebabItem = {
+  title: string
+  icon: string
+  onClick: () => void
+  disabled?: boolean
+  disabledReason?: string
+}
 type MenuGroup = { label: string; divider: boolean; items: KebabItem[] }
 
 /** Why the kebab menu's version-control actions are disabled, if at all. */
@@ -207,6 +217,14 @@ const menuDisabledReason = computed(() => {
   if (!props.committed) return 'Commit the changes first'
   return undefined
 })
+
+function itemDisabled(item: KebabItem): boolean {
+  return item.disabled ?? !!menuDisabledReason.value
+}
+
+function itemReason(item: KebabItem): string | undefined {
+  return item.disabledReason ?? menuDisabledReason.value
+}
 
 const menuGroups = computed(() => {
   const versionControlItems: KebabItem[] = [
@@ -230,6 +248,32 @@ const menuGroups = computed(() => {
   }
 
   const groups: MenuGroup[] = [{ label: 'Duplicate', divider: false, items: versionControlItems }]
+
+  if (props.hasPayloadEditor) {
+    groups.push({
+      label: 'Payload',
+      divider: true,
+      items: [
+        {
+          title: props.payloadFileType
+            ? `Import ${props.payloadFileType} File...`
+            : 'Import File...',
+          icon: 'mdi-import',
+          onClick: () => emit('import-payload'),
+          disabled: props.readOnly,
+          disabledReason: props.readOnly ? readOnlyReason : undefined,
+        },
+        {
+          title: props.payloadFileType
+            ? `Export to ${props.payloadFileType} File`
+            : 'Export to File',
+          icon: 'mdi-download',
+          onClick: () => emit('export-payload'),
+          disabled: false,
+        },
+      ],
+    })
+  }
 
   if (currentMode.value) {
     const modeId = currentMode.value.id

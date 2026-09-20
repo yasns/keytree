@@ -22,11 +22,15 @@
       :committed="!pending"
       :read-only="readOnly"
       :validation-errors="validationErrors"
+      has-payload-editor
+      :payload-file-type="payloadFileType"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="resetToBaseline"
       @fork="fork"
       @copy-to="copyTo"
+      @export-payload="exportPayload"
+      @import-payload="importPayload"
     ></KeyToolbar>
 
     <ReadOnlyAlert v-if="readOnly"></ReadOnlyAlert>
@@ -233,6 +237,33 @@ async function copyTo(targetMode: string, comment: string) {
   await changes.copyTo({ ...baseEdit(comment), target_mode_name: targetMode })
   resetToBaseline()
   await navigateToStaged(subsystem, name, targetMode, `Copied to mode "${targetMode}"`)
+}
+
+const payloadExtensions: Record<string, string[]> = { yaml: ['yaml', 'yml'], xml: ['xml'] }
+const currentExts = computed(() => payloadExtensions[languageFor(category)])
+const payloadFileType = computed(() => currentExts.value?.[0]?.toUpperCase())
+
+function exportPayload() {
+  if (!editor) return
+  const ext = currentExts.value?.[0]
+  const blob = new Blob([editor.getValue()], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${subsystem}_${name}_${mode}_v${version}${ext ? `.${ext}` : ''}`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function importPayload() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  if (currentExts.value) input.accept = currentExts.value.map((e) => `.${e}`).join(',')
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (file && editor) editor.setValue(await file.text())
+  }
+  input.click()
 }
 
 onBeforeUnmount(() => {
