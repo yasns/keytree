@@ -40,6 +40,21 @@
                 archivalPending ? (archived ? 'archive pending' : 'unarchive pending') : 'archived'
               }}</v-chip
             >
+            <v-chip
+              v-if="decommissioned || decommissionPending"
+              size="small"
+              density="compact"
+              label
+              variant="tonal"
+              :color="decommissionPending ? 'warning' : 'error'"
+              >{{
+                decommissionPending
+                  ? decommissioned
+                    ? 'decommission pending'
+                    : 'recommission pending'
+                  : 'decommissioned'
+              }}</v-chip
+            >
           </div>
           <div
             v-if="hasDetail"
@@ -122,6 +137,18 @@
 
             <span class="font-weight-medium">Archived by:</span>
             <span>{{ archivedByText }}</span>
+          </div>
+        </template>
+
+        <template v-if="decommissioned">
+          <v-divider class="my-2"></v-divider>
+
+          <div class="meta-grid">
+            <span class="font-weight-medium">Decommissioned at:</span>
+            <span>{{ decommissionedAtText }}</span>
+
+            <span class="font-weight-medium">Decommissioned by:</span>
+            <span>{{ decommissionedByText }}</span>
           </div>
         </template>
 
@@ -244,20 +271,31 @@ const isLatest = computed(() => {
   return latest === undefined ? undefined : latest === props.version
 })
 
+function formatAt(at: string | null | undefined): string {
+  return at ? new Date(at).toLocaleString(LOCALE) : ''
+}
+
+function formatBy(by: string | null | undefined, displayName: string | null | undefined): string {
+  return by ? (displayName ? `${displayName} (${by})` : by) : ''
+}
+
 const archived = useIsArchived(currentMode)
 const archivalPending = computed(
   () => !!currentMode.value && !!changes.stagedArchival(currentMode.value.id),
 )
-const archivedAtText = computed(() => {
-  const at = currentMode.value?.archived_at
-  return at ? new Date(at).toLocaleString(LOCALE) : ''
-})
-const archivedByText = computed(() => {
-  const by = currentMode.value?.archived_by
-  if (!by) return ''
-  const displayName = currentMode.value?.archived_by_display_name
-  return displayName ? `${displayName} (${by})` : by
-})
+const archivedAtText = computed(() => formatAt(currentMode.value?.archived_at))
+const archivedByText = computed(() =>
+  formatBy(currentMode.value?.archived_by, currentMode.value?.archived_by_display_name),
+)
+
+const decommissioned = computed(() => !!props.payload && changes.decommissioned(props.payload))
+const decommissionPending = computed(
+  () => !!props.payload && !!changes.stagedDecommission(props.payload.id),
+)
+const decommissionedAtText = computed(() => formatAt(props.payload?.decommissioned_at))
+const decommissionedByText = computed(() =>
+  formatBy(props.payload?.decommissioned_by, props.payload?.decommissioned_by_display_name),
+)
 
 const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
 

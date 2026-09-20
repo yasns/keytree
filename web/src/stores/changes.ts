@@ -7,6 +7,7 @@ type ChangesetOut = components['schemas']['ChangesetOut']
 type StagedEditIn = components['schemas']['StagedEditIn']
 type StagedEditOut = components['schemas']['StagedEditOut']
 type StagedArchivalOut = components['schemas']['StagedArchivalOut']
+type StagedDecommissionOut = components['schemas']['StagedDecommissionOut']
 type ForkIn = components['schemas']['ForkIn']
 type CopyIn = components['schemas']['CopyIn']
 export type Conflict = components['schemas']['ConflictOut']
@@ -66,11 +67,14 @@ export const useChangesStore = defineStore('changes', () => {
 
   const edits = computed(() => changeset.value?.edits ?? [])
   const archivals = computed(() => changeset.value?.archivals ?? [])
+  const decommissions = computed(() => changeset.value?.decommissions ?? [])
 
   // Hide external leaf edits
   const visibleEdits = computed(() => edits.value.filter((e) => e.category !== 'external'))
 
-  const pendingCount = computed(() => visibleEdits.value.length + archivals.value.length)
+  const pendingCount = computed(
+    () => visibleEdits.value.length + archivals.value.length + decommissions.value.length,
+  )
 
   async function load() {
     changeset.value = unwrap(await api.GET('/api/staging/'))
@@ -125,6 +129,20 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = unwrap(await api.POST('/api/staging/archive', { body: { mode_id: modeId } }))
   }
 
+  function stagedDecommission(keyId: number): StagedDecommissionOut | undefined {
+    return decommissions.value.find((d) => d.key_id === keyId)
+  }
+
+  function decommissioned(key: { id: number; decommissioned_at: string | null }): boolean {
+    return stagedDecommission(key.id)?.decommissioned ?? key.decommissioned_at !== null
+  }
+
+  async function toggleDecommission(keyId: number) {
+    changeset.value = unwrap(
+      await api.POST('/api/staging/decommission', { body: { key_id: keyId } }),
+    )
+  }
+
   async function stage(newEdits: StagedEditIn[]) {
     changeset.value = unwrap(await api.POST('/api/staging/', { body: newEdits }))
   }
@@ -159,6 +177,7 @@ export const useChangesStore = defineStore('changes', () => {
   return {
     visibleEdits,
     archivals,
+    decommissions,
     pendingCount,
     load,
     stagedFor,
@@ -168,6 +187,9 @@ export const useChangesStore = defineStore('changes', () => {
     stagedArchival,
     archived,
     toggleArchival,
+    stagedDecommission,
+    decommissioned,
+    toggleDecommission,
     stage,
     fork,
     copyTo,

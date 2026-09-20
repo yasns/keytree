@@ -6,7 +6,17 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import AppUser, Changeset, Key, Mode, Node, StagedArchival, StagedEdit, Subsystem
+from app.db.models import (
+    AppUser,
+    Changeset,
+    Key,
+    Mode,
+    Node,
+    StagedArchival,
+    StagedDecommission,
+    StagedEdit,
+    Subsystem,
+)
 from app.routers.commit import (
     _build_key_children,
     _build_keys,
@@ -17,6 +27,7 @@ from app.routers.commit import (
 from app.routers.staging import (
     ProposedChildOut,
     StagedArchivalOut,
+    StagedDecommissionOut,
     StagedEditIn,
     _build_changeset,
     _get_or_create_open_changeset,
@@ -62,6 +73,9 @@ def test_build_changeset_assembles_edits_and_ripple():
     archival = StagedArchival(changeset_id=7, mode_id=120, archived=True)
     archival_rows = [(archival, "cms_run", "conf", "retired")]
 
+    decommission = StagedDecommission(changeset_id=7, key_id=42, decommissioned=True)
+    decommission_rows = [(decommission, "cms_run", "conf", "default", 3, "cms_run/conf/default/v3")]
+
     out = _build_changeset(
         changeset,
         rows,
@@ -71,6 +85,7 @@ def test_build_changeset_assembles_edits_and_ripple():
             )
         },
         archival_rows,
+        decommission_rows,
     )
 
     assert out.id == 7
@@ -84,6 +99,18 @@ def test_build_changeset_assembles_edits_and_ripple():
             node_name="conf",
             mode_name="retired",
             archived=True,
+        )
+    ]
+
+    assert out.decommissions == [
+        StagedDecommissionOut(
+            key_id=42,
+            subsystem_name="cms_run",
+            node_name="conf",
+            mode_name="default",
+            version=3,
+            label="cms_run/conf/default/v3",
+            decommissioned=True,
         )
     ]
 
@@ -118,7 +145,7 @@ def test_build_changeset_handles_a_fork_with_no_base_key():
 
     rows = [(fork_edit, "cms_run", "clock_source", "collisions2026", None, "external")]
 
-    out = _build_changeset(changeset, rows, {}, [])
+    out = _build_changeset(changeset, rows, {}, [], [])
 
     assert out.edits[0].base_version is None
     assert out.edits[0].expected_version == 1
@@ -149,6 +176,7 @@ def test_build_changeset_reports_the_fork_source():
             )
         },
         [],
+        [],
     )
 
     assert out.edits[0].copied_from == ProposedChildOut(
@@ -166,7 +194,7 @@ def _fresh_mode_row() -> _CommitRow:
         expected_version=1,
         proposed_payload="x",
     )
-    return _CommitRow(edit, "cms_run", "clock_source", "collisions2026", 10, None, 0)
+    return _CommitRow(edit, "cms_run", "clock_source", "collisions2026", None, 10, None, 0)
 
 
 def test_build_keys_lands_on_v1_for_a_fresh_mode():
@@ -289,9 +317,9 @@ def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
 
     rows = [
         # base v1, targets v4, mode still on v3: fine
-        _CommitRow(promoting_edit, "cms_run", "clock_source", "default", 10, 1, 3),
+        _CommitRow(promoting_edit, "cms_run", "clock_source", "default", None, 10, 1, 3),
         # targeted v2, tip moved to v2 since: conflict
-        _CommitRow(taken_edit, "cms_run", "conf", "default", 11, 1, 2),
+        _CommitRow(taken_edit, "cms_run", "conf", "default", None, 11, 1, 2),
     ]
 
     conflicts = _conflicts(rows)
@@ -316,7 +344,7 @@ def test_build_keys_lands_on_the_tip_not_the_base():
     )
     changeset = Changeset(id=7, created_by="jdoe")
 
-    rows = [_CommitRow(edit, "cms_run", "clock_source", "default", 10, 1, 3)]
+    rows = [_CommitRow(edit, "cms_run", "clock_source", "default", None, 10, 1, 3)]
 
     keys = _build_keys(rows, changeset)
 
@@ -341,7 +369,7 @@ def test_rebased_edits_move_the_base_and_keep_the_proposal():
     )
 
     rebased = _rebased_edits(
-        [_CommitRow(edit, "cms_run", "conf", "default", 11, 1, 2)], tip_keys={119: (60, 2)}
+        [_CommitRow(edit, "cms_run", "conf", "default", None, 11, 1, 2)], tip_keys={119: (60, 2)}
     )
 
     assert len(rebased) == 1
@@ -365,7 +393,7 @@ def test_build_key_children_resolves_none_to_same_changeset_key():
         base_key_id=5,
         proposed_children={"clock_source": None, "other_child": 9},
     )
-    rows = [_CommitRow(edit, "cms_run", "conf", "default", 11, 1, 1)]
+    rows = [_CommitRow(edit, "cms_run", "conf", "default", None, 11, 1, 1)]
 
     children = _build_key_children(
         rows,
@@ -387,7 +415,7 @@ def test_build_key_children_raises_when_none_has_no_target():
     edit = StagedEdit(
         id=1, changeset_id=7, mode_id=1, base_key_id=5, proposed_children={"clock_source": None}
     )
-    rows = [_CommitRow(edit, "cms_run", "conf", "default", 11, 1, 1)]
+    rows = [_CommitRow(edit, "cms_run", "conf", "default", None, 11, 1, 1)]
 
     with pytest.raises(HTTPException) as exc_info:
         _ = _build_key_children(
@@ -412,8 +440,8 @@ def test_build_key_children_keys_parent_by_mode_not_node():
         id=2, changeset_id=7, mode_id=2, base_key_id=6, proposed_children={"b": 9}
     )
     rows = [
-        _CommitRow(default_edit, "cms_run", "conf", "default", 11, 1, 1),
-        _CommitRow(algo_edit, "cms_run", "conf", "algo", 11, 3, 3),
+        _CommitRow(default_edit, "cms_run", "conf", "default", None, 11, 1, 1),
+        _CommitRow(algo_edit, "cms_run", "conf", "algo", None, 11, 3, 3),
     ]
 
     children = _build_key_children(
@@ -433,7 +461,7 @@ def test_build_key_children_raises_on_unknown_concrete_key_id():
     edit = StagedEdit(
         id=1, changeset_id=7, mode_id=1, base_key_id=5, proposed_children={"clock_source": 999}
     )
-    rows = [_CommitRow(edit, "cms_run", "conf", "default", 11, 1, 1)]
+    rows = [_CommitRow(edit, "cms_run", "conf", "default", None, 11, 1, 1)]
 
     with pytest.raises(HTTPException) as exc_info:
         _ = _build_key_children(

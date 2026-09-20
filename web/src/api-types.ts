@@ -153,6 +153,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/staging/decommission": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Decommission
+         * @description Stages a key's decommission/recommission; a second toggle cancels.
+         */
+        post: operations["toggle_decommission_api_staging_decommission_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/staging/fork": {
         parameters: {
             query?: never;
@@ -480,6 +500,8 @@ export interface components {
             edits: components["schemas"]["StagedEditOut"][];
             /** Archivals */
             archivals: components["schemas"]["StagedArchivalOut"][];
+            /** Decommissions */
+            decommissions: components["schemas"]["StagedDecommissionOut"][];
         };
         /** CommitIn */
         CommitIn: {
@@ -533,6 +555,11 @@ export interface components {
             validation_status: "skipped" | "passed" | "failed";
             /** Target Mode Name */
             target_mode_name: string;
+        };
+        /** DecommissionIn */
+        DecommissionIn: {
+            /** Key Id */
+            key_id: number;
         };
         /** ForkIn */
         ForkIn: {
@@ -633,6 +660,14 @@ export interface components {
             comment: string;
             /** Validation Status */
             validation_status: string;
+            /** Decommissioned At */
+            decommissioned_at: string | null;
+            /** Decommissioned By */
+            decommissioned_by: string | null;
+            /** Decommissioned By Display Name */
+            decommissioned_by_display_name: string | null;
+            /** Retired Descendants */
+            retired_descendants: components["schemas"]["RetiredRefOut"][];
             based_on: components["schemas"]["KeyRefOut"] | null;
         };
         /** KeyRefOut */
@@ -669,6 +704,8 @@ export interface components {
             archived_at: string | null;
             /** Versions */
             versions: number[];
+            /** Decommissioned Versions */
+            decommissioned_versions: number[];
         };
         /** NodeOut */
         NodeOut: {
@@ -696,6 +733,16 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** RetiredRefOut */
+        RetiredRefOut: {
+            /** Label */
+            label: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "decommissioned" | "mode_archived";
+        };
         /** StagedArchivalOut */
         StagedArchivalOut: {
             /** Mode Id */
@@ -708,6 +755,23 @@ export interface components {
             mode_name: string;
             /** Archived */
             archived: boolean;
+        };
+        /** StagedDecommissionOut */
+        StagedDecommissionOut: {
+            /** Key Id */
+            key_id: number;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Node Name */
+            node_name: string;
+            /** Mode Name */
+            mode_name: string;
+            /** Version */
+            version: number;
+            /** Label */
+            label: string;
+            /** Decommissioned */
+            decommissioned: boolean;
         };
         /** StagedEditIn */
         StagedEditIn: {
@@ -1099,6 +1163,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ArchivalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_decommission_api_staging_decommission_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecommissionIn"];
             };
         };
         responses: {

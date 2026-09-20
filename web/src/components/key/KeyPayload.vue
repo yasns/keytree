@@ -10,6 +10,13 @@
       :pending="pending"
     ></KeyMetadata>
 
+    <div v-if="readOnly" class="flex-shrink-0">
+      <ReadOnlyAlert :reason="readOnlyText"></ReadOnlyAlert>
+    </div>
+    <div v-if="key?.retired_descendants.length" class="flex-shrink-0">
+      <RetiredDescendantsAlert :refs="key.retired_descendants"></RetiredDescendantsAlert>
+    </div>
+
     <KeyToolbar
       :dirty="dirty"
       :staged="!!staged"
@@ -21,6 +28,7 @@
       :version="version"
       :committed="!pending"
       :read-only="readOnly"
+      :payload="key"
       :validation-errors="validationErrors"
       has-payload-editor
       :payload-file-type="payloadFileType"
@@ -33,8 +41,6 @@
       @import-payload="importPayload"
     ></KeyToolbar>
 
-    <ReadOnlyAlert v-if="readOnly"></ReadOnlyAlert>
-
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
   </div>
 </template>
@@ -44,13 +50,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as monaco from 'monaco-editor'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
-import { useReadOnly } from '@/composables/useReadOnly'
+import { useKeyReadOnly } from '@/composables/useReadOnly'
+import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { useMonacoTheme, createPayloadModel, formatMarkers } from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
+import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
 
 const {
   subsystem,
@@ -84,10 +92,18 @@ const nav = useNavStore()
 const changes = useChangesStore()
 const { navigateToStaged, showStaged } = useStagedNavigation()
 
-const readOnly = useReadOnly(() => subsystem)
-
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
+const modes = useModesByPath(
+  computed(() => subsystem),
+  computed(() => name),
+)
+const currentMode = useCurrentMode(
+  modes,
+  computed(() => mode),
+)
+const archived = useIsArchived(currentMode)
+const { readOnly, readOnlyText } = useKeyReadOnly(() => subsystem, key, archived)
 const dirty = ref(false)
 // Always the rightmost column, so nothing is ever deeper than it
 useDirtySource(dirty, Infinity)

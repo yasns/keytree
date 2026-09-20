@@ -142,6 +142,7 @@ import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useClearPending } from '@/composables/usePendingNode'
+import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
 
 type ModeOut = components['schemas']['ModeOut']
@@ -207,18 +208,18 @@ function selectedVersion(mode: ModeOut) {
 }
 
 function defaultVersion(mode: ModeOut): number | undefined {
-  return mode.versions[0] ?? pendingVersion(mode)
+  return goodTip(mode) ?? pendingVersion(mode)
 }
 
 function defaultTarget(mode: ModeOut): VersionTarget | undefined {
-  if (mode.versions.length) return mode.versions[0]
+  if (mode.versions.length) return goodTip(mode)
   return pendingVersion(mode) !== undefined ? 'pending' : undefined
 }
 
 function versionOptions(mode: ModeOut): { version: VersionTarget; label: string }[] {
   const committed = mode.versions.map((v, i) => ({
     version: v,
-    label: i === 0 ? `v${v} (latest)` : `v${v}`,
+    label: versionLabel(mode, v, i === 0),
   }))
   const pending = pendingVersion(mode)
   return pending === undefined

@@ -31,6 +31,8 @@ class ModeOut(BaseModel):
     """None while active."""
     versions: list[int]
     """Newest first."""
+    decommissioned_versions: list[int]
+    """Subset of `versions` that are decommissioned."""
 
     model_config = {"from_attributes": True}
 
@@ -55,8 +57,11 @@ def _build_node_detail(
     display_names: dict[str, str],
 ) -> NodeOut:
     versions_by_mode: dict[int, list[int]] = {}
+    decommissioned_versions_by_mode: dict[int, list[int]] = {}
     for key in keys:
         versions_by_mode.setdefault(key.mode_id, []).append(key.version)
+        if key.decommissioned_at is not None:
+            decommissioned_versions_by_mode.setdefault(key.mode_id, []).append(key.version)
     for versions in versions_by_mode.values():
         versions.sort(reverse=True)
 
@@ -80,6 +85,7 @@ def _build_node_detail(
                 ),
                 archived_at=mode.archived_at,
                 versions=versions_by_mode.get(mode.id, []),
+                decommissioned_versions=decommissioned_versions_by_mode.get(mode.id, []),
             )
             for mode in sorted(modes, key=lambda m: m.id)
         ],
