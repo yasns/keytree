@@ -51,6 +51,7 @@
         </template>
         <v-list density="compact">
           <template v-if="subsystem && name && mode">
+            <v-list-subheader>Compare</v-list-subheader>
             <v-list-item
               title="Compare with..."
               prepend-icon="mdi-compare-horizontal"
@@ -61,6 +62,7 @@
 
           <template v-for="group in menuGroups" :key="group.label">
             <v-divider v-if="group.divider"></v-divider>
+            <v-list-subheader>{{ group.label }}</v-list-subheader>
             <v-tooltip
               v-for="item in group.items"
               :key="item.title"
@@ -140,11 +142,14 @@ import ForkModeDialog from '../dialog/ForkModeDialog.vue'
 import CopyToModeDialog from '../dialog/CopyToModeDialog.vue'
 import CompareDialog from '../dialog/CompareDialog.vue'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
-import { readOnlyReason } from '@/composables/useReadOnly'
+import { readOnlyReason, useIsDecommissioned, useReadOnly } from '@/composables/useReadOnly'
 import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { keyRoute, withDiffQuery, type DiffTarget } from '@/router'
+import type { components } from '@/api-types'
 import ReadOnlyTooltip from './ReadOnlyTooltip.vue'
+
+type KeyOut = components['schemas']['KeyOut']
 
 const props = withDefaults(
   defineProps<{
@@ -160,6 +165,7 @@ const props = withDefaults(
     readOnly?: boolean
     /** Live Monaco marker messages for this key's own payload editor; undefined where not applicable. */
     validationErrors?: string[]
+    payload?: KeyOut
     hasPayloadEditor?: boolean
     payloadFileType?: string
   }>(),
@@ -189,6 +195,8 @@ const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
 
 const currentMode = useCurrentMode(modes, toRef(props, 'mode'))
 const archived = useIsArchived(currentMode)
+const decommissioned = useIsDecommissioned(toRef(props, 'payload'))
+const authReadOnly = useReadOnly(() => props.subsystem ?? '')
 const isOldVersion = computed(() => {
   const versions = currentMode.value?.versions
   return props.committed && !!versions?.length && props.version !== versions[0]
@@ -208,22 +216,25 @@ type KebabItem = {
   onClick: () => void
   disabled?: boolean
   disabledReason?: string
+  ignoreGroupDisabled?: boolean
 }
 type MenuGroup = { label: string; divider: boolean; items: KebabItem[] }
 
-/** Why the kebab menu's version-control actions are disabled, if at all. */
 const menuDisabledReason = computed(() => {
-  if (props.readOnly) return readOnlyReason
+  if (authReadOnly.value) return readOnlyReason
   if (!props.committed) return 'Commit the changes first'
   return undefined
 })
 
 function itemDisabled(item: KebabItem): boolean {
-  return item.disabled ?? !!menuDisabledReason.value
+  if (item.ignoreGroupDisabled) return !!item.disabled
+  return !!item.disabled || !!menuDisabledReason.value
 }
 
 function itemReason(item: KebabItem): string | undefined {
-  return item.disabledReason ?? menuDisabledReason.value
+  if (item.disabled) return item.disabledReason
+  if (item.ignoreGroupDisabled) return undefined
+  return menuDisabledReason.value
 }
 
 const menuGroups = computed(() => {
@@ -238,20 +249,20 @@ const menuGroups = computed(() => {
       icon: 'mdi-source-pull',
       onClick: () => (copyDialog.value = true),
     },
-  ]
-  if (isOldVersion.value) {
-    versionControlItems.push({
+    {
       title: 'Copy to Latest Version...',
       icon: 'mdi-update',
       onClick: () => (copyLatestDialog.value = true),
-    })
-  }
+      disabled: !isOldVersion.value,
+      disabledReason: isOldVersion.value ? undefined : 'Already at the latest version',
+    },
+  ]
 
   const groups: MenuGroup[] = [{ label: 'Duplicate', divider: false, items: versionControlItems }]
 
   if (props.hasPayloadEditor) {
     groups.push({
-      label: 'Payload',
+      label: 'File',
       divider: true,
       items: [
         {
@@ -269,25 +280,31 @@ const menuGroups = computed(() => {
             : 'Export to File',
           icon: 'mdi-download',
           onClick: () => emit('export-payload'),
-          disabled: false,
+          ignoreGroupDisabled: true,
         },
       ],
     })
   }
 
+  const lifecycleItems: KebabItem[] = []
+  if (props.payload) {
+    const payload = props.payload
+    lifecycleItems.push({
+      title: decommissioned.value ? 'Recommission Key' : 'Decommission Key',
+      icon: decommissioned.value ? 'mdi-key-plus' : 'mdi-key-remove',
+      onClick: () => void changes.toggleDecommission(payload.id),
+    })
+  }
   if (currentMode.value) {
     const modeId = currentMode.value.id
-    groups.push({
-      label: 'Mode',
-      divider: true,
-      items: [
-        {
-          title: archived.value ? 'Unarchive Mode' : 'Archive Mode',
-          icon: archived.value ? 'mdi-archive-off-outline' : 'mdi-archive-outline',
-          onClick: () => void changes.toggleArchival(modeId),
-        },
-      ],
+    lifecycleItems.push({
+      title: archived.value ? 'Unarchive Mode' : 'Archive Mode',
+      icon: archived.value ? 'mdi-archive-off-outline' : 'mdi-archive-outline',
+      onClick: () => void changes.toggleArchival(modeId),
     })
+  }
+  if (lifecycleItems.length) {
+    groups.push({ label: 'Lifecycle', divider: true, items: lifecycleItems })
   }
 
   return groups

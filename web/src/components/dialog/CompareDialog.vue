@@ -61,6 +61,7 @@
 import { computed, ref, toRef, watch } from 'vue'
 import { useModesByPath } from '@/composables/useModes'
 import { useChangesStore } from '@/stores/changes'
+import { versionLabel } from '@/mode'
 import type { DiffTarget, VersionTarget } from '@/router'
 import FormDialog from './FormDialog.vue'
 
@@ -97,7 +98,7 @@ const versionItems = computed<{ title: string; value: VersionTarget; plain: stri
   const mode = modes.value.find((m) => m.name === selectedMode.value)
   if (!mode) return []
   const items = mode.versions.map((v, i) => ({
-    title: i === 0 ? `v${v} (latest)` : `v${v}`,
+    title: versionLabel(mode, v, i === 0),
     value: v as VersionTarget,
     plain: `v${v}`,
   }))

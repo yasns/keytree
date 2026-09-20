@@ -142,6 +142,14 @@ class Key(Base):
 
     validation_status: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    decommissioned_by: Mapped[str | None] = mapped_column(
+        ForeignKey("app_user.cern_login"), nullable=True
+    )
+
+    decommissioned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(["mode_id", "node_id"], ["mode.id", "mode.node_id"]),
         UniqueConstraint("mode_id", "version"),
@@ -153,6 +161,10 @@ class Key(Base):
         CheckConstraint("version > 0", name="version_positive"),
         CheckConstraint(
             "validation_status IN ('skipped', 'passed', 'failed')", name="validation_status_enum"
+        ),
+        CheckConstraint(
+            "(decommissioned_at IS NULL) = (decommissioned_by IS NULL)",
+            name="decommission_complete",
         ),
     )
 
@@ -258,6 +270,18 @@ class StagedArchival(Base):
     mode_id: Mapped[int] = mapped_column(ForeignKey("mode.id"), primary_key=True)
 
     archived: Mapped[bool] = mapped_column(nullable=False)
+
+
+class StagedDecommission(Base):
+    __tablename__: str = "staged_decommission"
+
+    changeset_id: Mapped[int] = mapped_column(
+        ForeignKey("changeset.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    key_id: Mapped[int] = mapped_column(ForeignKey("key.id"), primary_key=True)
+
+    decommissioned: Mapped[bool] = mapped_column(nullable=False)
 
 
 class AppUser(Base):

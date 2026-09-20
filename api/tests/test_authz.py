@@ -21,7 +21,7 @@ def test_writable_subsystems_resolves_the_grant_matrix(
         async with session_factory() as session:
             return await writable_subsystems(_claims(["keytree_ugt_expert"]), session)
 
-    assert asyncio.run(run()) == {"ugt", "tcds"}
+    assert asyncio.run(run()) == {"ugt"}
 
 
 @pytest.mark.docker

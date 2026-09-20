@@ -11,7 +11,16 @@ from tsgauth.fastapi import JWTBearerClaims
 
 from app.authz import require_writable
 from app.db.base import SessionDep
-from app.db.models import Changeset, Key, Mode, Node, StagedArchival, StagedEdit, Subsystem
+from app.db.models import (
+    Changeset,
+    Key,
+    Mode,
+    Node,
+    StagedArchival,
+    StagedDecommission,
+    StagedEdit,
+    Subsystem,
+)
 from app.routers.keys import key_or_404, keys_by_locator
 from app.routers.user import upsert_app_user
 
@@ -53,6 +62,10 @@ class ArchivalIn(BaseModel):
     mode_id: int
 
 
+class DecommissionIn(BaseModel):
+    key_id: int
+
+
 class ProposedChildOut(BaseModel):
     key_id: int
     mode_name: str
@@ -87,16 +100,28 @@ class StagedArchivalOut(BaseModel):
     archived: bool
 
 
+class StagedDecommissionOut(BaseModel):
+    key_id: int
+    subsystem_name: str
+    node_name: str
+    mode_name: str
+    version: int
+    label: str
+    decommissioned: bool
+
+
 class ChangesetOut(BaseModel):
     id: int
     created_by: str
     created_at: datetime
     edits: list[StagedEditOut]
     archivals: list[StagedArchivalOut]
+    decommissions: list[StagedDecommissionOut]
 
 
 _EditRow = tuple[StagedEdit, str, str, str, int | None, str | None]
 _ArchivalRow = tuple[StagedArchival, str, str, str]
+_DecommissionRow = tuple[StagedDecommission, str, str, str, int, str]
 
 
 def _build_children(
@@ -115,6 +140,7 @@ def _build_changeset(
     rows: list[_EditRow],
     child_modes: dict[int, ProposedChildOut],
     archival_rows: list[_ArchivalRow],
+    decommission_rows: list[_DecommissionRow],
 ) -> ChangesetOut:
     return ChangesetOut(
         id=changeset.id,
@@ -129,6 +155,20 @@ def _build_changeset(
                 archived=archival.archived,
             )
             for archival, subsystem_name, node_name, mode_name in archival_rows
+        ],
+        decommissions=[
+            StagedDecommissionOut(
+                key_id=decommission.key_id,
+                subsystem_name=subsystem_name,
+                node_name=node_name,
+                mode_name=mode_name,
+                version=version,
+                label=label,
+                decommissioned=decommission.decommissioned,
+            )
+            for decommission, subsystem_name, node_name, mode_name, version, label in (
+                decommission_rows
+            )
         ],
         edits=[
             StagedEditOut(
@@ -234,10 +274,69 @@ async def _archival_rows(changeset_id: int, session: SessionDep) -> list[_Archiv
     return list(rows.tuples())
 
 
+async def _decommission_rows(changeset_id: int, session: SessionDep) -> list[_DecommissionRow]:
+    rows = await session.execute(
+        join_mode_names(
+            select(
+                StagedDecommission, Subsystem.name, Node.name, Mode.name, Key.version, Key.label
+            ).join(Key, Key.id == StagedDecommission.key_id),
+            Key.mode_id,
+        ).where(StagedDecommission.changeset_id == changeset_id)
+    )
+    return list(rows.tuples())
+
+
+async def decommissioned_labels(
+    key_ids: set[int], changeset_id: int, session: SessionDep
+) -> list[str]:
+    """Labels effectively decommissioned, own-changeset staged toggle overriding committed state."""
+    if not key_ids:
+        return []
+    rows = await session.execute(
+        select(Key.label, Key.decommissioned_at, StagedDecommission.decommissioned)
+        .outerjoin(
+            StagedDecommission,
+            (StagedDecommission.changeset_id == changeset_id)
+            & (StagedDecommission.key_id == Key.id),
+        )
+        .where(Key.id.in_(key_ids))
+    )
+    labels = []
+    for label, decommissioned_at, staged in rows.tuples():
+        if staged if staged is not None else decommissioned_at is not None:
+            labels.append(label)
+    return labels
+
+
+async def archived_labels(mode_ids: set[int], changeset_id: int, session: SessionDep) -> list[str]:
+    """Labels effectively archived, own-changeset staged toggle overriding committed state."""
+    if not mode_ids:
+        return []
+    rows = await session.execute(
+        select(Subsystem.name, Node.name, Mode.name, Mode.archived_at, StagedArchival.archived)
+        .select_from(Mode)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .outerjoin(
+            StagedArchival,
+            (StagedArchival.changeset_id == changeset_id) & (StagedArchival.mode_id == Mode.id),
+        )
+        .where(Mode.id.in_(mode_ids))
+    )
+    labels = []
+    for subsystem_name, node_name, mode_name, archived_at, staged in rows.tuples():
+        if staged if staged is not None else archived_at is not None:
+            labels.append(f"{subsystem_name}/{node_name}/{mode_name}")
+    return labels
+
+
 async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetOut:
     rows = await _edit_rows(changeset.id, session)
     archival_rows = await _archival_rows(changeset.id, session)
-    return _build_changeset(changeset, rows, await _child_modes(rows, session), archival_rows)
+    decommission_rows = await _decommission_rows(changeset.id, session)
+    return _build_changeset(
+        changeset, rows, await _child_modes(rows, session), archival_rows, decommission_rows
+    )
 
 
 async def _tip_keys(mode_ids: set[int], session: SessionDep) -> dict[int, tuple[int, int]]:
@@ -333,6 +432,21 @@ async def stage_edits(
 
     bases = await _resolve_bases(edits, changeset.id, session)
 
+    check_ids = {base.base_key_id for base in bases if base.base_key_id is not None}
+    for edit_in in edits:
+        check_ids |= {v for v in (edit_in.proposed_children or {}).values() if v is not None}
+    if decommissioned := await decommissioned_labels(check_ids, changeset.id, session):
+        raise HTTPException(
+            status_code=400,
+            detail=f"cannot use decommissioned key(s): {', '.join(sorted(decommissioned))}",
+        )
+
+    if archived := await archived_labels({base.mode_id for base in bases}, changeset.id, session):
+        raise HTTPException(
+            status_code=400,
+            detail=f"cannot edit archived mode(s): {', '.join(sorted(archived))}",
+        )
+
     _ = await session.execute(
         delete(StagedEdit).where(
             StagedEdit.changeset_id == changeset.id,
@@ -391,6 +505,48 @@ async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDe
                 changeset_id=changeset.id,
                 mode_id=body.mode_id,
                 archived=mode.archived_at is None,
+            )
+        )
+
+    await session.commit()
+    return await changeset_out(changeset, session)
+
+
+@router.post("/decommission")
+async def toggle_decommission(
+    body: DecommissionIn, request: Request, session: SessionDep
+) -> ChangesetOut:
+    """Stages a key's decommission/recommission; a second toggle cancels."""
+    claims = request.state.claims
+    cern_login = claims["cern_upn"]
+    await upsert_app_user(claims, session)
+
+    key_row = (
+        await session.execute(
+            select(Key, Subsystem.name)
+            .join(Mode, Mode.id == Key.mode_id)
+            .join(Node, Node.id == Mode.node_id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(Key.id == body.key_id)
+        )
+    ).first()
+    if key_row is None:
+        raise HTTPException(status_code=404, detail="key not found")
+    key, subsystem_name = key_row
+
+    await require_writable({subsystem_name}, claims, session)
+
+    changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    existing = await session.get(StagedDecommission, (changeset.id, body.key_id))
+    if existing is not None:
+        await session.delete(existing)
+    else:
+        session.add(
+            StagedDecommission(
+                changeset_id=changeset.id,
+                key_id=body.key_id,
+                decommissioned=key.decommissioned_at is None,
             )
         )
 
@@ -465,12 +621,7 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
-    # staged archival on target overrides its committed state
-    staged_archival = await session.get(StagedArchival, (changeset.id, target.id))
-    effective_archived = (
-        staged_archival.archived if staged_archival is not None else target.archived_at is not None
-    )
-    if effective_archived:
+    if await archived_labels({target.id}, changeset.id, session):
         raise HTTPException(status_code=400, detail="target mode is archived")
 
     _ = await session.execute(

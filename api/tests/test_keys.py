@@ -3,13 +3,36 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import Changeset, Key, Mode, Node, StagedEdit, Subsystem
+from app.db.models import (
+    Changeset,
+    Key,
+    Mode,
+    Node,
+    StagedDecommission,
+    StagedEdit,
+    Subsystem,
+)
 from app.routers.commit import CommitIn, commit_changeset
-from app.routers.keys import _build_child_meta, _build_key_detail, search_keys
-from app.routers.staging import StagedEditIn, stage_edits
+from app.routers.keys import (
+    RetiredRefOut,
+    _build_child_meta,
+    _build_key_detail,
+    _retired_descendants,
+    search_keys,
+)
+from app.routers.staging import (
+    ArchivalIn,
+    DecommissionIn,
+    StagedEditIn,
+    discard_changeset,
+    stage_edits,
+    toggle_archival,
+    toggle_decommission,
+)
 from app.routers.user import upsert_app_user
 
 
@@ -68,7 +91,7 @@ def test_build_child_meta_lists_empty_alias_with_null_key():
 
 
 def test_build_key_detail_fills_display_name_and_ancestor():
-    out = _build_key_detail(_key(), "Jane Doe", "default", 3, "ugt/l1_menu/default/v3")
+    out = _build_key_detail(_key(), "Jane Doe", "default", 3, "ugt/l1_menu/default/v3", None, [])
 
     assert out.created_by_display_name == "Jane Doe"
     assert out.based_on is not None
@@ -78,9 +101,30 @@ def test_build_key_detail_fills_display_name_and_ancestor():
 
 
 def test_build_key_detail_has_no_ancestor_without_fork_source_or_prior_version():
-    out = _build_key_detail(_key(), "Jane Doe", None, None, None)
+    out = _build_key_detail(_key(), "Jane Doe", None, None, None, None, [])
 
     assert out.based_on is None
+
+
+def test_build_key_detail_carries_decommission_and_retired_descendants():
+    key = _key()
+    key.decommissioned_by = "jdoe"
+    key.decommissioned_at = datetime(2026, 2, 1, tzinfo=UTC)
+    out = _build_key_detail(
+        key,
+        "Jane Doe",
+        None,
+        None,
+        None,
+        "Jane Doe",
+        [RetiredRefOut(label="ugt/l1_menu/other/v1", reason="mode_archived")],
+    )
+
+    assert out.decommissioned_by == "jdoe"
+    assert out.decommissioned_by_display_name == "Jane Doe"
+    assert out.retired_descendants == [
+        RetiredRefOut(label="ugt/l1_menu/other/v1", reason="mode_archived")
+    ]
 
 
 def _fake_request(cern_login: str) -> SimpleNamespace:
@@ -160,6 +204,353 @@ async def _restage_key(
         )
     async with session_factory() as session:
         await commit_changeset(CommitIn(), request, session)
+
+
+async def _key_id_by_label(session_factory: async_sessionmaker[AsyncSession], label: str) -> int:
+    async with session_factory() as session:
+        key_id = await session.scalar(select(Key.id).where(Key.label == label))
+        assert key_id is not None
+        return key_id
+
+
+async def _mode_id(
+    session_factory: async_sessionmaker[AsyncSession], subsystem: str, node: str, mode_name: str
+) -> int:
+    async with session_factory() as session:
+        mode_id = await session.scalar(
+            select(Mode.id)
+            .join(Node, Node.id == Mode.node_id)
+            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .where(Subsystem.name == subsystem, Node.name == node, Mode.name == mode_name)
+        )
+        assert mode_id is not None
+        return mode_id
+
+
+@pytest.mark.docker
+def test_toggle_decommission_stages_then_cancels_on_a_second_click(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> tuple[bool | None, list]:
+        await _forked_key(
+            session_factory,
+            cern_login="decommission_toggle",
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="decommission_toggle_mode",
+            payload="<menu/>",
+        )
+        key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/decommission_toggle_mode/v1")
+        request = _fake_request("decommission_toggle")
+
+        async with session_factory() as session:
+            staged = await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
+        first_pass = staged.decommissions[0].decommissioned if staged.decommissions else None
+
+        async with session_factory() as session:
+            cancelled = await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
+
+        return first_pass, cancelled.decommissions
+
+    first_pass, decommissions_after_cancel = asyncio.run(run())
+    assert first_pass is True
+    assert decommissions_after_cancel == []
+
+
+@pytest.mark.docker
+def test_committing_a_staged_decommission_updates_the_key(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """decommissioned_by/decommissioned_at clear together on recommission."""
+
+    async def run() -> tuple[str | None, object, str | None, object]:
+        await _forked_key(
+            session_factory,
+            cern_login="decommission_commit",
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="decommission_commit_mode",
+            payload="<menu/>",
+        )
+        key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/decommission_commit_mode/v1")
+        request = _fake_request("decommission_commit")
+
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), request, session)
+        async with session_factory() as session:
+            decommissioned = await session.get(Key, key_id)
+            assert decommissioned is not None
+            after_decommission = (
+                decommissioned.decommissioned_by,
+                decommissioned.decommissioned_at,
+            )
+
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), request, session)
+        async with session_factory() as session:
+            recommissioned = await session.get(Key, key_id)
+            assert recommissioned is not None
+            after_recommission = (
+                recommissioned.decommissioned_by,
+                recommissioned.decommissioned_at,
+            )
+
+        return (*after_decommission, *after_recommission)
+
+    decommissioned_by, decommissioned_at, recommissioned_by, recommissioned_at = asyncio.run(run())
+    assert decommissioned_by == "decommission_commit"
+    assert decommissioned_at is not None
+    assert recommissioned_by is None
+    assert recommissioned_at is None
+
+
+@pytest.mark.docker
+def test_discarding_an_open_changeset_clears_its_staged_decommission(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> int:
+        await _forked_key(
+            session_factory,
+            cern_login="decommission_discard",
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="decommission_discard_mode",
+            payload="<menu/>",
+        )
+        key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/decommission_discard_mode/v1")
+        request = _fake_request("decommission_discard")
+
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
+        async with session_factory() as session:
+            await discard_changeset(request, session)
+        async with session_factory() as session:
+            remaining = (
+                await session.scalars(
+                    select(StagedDecommission).where(StagedDecommission.key_id == key_id)
+                )
+            ).all()
+            return len(remaining)
+
+    assert asyncio.run(run()) == 0
+
+
+@pytest.mark.docker
+def test_staging_rejects_decommissioned_base_and_child_keys(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> tuple[int | None, int | None]:
+        # Distinct logins: a rejected stage_edits leaves an empty changeset that would collide.
+        base_login = "decommission_guard_base"
+        base_request = _fake_request(base_login)
+
+        await _forked_key(
+            session_factory,
+            cern_login=base_login,
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="guard_base_mode",
+            payload="<menu/>",
+        )
+        base_key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/guard_base_mode/v1")
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=base_key_id), base_request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), base_request, session)
+
+        base_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await stage_edits(
+                    [
+                        StagedEditIn(
+                            subsystem_name="ugt",
+                            node_name="l1_menu",
+                            mode_name="guard_base_mode",
+                            base_version=1,
+                            proposed_payload="attempted v2",
+                            comment="should be rejected",
+                        )
+                    ],
+                    base_request,
+                    session,
+                )
+        except HTTPException as e:
+            base_status = e.status_code
+
+        child_login = "decommission_guard_child"
+        child_request = _fake_request(child_login)
+
+        await _forked_key(
+            session_factory,
+            cern_login=child_login,
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="guard_child_source_mode",
+            payload="<menu/>",
+        )
+        source_key_id = await _key_id_by_label(
+            session_factory, "ugt/l1_menu/guard_child_source_mode/v1"
+        )
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=source_key_id), child_request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), child_request, session)
+
+        await _forked_key(
+            session_factory,
+            cern_login=child_login,
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="guard_child_target_mode",
+            payload="<menu/>",
+        )
+
+        child_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await stage_edits(
+                    [
+                        StagedEditIn(
+                            subsystem_name="ugt",
+                            node_name="l1_menu",
+                            mode_name="guard_child_target_mode",
+                            base_version=1,
+                            proposed_children={"decommissioned_child": source_key_id},
+                            comment="should be rejected",
+                        )
+                    ],
+                    child_request,
+                    session,
+                )
+        except HTTPException as e:
+            child_status = e.status_code
+
+        return base_status, child_status
+
+    assert asyncio.run(run()) == (400, 400)
+
+
+@pytest.mark.docker
+def test_staging_rejects_archived_mode_edits(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> tuple[int | None, int | None]:
+        # Distinct logins: a rejected stage_edits leaves an empty changeset that would collide.
+        committed_login = "archive_guard_committed"
+        committed_request = _fake_request(committed_login)
+
+        await _forked_key(
+            session_factory,
+            cern_login=committed_login,
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="guard_archived_mode",
+            payload="<menu/>",
+        )
+        mode_id = await _mode_id(session_factory, "ugt", "l1_menu", "guard_archived_mode")
+        async with session_factory() as session:
+            await toggle_archival(ArchivalIn(mode_id=mode_id), committed_request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), committed_request, session)
+
+        committed_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await stage_edits(
+                    [
+                        StagedEditIn(
+                            subsystem_name="ugt",
+                            node_name="l1_menu",
+                            mode_name="guard_archived_mode",
+                            base_version=1,
+                            proposed_payload="attempted v2",
+                            comment="should be rejected",
+                        )
+                    ],
+                    committed_request,
+                    session,
+                )
+        except HTTPException as e:
+            committed_status = e.status_code
+
+        # Same changeset that staged the archival, not yet committed: effective state still bites.
+        staged_login = "archive_guard_staged"
+        staged_request = _fake_request(staged_login)
+
+        await _forked_key(
+            session_factory,
+            cern_login=staged_login,
+            subsystem="ugt",
+            node="l1_menu",
+            mode_name="guard_self_archived_mode",
+            payload="<menu/>",
+        )
+        self_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", "guard_self_archived_mode")
+        async with session_factory() as session:
+            await toggle_archival(ArchivalIn(mode_id=self_mode_id), staged_request, session)
+
+        staged_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await stage_edits(
+                    [
+                        StagedEditIn(
+                            subsystem_name="ugt",
+                            node_name="l1_menu",
+                            mode_name="guard_self_archived_mode",
+                            base_version=1,
+                            proposed_payload="attempted v2",
+                            comment="should be rejected",
+                        )
+                    ],
+                    staged_request,
+                    session,
+                )
+        except HTTPException as e:
+            staged_status = e.status_code
+
+        return committed_status, staged_status
+
+    assert asyncio.run(run()) == (400, 400)
+
+
+@pytest.mark.docker
+def test_retired_descendants_finds_a_grandchild_by_either_cause(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Walks the seeded l1_hlt -> l1_trg -> {ugt,ugmt} containment two levels deep."""
+
+    async def run() -> set[tuple[str, str]]:
+        cern_login = "retired_desc"
+        request = _fake_request(cern_login)
+
+        root_id = await _key_id_by_label(session_factory, "l1_hlt/conf/default/v1")
+        leaf_decom_id = await _key_id_by_label(session_factory, "ugt/conf/default/v1")
+        leaf_arch_mode_id = await _mode_id(session_factory, "ugmt", "conf", "default")
+
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=leaf_decom_id), request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), request, session)
+
+        async with session_factory() as session:
+            await toggle_archival(ArchivalIn(mode_id=leaf_arch_mode_id), request, session)
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), request, session)
+
+        async with session_factory() as session:
+            found = await _retired_descendants(root_id, session)
+            return {(ref.label, ref.reason) for ref in found}
+
+    assert asyncio.run(run()) == {
+        ("ugt/conf/default/v1", "decommissioned"),
+        ("ugmt/conf/default/v1", "mode_archived"),
+    }
 
 
 @pytest.mark.docker

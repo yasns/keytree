@@ -26,6 +26,11 @@ class KeyRefOut(BaseModel):
     label: str
 
 
+class RetiredRefOut(BaseModel):
+    label: str
+    reason: Literal["decommissioned", "mode_archived"]
+
+
 class KeyOut(BaseModel):
     id: int
     label: str
@@ -37,6 +42,14 @@ class KeyOut(BaseModel):
     created_at: datetime
     comment: str
     validation_status: str
+    decommissioned_at: datetime | None
+    """None while active."""
+    decommissioned_by: str | None
+    """None while active."""
+    decommissioned_by_display_name: str | None
+    """None while active."""
+    retired_descendants: list[RetiredRefOut]
+    """Descendants (via key_child, any depth) that are decommissioned or whose mode is archived."""
     based_on: KeyRefOut | None
     """The key this was forked/copied from, or its previous version otherwise."""
 
@@ -107,6 +120,8 @@ def _build_key_detail(
     ancestor_mode_name: str | None,
     ancestor_version: int | None,
     ancestor_label: str | None,
+    decommissioner_display_name: str | None,
+    retired_descendants: list[RetiredRefOut],
 ) -> KeyOut:
     return KeyOut(
         id=key.id,
@@ -118,6 +133,10 @@ def _build_key_detail(
         created_at=key.created_at,
         comment=key.comment,
         validation_status=key.validation_status,
+        decommissioned_at=key.decommissioned_at,
+        decommissioned_by=key.decommissioned_by,
+        decommissioned_by_display_name=decommissioner_display_name,
+        retired_descendants=retired_descendants,
         based_on=(
             KeyRefOut(mode_name=ancestor_mode_name, version=ancestor_version, label=ancestor_label)
             if ancestor_mode_name is not None
@@ -197,6 +216,33 @@ async def search_keys(
     ]
 
 
+async def _retired_descendants(key_id: int, session: SessionDep) -> list[RetiredRefOut]:
+    """Descendants (via key_child, any depth) that are decommissioned or whose mode is archived."""
+    descendants = (
+        select(KeyChild.child_key_id).where(KeyChild.parent_key_id == key_id).cte(recursive=True)
+    )
+    child = aliased(KeyChild)
+    descendants = descendants.union(
+        select(child.child_key_id).join(
+            descendants, child.parent_key_id == descendants.c.child_key_id
+        )
+    )
+
+    rows = await session.execute(
+        select(Key.label, Key.decommissioned_at, Mode.archived_at)
+        .join(descendants, Key.id == descendants.c.child_key_id)
+        .join(Mode, Mode.id == Key.mode_id)
+        .where(Key.decommissioned_at.is_not(None) | Mode.archived_at.is_not(None))
+    )
+    return [
+        RetiredRefOut(
+            label=label,
+            reason="decommissioned" if decommissioned_at is not None else "mode_archived",
+        )
+        for label, decommissioned_at, _archived_at in rows.tuples()
+    ]
+
+
 @router.get("/{subsystem_name}/{node_name}/{mode_name}/{version}")
 async def get_key(
     subsystem_name: str, node_name: str, mode_name: str, version: int, session: SessionDep
@@ -206,9 +252,16 @@ async def get_key(
 
     ancestor = aliased(Key)
     ancestor_mode = aliased(Mode)
+    decommissioner = aliased(AppUser)
     row = (
         await session.execute(
-            select(AppUser.display_name, ancestor_mode.name, ancestor.version, ancestor.label)
+            select(
+                AppUser.display_name,
+                ancestor_mode.name,
+                ancestor.version,
+                ancestor.label,
+                decommissioner.display_name,
+            )
             .select_from(StagedEdit)
             .outerjoin(
                 ancestor,
@@ -216,14 +269,22 @@ async def get_key(
             )
             .outerjoin(ancestor_mode, ancestor_mode.id == ancestor.mode_id)
             .outerjoin(AppUser, AppUser.cern_login == key.created_by)
+            .outerjoin(decommissioner, decommissioner.cern_login == key.decommissioned_by)
             .where(StagedEdit.id == key.staged_edit_id)
         )
     ).first()
     assert row is not None
-    display_name, ancestor_mode_name, ancestor_version, ancestor_label = row
+    display_name, ancestor_mode_name, ancestor_version, ancestor_label, decommissioner_name = row
     assert display_name is not None
+    retired_descendants = await _retired_descendants(key.id, session)
     return _build_key_detail(
-        key, display_name, ancestor_mode_name, ancestor_version, ancestor_label
+        key,
+        display_name,
+        ancestor_mode_name,
+        ancestor_version,
+        ancestor_label,
+        decommissioner_name,
+        retired_descendants,
     )
 
 

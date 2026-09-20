@@ -88,6 +88,31 @@
             {{ archival.archived ? 'Archive mode' : 'Unarchive mode' }}
           </v-list-item-subtitle>
         </v-list-item>
+        <v-list-item
+          v-for="decommission in changes.decommissions"
+          :key="`decommission-${decommission.key_id}`"
+          slim
+          @click="goToDecommission(decommission)"
+        >
+          <template #prepend>
+            <v-icon
+              :icon="decommission.decommissioned ? 'mdi-key-remove' : 'mdi-key-plus'"
+              size="small"
+            ></v-icon>
+          </template>
+          <v-list-item-title class="text-body-medium">
+            <span
+              :class="{
+                'text-decoration-line-through': decommission.decommissioned,
+                'key-label': true,
+              }"
+              >{{ decommission.label }}</span
+            >
+          </v-list-item-title>
+          <v-list-item-subtitle>
+            {{ decommission.decommissioned ? 'Decommission key' : 'Recommission key' }}
+          </v-list-item-subtitle>
+        </v-list-item>
       </v-list>
     </div>
 
@@ -137,6 +162,7 @@ import CommitConflictsDialog from '../dialog/CommitConflictsDialog.vue'
 
 type StagedEditOut = components['schemas']['StagedEditOut']
 type StagedArchivalOut = components['schemas']['StagedArchivalOut']
+type StagedDecommissionOut = components['schemas']['StagedDecommissionOut']
 
 const changes = useChangesStore()
 const nav = useNavStore()
@@ -192,6 +218,18 @@ async function goToArchival(archival: StagedArchivalOut) {
   if (tip !== undefined) {
     router.push(keyRoute(archival.subsystem_name, archival.node_name, archival.mode_name, tip))
   }
+}
+
+async function goToDecommission(decommission: StagedDecommissionOut) {
+  if (!(await changes.confirmDiscard())) return
+  router.push(
+    keyRoute(
+      decommission.subsystem_name,
+      decommission.node_name,
+      decommission.mode_name,
+      decommission.version,
+    ),
+  )
 }
 
 function routedKey() {

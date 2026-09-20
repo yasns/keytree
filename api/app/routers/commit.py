@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
-from typing import NamedTuple, cast
+from typing import NamedTuple, TypeVar, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import Select, delete, func, select, tuple_
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.authz import claim_roles, require_writable
@@ -16,10 +16,17 @@ from app.db.models import (
     Node,
     NodeEdge,
     StagedArchival,
+    StagedDecommission,
     StagedEdit,
     Subsystem,
 )
-from app.routers.staging import ChangesetOut, changeset_out, join_mode_names, open_changeset
+from app.routers.staging import (
+    ChangesetOut,
+    changeset_out,
+    decommissioned_labels,
+    join_mode_names,
+    open_changeset,
+)
 
 router = APIRouter(
     prefix="/commit",
@@ -49,6 +56,7 @@ class _CommitRow(NamedTuple):
     subsystem_name: str
     node_name: str
     mode_name: str
+    mode_archived_at: datetime | None
     node_id: int
     base_version: int | None
     tip_version: int
@@ -149,6 +157,29 @@ def _archive_modes(
         mode.archived_at = datetime.now(UTC) if archival.archived else None
 
 
+def _decommission_keys(
+    decommissions: list[StagedDecommission], keys: dict[int, Key], cern_login: str
+) -> None:
+    for decommission in decommissions:
+        key = keys[decommission.key_id]
+        key.decommissioned_by = cern_login if decommission.decommissioned else None
+        key.decommissioned_at = datetime.now(UTC) if decommission.decommissioned else None
+
+
+_Entity = TypeVar("_Entity", Mode, Key)
+
+
+async def _entities_with_subsystems(
+    stmt: Select[tuple[_Entity, str]], session: SessionDep
+) -> tuple[dict[int, _Entity], set[str]]:
+    entities: dict[int, _Entity] = {}
+    subsystems: set[str] = set()
+    for entity, subsystem_name in await session.execute(stmt):
+        entities[entity.id] = entity
+        subsystems.add(subsystem_name)
+    return entities, subsystems
+
+
 async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRow]:
     tip_versions = (
         select(Key.mode_id, func.max(Key.version).label("tip_version"))
@@ -167,6 +198,7 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
                 Subsystem.name,
                 Node.name,
                 Mode.name,
+                Mode.archived_at,
                 Node.id,
                 Key.version,
                 func.coalesce(tip_versions.c.tip_version, 0),
@@ -268,32 +300,59 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
             select(StagedArchival).where(StagedArchival.changeset_id == changeset.id)
         )
     )
-    if not rows and not archivals:
+    decommissions = list(
+        await session.scalars(
+            select(StagedDecommission).where(StagedDecommission.changeset_id == changeset.id)
+        )
+    )
+    if not rows and not archivals and not decommissions:
         raise HTTPException(status_code=400, detail="changeset has no staged edits")
 
-    archival_modes: dict[int, Mode] = {}
-    archival_subsystems: set[str] = set()
-    if archivals:
-        for mode, subsystem_name in await session.execute(
-            select(Mode, Subsystem.name)
-            .join(Node, Node.id == Mode.node_id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
-            .where(Mode.id.in_({a.mode_id for a in archivals}))
-        ):
-            archival_modes[mode.id] = mode
-            archival_subsystems.add(subsystem_name)
+    archival_modes, archival_subsystems = await _entities_with_subsystems(
+        select(Mode, Subsystem.name)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .where(Mode.id.in_({a.mode_id for a in archivals})),
+        session,
+    )
 
-    wanted = {row.subsystem_name for row in rows} | archival_subsystems
+    decommission_keys, decommission_subsystems = await _entities_with_subsystems(
+        select(Key, Subsystem.name)
+        .join(Mode, Mode.id == Key.mode_id)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .where(Key.id.in_({d.key_id for d in decommissions})),
+        session,
+    )
+
+    wanted = {row.subsystem_name for row in rows} | archival_subsystems | decommission_subsystems
     await require_writable(wanted, claims, session)
 
     if not body.overwrite_conflicts and (conflicts := _conflicts(rows)):
         raise HTTPException(status_code=409, detail=[c.model_dump() for c in conflicts])
 
+    none_aliases, concrete_ids = _proposed_child_refs(rows)
+
+    # Defence in depth: re-check retirement that may have landed between staging and commit.
+    base_key_ids = {row.edit.base_key_id for row in rows if row.edit.base_key_id is not None}
+    retired_keys = await decommissioned_labels(base_key_ids | concrete_ids, changeset.id, session)
+    # Committed state only: an archival by this same changeset isn't applied yet, so it's excluded.
+    retired_modes = [
+        f"{row.subsystem_name}/{row.node_name}/{row.mode_name}"
+        for row in rows
+        if row.mode_archived_at is not None
+    ]
+    if retired_keys or retired_modes:
+        parts = []
+        if retired_keys:
+            parts.append(f"decommissioned key(s): {', '.join(sorted(retired_keys))}")
+        if retired_modes:
+            parts.append(f"archived mode(s): {', '.join(sorted(retired_modes))}")
+        raise HTTPException(status_code=409, detail="; ".join(parts))
+
     keys = _build_keys(rows, changeset)
     session.add_all(keys)
     await session.flush()
-
-    none_aliases, concrete_ids = _proposed_child_refs(rows)
 
     child_node_of: dict[tuple[int, str], int] = {}
     if none_aliases:
@@ -313,6 +372,9 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
 
     if archivals:
         _archive_modes(archivals, archival_modes, cern_login)
+
+    if decommissions:
+        _decommission_keys(decommissions, decommission_keys, cern_login)
 
     changeset.committed_at = datetime.now(UTC)
     changeset.committed_with_roles = claim_roles(claims)

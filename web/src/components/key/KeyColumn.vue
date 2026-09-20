@@ -10,7 +10,12 @@
       :pending="pending"
     ></KeyMetadata>
 
-    <ReadOnlyAlert v-if="readOnly"></ReadOnlyAlert>
+    <div v-if="readOnly" class="flex-shrink-0">
+      <ReadOnlyAlert :reason="readOnlyText"></ReadOnlyAlert>
+    </div>
+    <div v-if="payload?.retired_descendants.length" class="flex-shrink-0">
+      <RetiredDescendantsAlert :refs="payload.retired_descendants"></RetiredDescendantsAlert>
+    </div>
 
     <KeyToolbar
       :dirty="dirty"
@@ -23,6 +28,7 @@
       :version="version"
       :committed="!pending"
       :read-only="readOnly"
+      :payload="payload"
       @save="save"
       @save-and-queue="saveAndQueue"
       @discard="applyBaseline"
@@ -117,6 +123,15 @@
                   ></v-icon>
                   This mode is archived.
                 </div>
+
+                <div v-if="row.decommissioned" class="text-label-medium text-error">
+                  <v-icon
+                    icon="mdi-key-remove"
+                    size="x-small"
+                    style="vertical-align: baseline"
+                  ></v-icon>
+                  This key is decommissioned.
+                </div>
               </div>
             </template>
           </div>
@@ -129,17 +144,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, toRef, watch } from 'vue'
 import { childLocator, useNavStore } from '@/stores/nav'
 import { useChangesStore, useDirtySource } from '@/stores/changes'
-import { useReadOnly } from '@/composables/useReadOnly'
+import { useKeyReadOnly } from '@/composables/useReadOnly'
+import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
+import { goodTip } from '@/mode'
 import type { components } from '@/api-types'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
+import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
 import Spinner from '../Spinner.vue'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -165,9 +183,12 @@ const nav = useNavStore()
 const changes = useChangesStore()
 const { navigateToStaged, showStaged } = useStagedNavigation()
 
-const readOnly = useReadOnly(() => props.subsystem)
-
 const payload = ref<KeyOut>()
+const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
+const currentMode = useCurrentMode(modes, toRef(props, 'mode'))
+const archived = useIsArchived(currentMode)
+const { readOnly, readOnlyText } = useKeyReadOnly(() => props.subsystem, payload, archived)
+
 const children = ref<KeyChildMetaOut[]>()
 
 const staged = computed(() =>
@@ -212,7 +233,8 @@ function modeOptions(child: KeyChildMetaOut): ModeOut[] {
 }
 
 function committedTip(child: KeyChildMetaOut, modeName: string): number | undefined {
-  return modeOptions(child).find((m) => m.name === modeName)?.versions[0]
+  const mode = modeOptions(child).find((m) => m.name === modeName)
+  return mode && goodTip(mode)
 }
 
 type Upgrade = { version: number; staged: boolean }
@@ -243,6 +265,14 @@ function archivedMode(child: KeyChildMetaOut): boolean {
   if (!mode) return false
   const option = modeOptions(child).find((m) => m.name === mode)
   return !!option && changes.archived(option)
+}
+
+// Off the mode's committed decommissioned_versions, mirroring archivedMode's fresh option lookup.
+function decommissionedChild(child: KeyChildMetaOut): boolean {
+  const choice = childChoice.get(child.alias)
+  if (!choice?.mode || choice.version == null) return false
+  const mode = modeOptions(child).find((m) => m.name === choice.mode)
+  return !!mode?.decommissioned_versions.includes(choice.version)
 }
 
 function modeValue(choice: ChildChoice | undefined): string | undefined {
@@ -410,6 +440,7 @@ const rows = computed(() =>
     changed: changedFromOriginal(child),
     dirty: rowDirty(child),
     archived: archivedMode(child),
+    decommissioned: decommissionedChild(child),
     items: child.category === 'external' ? [] : modeItems(child),
   })),
 )
