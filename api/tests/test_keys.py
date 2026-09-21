@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -172,7 +172,7 @@ async def _forked_key(
         )
         await session.commit()
     async with session_factory() as session:
-        await commit_changeset(CommitIn(), _fake_request(cern_login), session)
+        await commit_changeset(CommitIn(), _fake_request(cern_login), session, BackgroundTasks())
 
 
 async def _restage_key(
@@ -203,7 +203,7 @@ async def _restage_key(
             session,
         )
     async with session_factory() as session:
-        await commit_changeset(CommitIn(), request, session)
+        await commit_changeset(CommitIn(), request, session, BackgroundTasks())
 
 
 async def _key_id_by_label(session_factory: async_sessionmaker[AsyncSession], label: str) -> int:
@@ -278,7 +278,7 @@ def test_committing_a_staged_decommission_updates_the_key(
         async with session_factory() as session:
             await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
         async with session_factory() as session:
             decommissioned = await session.get(Key, key_id)
             assert decommissioned is not None
@@ -290,7 +290,7 @@ def test_committing_a_staged_decommission_updates_the_key(
         async with session_factory() as session:
             await toggle_decommission(DecommissionIn(key_id=key_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
         async with session_factory() as session:
             recommissioned = await session.get(Key, key_id)
             assert recommissioned is not None
@@ -360,7 +360,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
         async with session_factory() as session:
             await toggle_decommission(DecommissionIn(key_id=base_key_id), base_request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), base_request, session)
+            await commit_changeset(CommitIn(), base_request, session, BackgroundTasks())
 
         base_status: int | None = None
         try:
@@ -399,7 +399,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
         async with session_factory() as session:
             await toggle_decommission(DecommissionIn(key_id=source_key_id), child_request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), child_request, session)
+            await commit_changeset(CommitIn(), child_request, session, BackgroundTasks())
 
         await _forked_key(
             session_factory,
@@ -456,7 +456,7 @@ def test_staging_rejects_archived_mode_edits(
         async with session_factory() as session:
             await toggle_archival(ArchivalIn(mode_id=mode_id), committed_request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), committed_request, session)
+            await commit_changeset(CommitIn(), committed_request, session, BackgroundTasks())
 
         committed_status: int | None = None
         try:
@@ -536,12 +536,12 @@ def test_retired_descendants_finds_a_grandchild_by_either_cause(
         async with session_factory() as session:
             await toggle_decommission(DecommissionIn(key_id=leaf_decom_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
 
         async with session_factory() as session:
             await toggle_archival(ArchivalIn(mode_id=leaf_arch_mode_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
 
         async with session_factory() as session:
             found = await _retired_descendants(root_id, session)

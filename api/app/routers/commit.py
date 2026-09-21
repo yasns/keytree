@@ -1,24 +1,38 @@
 from datetime import UTC, datetime
-from typing import NamedTuple, TypeVar, cast
+from typing import NamedTuple, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import Select, delete, func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.authz import claim_roles, require_writable
+from app.config import settings
 from app.db.base import SessionDep
 from app.db.models import (
+    AppUser,
     Changeset,
     Key,
     KeyChild,
     Mode,
     Node,
     NodeEdge,
+    Role,
+    RoleSubsystem,
     StagedArchival,
     StagedDecommission,
     StagedEdit,
     Subsystem,
+)
+from app.mail import send_all
+from app.notify import (
+    Entry,
+    archival_entry,
+    build_mails,
+    bundle_counts,
+    decommission_entry,
+    edit_entry,
+    payload_counts,
 )
 from app.routers.staging import (
     ChangesetOut,
@@ -60,6 +74,7 @@ class _CommitRow(NamedTuple):
     node_id: int
     base_version: int | None
     tip_version: int
+    category: str | None
 
 
 def _is_conflicted(row: _CommitRow) -> bool:
@@ -166,18 +181,142 @@ def _decommission_keys(
         key.decommissioned_at = datetime.now(UTC) if decommission.decommissioned else None
 
 
-_Entity = TypeVar("_Entity", Mode, Key)
+async def _archival_data(
+    archivals: list[StagedArchival], session: SessionDep
+) -> tuple[dict[int, Mode], dict[int, tuple[str, str, str]]]:
+    """Mode entities by mode_id, and mode_id -> (subsystem_name, node_name, mode_name)."""
+    if not archivals:
+        return {}, {}
+    rows = await session.execute(
+        select(Mode, Subsystem.name, Node.name)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .where(Mode.id.in_({a.mode_id for a in archivals}))
+    )
+    modes: dict[int, Mode] = {}
+    context: dict[int, tuple[str, str, str]] = {}
+    for mode, subsystem_name, node_name in rows:
+        modes[mode.id] = mode
+        context[mode.id] = (subsystem_name, node_name, mode.name)
+    return modes, context
 
 
-async def _entities_with_subsystems(
-    stmt: Select[tuple[_Entity, str]], session: SessionDep
-) -> tuple[dict[int, _Entity], set[str]]:
-    entities: dict[int, _Entity] = {}
-    subsystems: set[str] = set()
-    for entity, subsystem_name in await session.execute(stmt):
-        entities[entity.id] = entity
-        subsystems.add(subsystem_name)
-    return entities, subsystems
+async def _decommission_data(
+    decommissions: list[StagedDecommission], session: SessionDep
+) -> tuple[dict[int, Key], dict[int, tuple[str, str, str, str]]]:
+    """Key entities by key_id, and key_id -> (subsystem_name, node_name, mode_name, label)."""
+    if not decommissions:
+        return {}, {}
+    rows = await session.execute(
+        select(Key, Subsystem.name, Node.name, Mode.name)
+        .join(Mode, Mode.id == Key.mode_id)
+        .join(Node, Node.id == Mode.node_id)
+        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .where(Key.id.in_({d.key_id for d in decommissions}))
+    )
+    keys: dict[int, Key] = {}
+    context: dict[int, tuple[str, str, str, str]] = {}
+    for key, subsystem_name, node_name, mode_name in rows:
+        keys[key.id] = key
+        context[key.id] = (subsystem_name, node_name, mode_name, key.label)
+    return keys, context
+
+
+async def _ancestor_data(
+    notifiable_rows: list[_CommitRow], session: SessionDep
+) -> tuple[dict[int, str | None], dict[int, dict[str, int]]]:
+    """Ancestor key id -> payload, and ancestor key id -> {alias: child_key_id}, for diff counts."""
+    ancestor_ids = {
+        row.edit.base_key_id or row.edit.copied_from_key_id
+        for row in notifiable_rows
+        if row.edit.base_key_id or row.edit.copied_from_key_id
+    }
+    if not ancestor_ids:
+        return {}, {}
+    payload_rows = await session.execute(
+        select(Key.id, Key.payload).where(Key.id.in_(ancestor_ids))
+    )
+    payloads = dict(payload_rows.tuples().all())
+    child_rows = await session.execute(
+        select(KeyChild.parent_key_id, KeyChild.alias, KeyChild.child_key_id).where(
+            KeyChild.parent_key_id.in_(ancestor_ids)
+        )
+    )
+    children: dict[int, dict[str, int]] = {}
+    for parent_key_id, alias, child_key_id in child_rows.tuples():
+        children.setdefault(parent_key_id, {})[alias] = child_key_id
+    return payloads, children
+
+
+async def _notification_entries(
+    rows: list[_CommitRow],
+    keys: list[Key],
+    archivals: list[StagedArchival],
+    archival_ctx: dict[int, tuple[str, str, str]],
+    decommissions: list[StagedDecommission],
+    decommission_ctx: dict[int, tuple[str, str, str, str]],
+    session: SessionDep,
+) -> dict[str, list[Entry]]:
+    """Mirrors the sidebar's Version Control panel: same entries, same external-edit filter."""
+    notifiable_rows = [row for row in rows if row.category != "external"]
+    ancestor_payloads, ancestor_children = await _ancestor_data(notifiable_rows, session)
+    keys_by_mode = {key.mode_id: key for key in keys}
+
+    entries: dict[str, list[Entry]] = {}
+    for row in notifiable_rows:
+        key = keys_by_mode[row.edit.mode_id]
+        ancestor_id = row.edit.base_key_id or row.edit.copied_from_key_id
+        is_fork = row.base_version is None and row.edit.copied_from_key_id is not None
+        if row.edit.proposed_payload is not None:
+            counts = payload_counts(ancestor_payloads.get(ancestor_id), row.edit.proposed_payload)
+        else:
+            proposed_children = cast("dict[str, int | None]", row.edit.proposed_children or {})
+            counts = bundle_counts(ancestor_children.get(ancestor_id), proposed_children, key.id)
+        entries.setdefault(row.subsystem_name, []).append(
+            edit_entry(
+                row.subsystem_name,
+                row.node_name,
+                row.mode_name,
+                row.base_version,
+                key.version,
+                is_fork,
+                row.edit.comment,
+                counts,
+            )
+        )
+
+    for archival in archivals:
+        sub, node, mode = archival_ctx[archival.mode_id]
+        entries.setdefault(sub, []).append(archival_entry(sub, node, mode, archival.archived))
+
+    for decommission in decommissions:
+        sub, node, mode, label = decommission_ctx[decommission.key_id]
+        entries.setdefault(sub, []).append(
+            decommission_entry(sub, node, mode, label, decommission.decommissioned)
+        )
+
+    return entries
+
+
+async def _notification_context(
+    subsystems: set[str], session: SessionDep
+) -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Recipient group emails and display name, per subsystem."""
+    if not subsystems:
+        return {}, {}
+    rows = await session.execute(
+        select(Subsystem.name, Subsystem.display_name, Role.notification_email)
+        .outerjoin(RoleSubsystem, RoleSubsystem.subsystem_id == Subsystem.id)
+        .outerjoin(Role, (Role.id == RoleSubsystem.role_id) & Role.notification_email.is_not(None))
+        .where(Subsystem.name.in_(subsystems))
+    )
+    recipients: dict[str, set[str]] = {}
+    display_names: dict[str, str] = {}
+    for name, display_name, group_email in rows.tuples():
+        display_names[name] = display_name or name
+        if group_email is not None:
+            recipients.setdefault(name, set()).add(group_email)
+    return recipients, display_names
 
 
 async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRow]:
@@ -202,6 +341,7 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
                 Node.id,
                 Key.version,
                 func.coalesce(tip_versions.c.tip_version, 0),
+                Node.category,
             ),
             StagedEdit.mode_id,
         )
@@ -285,7 +425,9 @@ async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOu
     status_code=204,
     responses={409: {"model": list[ConflictOut], "description": "Target versions taken since"}},
 )
-async def commit_changeset(body: CommitIn, request: Request, session: SessionDep) -> None:
+async def commit_changeset(
+    body: CommitIn, request: Request, session: SessionDep, background: BackgroundTasks
+) -> None:
     """Materialises every staged edit in the caller's open changeset as a key, then closes it."""
     claims = request.state.claims
     cern_login = claims["cern_upn"]
@@ -308,23 +450,11 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
     if not rows and not archivals and not decommissions:
         raise HTTPException(status_code=400, detail="changeset has no staged edits")
 
-    archival_modes, archival_subsystems = await _entities_with_subsystems(
-        select(Mode, Subsystem.name)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
-        .where(Mode.id.in_({a.mode_id for a in archivals})),
-        session,
-    )
+    archival_modes, archival_ctx = await _archival_data(archivals, session)
+    decommission_keys, decommission_ctx = await _decommission_data(decommissions, session)
 
-    decommission_keys, decommission_subsystems = await _entities_with_subsystems(
-        select(Key, Subsystem.name)
-        .join(Mode, Mode.id == Key.mode_id)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
-        .where(Key.id.in_({d.key_id for d in decommissions})),
-        session,
-    )
-
+    archival_subsystems = {sub for sub, _, _ in archival_ctx.values()}
+    decommission_subsystems = {sub for sub, _, _, _ in decommission_ctx.values()}
     wanted = {row.subsystem_name for row in rows} | archival_subsystems | decommission_subsystems
     await require_writable(wanted, claims, session)
 
@@ -379,4 +509,27 @@ async def commit_changeset(body: CommitIn, request: Request, session: SessionDep
     changeset.committed_at = datetime.now(UTC)
     changeset.committed_with_roles = claim_roles(claims)
 
+    committed_at = changeset.committed_at
+
     await session.commit()
+
+    if settings.smtp_host:
+        recipients, subsystem_display_names = await _notification_context(wanted, session)
+        if recipients:
+            entries = await _notification_entries(
+                rows, keys, archivals, archival_ctx, decommissions, decommission_ctx, session
+            )
+            if entries:
+                author = await session.get(AppUser, cern_login)
+                background.add_task(
+                    send_all,
+                    build_mails(
+                        author.display_name if author else cern_login,
+                        cern_login,
+                        author.email if author else None,
+                        committed_at,
+                        entries,
+                        recipients,
+                        subsystem_display_names,
+                    ),
+                )

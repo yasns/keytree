@@ -83,6 +83,8 @@ class StagedEditOut(BaseModel):
     """Not necessarily the mode's tip. None for a forked mode's v1."""
     expected_version: int
     category: str | None
+    visible: bool
+    """False for edits on external leaf nodes, which the UI hides from the changes list."""
     proposed_payload: str | None
     proposed_children: dict[str, ProposedChildOut | None] | None
     copied_from: ProposedChildOut | None
@@ -180,6 +182,7 @@ def _build_changeset(
                 base_version=base_version,
                 expected_version=edit.expected_version,
                 category=category,
+                visible=category != "external",
                 proposed_payload=edit.proposed_payload,
                 proposed_children=_build_children(edit.proposed_children, child_modes),
                 copied_from=child_modes.get(edit.copied_from_key_id)

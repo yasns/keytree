@@ -299,7 +299,9 @@ class Role(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    cern_role_name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+
+    notification_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
 
 
 class RoleSubsystem(Base):

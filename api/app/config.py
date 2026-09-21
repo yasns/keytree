@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     postgres_password: str = ""
     postgres_sslmode: str = "prefer"
 
+    smtp_host: str = ""  # empty disables commit notification emails
+    smtp_port: int = 25
+    smtp_from: str = "no-reply@keytree.app.cern.ch"
+    app_base_url: str = "http://localhost:5173"
+
     @property
     def database_url(self) -> URL:
         """API: least-privileged user. Migrations: owner."""

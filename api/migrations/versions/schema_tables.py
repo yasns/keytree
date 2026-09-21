@@ -34,9 +34,10 @@ def upgrade() -> None:
     _ = op.create_table(
         "role",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("name", sa.String(length=64), nullable=False),
+        sa.Column("cern_role_name", sa.String(length=64), nullable=False),
+        sa.Column("notification_email", sa.String(length=254), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_role")),
-        sa.UniqueConstraint("name", name=op.f("uq_role_name")),
+        sa.UniqueConstraint("cern_role_name", name=op.f("uq_role_cern_role_name")),
     )
     op.execute("GRANT SELECT ON role TO keytree_app")
 

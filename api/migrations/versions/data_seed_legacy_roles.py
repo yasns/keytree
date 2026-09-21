@@ -55,12 +55,12 @@ GRANTS: dict[str, list[str]] = {
 
 
 def upgrade() -> None:
-    seed("role", [{"name": name} for name in GRANTS], key=["name"])
+    seed("role", [{"cern_role_name": name} for name in GRANTS], key=["cern_role_name"])
 
-    role = table("role", column("id"), column("name"))
+    role = table("role", column("id"), column("cern_role_name"))
     subsystem = table("subsystem", column("id"), column("name"))
     bind = op.get_bind()
-    role_ids = {name: id for name, id in bind.execute(select(role.c.name, role.c.id))}
+    role_ids = {name: id for name, id in bind.execute(select(role.c.cern_role_name, role.c.id))}
     subsystem_ids = {
         name: id for name, id in bind.execute(select(subsystem.c.name, subsystem.c.id))
     }
