@@ -7,12 +7,12 @@ from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import AppUser, Key, Mode, Node, Subsystem
+from app.db.models import AppUser, Key, Mode, Subsystem, Vertex
 
 router = APIRouter(
-    prefix="/nodes",
+    prefix="/vertices",
     dependencies=[Depends(JWTBearerClaims())],
-    tags=["nodes"],
+    tags=["vertices"],
 )
 
 
@@ -37,7 +37,7 @@ class ModeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class NodeOut(BaseModel):
+class VertexOut(BaseModel):
     id: int
     name: str
     category: str | None
@@ -49,13 +49,13 @@ class NodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _build_node_detail(
-    node: Node,
+def _build_vertex_detail(
+    vertex: Vertex,
     subsystem_name: str,
     modes: list[Mode],
     keys: list[Key],
     display_names: dict[str, str],
-) -> NodeOut:
+) -> VertexOut:
     versions_by_mode: dict[int, list[int]] = {}
     decommissioned_versions_by_mode: dict[int, list[int]] = {}
     for key in keys:
@@ -65,11 +65,11 @@ def _build_node_detail(
     for versions in versions_by_mode.values():
         versions.sort(reverse=True)
 
-    return NodeOut(
-        id=node.id,
-        name=node.name,
-        category=node.category,
-        subsystem_id=node.subsystem_id,
+    return VertexOut(
+        id=vertex.id,
+        name=vertex.name,
+        category=vertex.category,
+        subsystem_id=vertex.subsystem_id,
         subsystem_name=subsystem_name,
         modes=[
             ModeOut(
@@ -92,12 +92,12 @@ def _build_node_detail(
     )
 
 
-async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut:
-    if node is None:
-        raise HTTPException(status_code=404, detail="node not found")
+async def _vertex_detail_or_404(vertex: Vertex | None, session: SessionDep) -> VertexOut:
+    if vertex is None:
+        raise HTTPException(status_code=404, detail="vertex not found")
 
     subsystem_name = await session.scalar(
-        select(Subsystem.name).where(Subsystem.id == node.subsystem_id)
+        select(Subsystem.name).where(Subsystem.id == vertex.subsystem_id)
     )
     assert subsystem_name is not None
 
@@ -109,7 +109,7 @@ async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut
             .select_from(Mode)
             .outerjoin(creator, creator.cern_login == Mode.created_by)
             .outerjoin(archiver, archiver.cern_login == Mode.archived_by)
-            .where(Mode.node_id == node.id)
+            .where(Mode.vertex_id == vertex.id)
         )
     ).all()
     modes = [row[0] for row in mode_rows]
@@ -119,22 +119,24 @@ async def _node_detail_or_404(node: Node | None, session: SessionDep) -> NodeOut
 
     keys = list(await session.scalars(select(Key).where(Key.mode_id.in_([m.id for m in modes]))))
 
-    return _build_node_detail(node, subsystem_name, modes, keys, display_names)
+    return _build_vertex_detail(vertex, subsystem_name, modes, keys, display_names)
 
 
-@router.get("/by-path/{subsystem_name}/{node_name}")
-async def get_node_by_path(subsystem_name: str, node_name: str, session: SessionDep) -> NodeOut:
-    """Fetches a node by (subsystem, name)."""
-    node = await session.scalar(
-        select(Node)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
-        .where(Subsystem.name == subsystem_name, Node.name == node_name)
+@router.get("/by-path/{subsystem_name}/{vertex_name}")
+async def get_vertex_by_path(
+    subsystem_name: str, vertex_name: str, session: SessionDep
+) -> VertexOut:
+    """Fetches a vertex by (subsystem, name)."""
+    vertex = await session.scalar(
+        select(Vertex)
+        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+        .where(Subsystem.name == subsystem_name, Vertex.name == vertex_name)
     )
-    return await _node_detail_or_404(node, session)
+    return await _vertex_detail_or_404(vertex, session)
 
 
-@router.get("/{node_id}")
-async def get_node(node_id: int, session: SessionDep) -> NodeOut:
-    """Fetches a single node by numeric id."""
-    node = await session.get(Node, node_id)
-    return await _node_detail_or_404(node, session)
+@router.get("/{vertex_id}")
+async def get_vertex(vertex_id: int, session: SessionDep) -> VertexOut:
+    """Fetches a single vertex by numeric id."""
+    vertex = await session.get(Vertex, vertex_id)
+    return await _vertex_detail_or_404(vertex, session)

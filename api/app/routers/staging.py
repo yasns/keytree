@@ -16,11 +16,11 @@ from app.db.models import (
     Changeset,
     Key,
     Mode,
-    Node,
     StagedArchival,
     StagedDecommission,
     StagedEdit,
     Subsystem,
+    Vertex,
 )
 from app.routers.keys import key_or_404, keys_by_locator
 from app.routers.user import upsert_app_user
@@ -34,7 +34,7 @@ router = APIRouter(
 
 class StagedEditIn(BaseModel):
     subsystem_name: str
-    node_name: str
+    vertex_name: str
     mode_name: str
     base_version: int
     proposed_payload: str | None = None
@@ -77,14 +77,14 @@ class ProposedChildOut(BaseModel):
 class StagedEditOut(BaseModel):
     id: int
     subsystem_name: str
-    node_name: str
+    vertex_name: str
     mode_name: str
     base_version: int | None
     """Not necessarily the mode's tip. None for a forked mode's v1."""
     expected_version: int
     category: str | None
     visible: bool
-    """False for edits on external leaf nodes, which the UI hides from the changes list."""
+    """False for edits on external leaf vertices, which the UI hides from the changes list."""
     proposed_payload: str | None
     proposed_children: dict[str, ProposedChildOut | None] | None
     copied_from: ProposedChildOut | None
@@ -98,7 +98,7 @@ class StagedEditOut(BaseModel):
 class StagedArchivalOut(BaseModel):
     mode_id: int
     subsystem_name: str
-    node_name: str
+    vertex_name: str
     mode_name: str
     archived: bool
 
@@ -106,7 +106,7 @@ class StagedArchivalOut(BaseModel):
 class StagedDecommissionOut(BaseModel):
     key_id: int
     subsystem_name: str
-    node_name: str
+    vertex_name: str
     mode_name: str
     version: int
     label: str
@@ -153,23 +153,23 @@ def _build_changeset(
             StagedArchivalOut(
                 mode_id=archival.mode_id,
                 subsystem_name=subsystem_name,
-                node_name=node_name,
+                vertex_name=vertex_name,
                 mode_name=mode_name,
                 archived=archival.archived,
             )
-            for archival, subsystem_name, node_name, mode_name in archival_rows
+            for archival, subsystem_name, vertex_name, mode_name in archival_rows
         ],
         decommissions=[
             StagedDecommissionOut(
                 key_id=decommission.key_id,
                 subsystem_name=subsystem_name,
-                node_name=node_name,
+                vertex_name=vertex_name,
                 mode_name=mode_name,
                 version=version,
                 label=label,
                 decommissioned=decommission.decommissioned,
             )
-            for decommission, subsystem_name, node_name, mode_name, version, label in (
+            for decommission, subsystem_name, vertex_name, mode_name, version, label in (
                 decommission_rows
             )
         ],
@@ -177,7 +177,7 @@ def _build_changeset(
             StagedEditOut(
                 id=edit.id,
                 subsystem_name=subsystem_name,
-                node_name=node_name,
+                vertex_name=vertex_name,
                 mode_name=mode_name,
                 base_version=base_version,
                 expected_version=edit.expected_version,
@@ -195,7 +195,7 @@ def _build_changeset(
                 created_by=changeset.created_by,
                 validation_status=edit.validation_status,
             )
-            for edit, subsystem_name, node_name, mode_name, base_version, category in rows
+            for edit, subsystem_name, vertex_name, mode_name, base_version, category in rows
         ],
     )
 
@@ -230,8 +230,8 @@ def join_mode_names(
     """mode_id can be any FK column pointing at Mode.id."""
     return (
         stmt.join(Mode, Mode.id == mode_id)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .join(Vertex, Vertex.id == Mode.vertex_id)
+        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
     )
 
 
@@ -268,7 +268,9 @@ async def pending_editors(
 async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
     rows = await session.execute(
         join_mode_names(
-            select(StagedEdit, Subsystem.name, Node.name, Mode.name, Key.version, Node.category),
+            select(
+                StagedEdit, Subsystem.name, Vertex.name, Mode.name, Key.version, Vertex.category
+            ),
             StagedEdit.mode_id,
         )
         .outerjoin(Key, Key.id == StagedEdit.base_key_id)
@@ -302,7 +304,7 @@ async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, P
 async def _archival_rows(changeset_id: int, session: SessionDep) -> list[_ArchivalRow]:
     rows = await session.execute(
         join_mode_names(
-            select(StagedArchival, Subsystem.name, Node.name, Mode.name), StagedArchival.mode_id
+            select(StagedArchival, Subsystem.name, Vertex.name, Mode.name), StagedArchival.mode_id
         ).where(StagedArchival.changeset_id == changeset_id)
     )
     return list(rows.tuples())
@@ -312,7 +314,7 @@ async def _decommission_rows(changeset_id: int, session: SessionDep) -> list[_De
     rows = await session.execute(
         join_mode_names(
             select(
-                StagedDecommission, Subsystem.name, Node.name, Mode.name, Key.version, Key.label
+                StagedDecommission, Subsystem.name, Vertex.name, Mode.name, Key.version, Key.label
             ).join(Key, Key.id == StagedDecommission.key_id),
             Key.mode_id,
         ).where(StagedDecommission.changeset_id == changeset_id)
@@ -347,10 +349,10 @@ async def archived_labels(mode_ids: set[int], changeset_id: int, session: Sessio
     if not mode_ids:
         return []
     rows = await session.execute(
-        select(Subsystem.name, Node.name, Mode.name, Mode.archived_at, StagedArchival.archived)
+        select(Subsystem.name, Vertex.name, Mode.name, Mode.archived_at, StagedArchival.archived)
         .select_from(Mode)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .join(Vertex, Vertex.id == Mode.vertex_id)
+        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
         .outerjoin(
             StagedArchival,
             (StagedArchival.changeset_id == changeset_id) & (StagedArchival.mode_id == Mode.id),
@@ -358,9 +360,9 @@ async def archived_labels(mode_ids: set[int], changeset_id: int, session: Sessio
         .where(Mode.id.in_(mode_ids))
     )
     labels = []
-    for subsystem_name, node_name, mode_name, archived_at, staged in rows.tuples():
+    for subsystem_name, vertex_name, mode_name, archived_at, staged in rows.tuples():
         if staged if staged is not None else archived_at is not None:
-            labels.append(f"{subsystem_name}/{node_name}/{mode_name}")
+            labels.append(f"{subsystem_name}/{vertex_name}/{mode_name}")
     return labels
 
 
@@ -404,19 +406,19 @@ async def _resolve_bases(
     edits: list[StagedEditIn], changeset_id: int, session: SessionDep
 ) -> list[_ResolvedBase]:
     """In request order."""
-    locators = [(e.subsystem_name, e.node_name, e.mode_name, e.base_version) for e in edits]
+    locators = [(e.subsystem_name, e.vertex_name, e.mode_name, e.base_version) for e in edits]
     keys = await keys_by_locator(locators, session)
 
     unresolved = [e for e, locator in zip(edits, locators, strict=True) if locator not in keys]
     mode_ids_by_name: dict[tuple[str, str, str], int] = {}
     if unresolved:
-        names = {(e.subsystem_name, e.node_name, e.mode_name) for e in unresolved}
+        names = {(e.subsystem_name, e.vertex_name, e.mode_name) for e in unresolved}
         rows = await session.execute(
-            select(Subsystem.name, Node.name, Mode.name, Mode.id)
+            select(Subsystem.name, Vertex.name, Mode.name, Mode.id)
             .select_from(Mode)
-            .join(Node, Node.id == Mode.node_id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
-            .where(tuple_(Subsystem.name, Node.name, Mode.name).in_(names))
+            .join(Vertex, Vertex.id == Mode.vertex_id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+            .where(tuple_(Subsystem.name, Vertex.name, Mode.name).in_(names))
         )
         mode_ids_by_name = {(s, n, m): mode_id for s, n, m, mode_id in rows.tuples()}
 
@@ -439,7 +441,7 @@ async def _resolve_bases(
         if key is not None:
             bases.append(_ResolvedBase(key.mode_id, key.id, tips[key.mode_id][1] + 1, None))
             continue
-        key_name = (edit_in.subsystem_name, edit_in.node_name, edit_in.mode_name)
+        key_name = (edit_in.subsystem_name, edit_in.vertex_name, edit_in.mode_name)
         mode_id = mode_ids_by_name.get(key_name)
         own = own_edits.get(mode_id) if mode_id is not None else None
         if mode_id is None or own is None or own.expected_version != edit_in.base_version:
@@ -517,8 +519,8 @@ async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDe
     mode_row = (
         await session.execute(
             select(Mode, Subsystem.name)
-            .join(Node, Node.id == Mode.node_id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .join(Vertex, Vertex.id == Mode.vertex_id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
             .where(Mode.id == body.mode_id)
         )
     ).first()
@@ -559,8 +561,8 @@ async def toggle_decommission(
         await session.execute(
             select(Key, Subsystem.name)
             .join(Mode, Mode.id == Key.mode_id)
-            .join(Node, Node.id == Mode.node_id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
+            .join(Vertex, Vertex.id == Mode.vertex_id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
             .where(Key.id == body.key_id)
         )
     ).first()
@@ -596,23 +598,23 @@ async def _login_and_source(
     await require_writable({body.subsystem_name}, claims, session)
     await upsert_app_user(claims, session)
     source = await key_or_404(
-        body.subsystem_name, body.node_name, body.mode_name, body.base_version, session
+        body.subsystem_name, body.vertex_name, body.mode_name, body.base_version, session
     )
     return cern_login, source
 
 
 @router.post("/fork")
 async def fork_mode(body: ForkIn, request: Request, session: SessionDep) -> ChangesetOut:
-    """Branches a key's content into a brand new mode on the same node, staged as its v1."""
+    """Branches a key's content into a brand new mode on the same vertex, staged as its v1."""
     cern_login, source = await _login_and_source(body, request, session)
 
-    node = await session.get(Node, source.node_id)
-    assert node is not None
+    vertex = await session.get(Vertex, source.vertex_id)
+    assert vertex is not None
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
     mode = Mode(
-        node_id=source.node_id,
+        vertex_id=source.vertex_id,
         name=body.new_mode_name,
         description=body.description,
         forked_from_key_id=source.id,
@@ -648,7 +650,7 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
     cern_login, source = await _login_and_source(body, request, session)
 
     target = await session.scalar(
-        select(Mode).where(Mode.node_id == source.node_id, Mode.name == body.target_mode_name)
+        select(Mode).where(Mode.vertex_id == source.vertex_id, Mode.name == body.target_mode_name)
     )
     if target is None:
         raise HTTPException(status_code=404, detail="target mode not found")

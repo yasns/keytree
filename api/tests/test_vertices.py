@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
 
-from app.db.models import Key, Mode, Node
-from app.routers.nodes import _build_node_detail
+from app.db.models import Key, Mode, Vertex
+from app.routers.vertices import _build_vertex_detail
 
 
 def _key(id: int, mode_id: int, version: int) -> Key:
     return Key(
         id=id,
         mode_id=mode_id,
-        node_id=42,
+        vertex_id=42,
         version=version,
         label=f"ugt/rs_mp7/default/v{version}",
         staged_edit_id=id,
@@ -17,12 +17,12 @@ def _key(id: int, mode_id: int, version: int) -> Key:
     )
 
 
-def test_build_node_detail_versions_and_archived_modes():
-    node = Node(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
+def test_build_vertex_detail_versions_and_archived_modes():
+    vertex = Vertex(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
 
     active = Mode(
         id=118,
-        node_id=42,
+        vertex_id=42,
         name="default",
         description="Starter mode seed.",
         created_by="keytree_app",
@@ -30,7 +30,7 @@ def test_build_node_detail_versions_and_archived_modes():
     )
     archived = Mode(
         id=119,
-        node_id=42,
+        vertex_id=42,
         name="retired_line",
         description="Old line.",
         created_by="keytree_app",
@@ -42,7 +42,7 @@ def test_build_node_detail_versions_and_archived_modes():
     keys = [_key(1, mode_id=118, version=1), _key(2, mode_id=118, version=2)]
 
     display_names = {"keytree_app": "Keytree App", "alice": "Alice"}
-    out = _build_node_detail(node, "ugt", [archived, active], keys, display_names)
+    out = _build_vertex_detail(vertex, "ugt", [archived, active], keys, display_names)
 
     assert out.id == 42
     assert out.category == "run_settings"

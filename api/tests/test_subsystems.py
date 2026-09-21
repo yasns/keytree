@@ -1,20 +1,20 @@
-from app.db.models import Node
+from app.db.models import Vertex
 from app.routers.subsystems import _build_tree
 
 
-def _node(id: int, subsystem_id: int, name: str) -> Node:
-    return Node(id=id, subsystem_id=subsystem_id, name=name, category=None)
+def _vertex(id: int, subsystem_id: int, name: str) -> Vertex:
+    return Vertex(id=id, subsystem_id=subsystem_id, name=name, category=None)
 
 
 def test_build_tree_roots_aliases_and_subsystem_boundary():
     # Subsystem 1: conf -> tcds -> [alias]x2 -> tcds subsystem's conf.
-    # rs is a separate root reaching the same foreign node under two aliases.
-    conf = _node(10, 1, "conf")
-    rs = _node(11, 1, "rs")
-    tcds = _node(12, 1, "tcds")
-    foreign_conf = _node(20, 2, "conf")
-    foreign_hw = _node(21, 2, "hw")
-    foreign_rs = _node(31, 3, "rs")
+    # rs is a separate root reaching the same foreign vertex under two aliases.
+    conf = _vertex(10, 1, "conf")
+    rs = _vertex(11, 1, "rs")
+    tcds = _vertex(12, 1, "tcds")
+    foreign_conf = _vertex(20, 2, "conf")
+    foreign_hw = _vertex(21, 2, "hw")
+    foreign_rs = _vertex(31, 3, "rs")
 
     edges = [
         (10, "tcds", tcds),
@@ -36,7 +36,7 @@ def test_build_tree_roots_aliases_and_subsystem_boundary():
 
     tcds_out = conf_out.children[0]
     assert tcds_out.name == "tcds"
-    # Same foreign node reached under two aliases from one parent.
+    # Same foreign vertex reached under two aliases from one parent.
     assert [c.alias for c in tcds_out.children] == ["ugmt", "ugt"]
     assert all(c.id == 20 and c.subsystem_id == 2 and c.children == [] for c in tcds_out.children)
 
@@ -53,9 +53,9 @@ def test_build_tree_roots_aliases_and_subsystem_boundary():
 
 def test_build_tree_stops_on_cycle():
     # a -> b -> c -> b, all in the same subsystem.
-    a = _node(1, 1, "a")
-    b = _node(2, 1, "b")
-    c = _node(3, 1, "c")
+    a = _vertex(1, 1, "a")
+    b = _vertex(2, 1, "b")
+    c = _vertex(3, 1, "c")
 
     edges = [
         (1, "b", b),

@@ -14,29 +14,29 @@ const CATEGORY: Record<string, CategoryMeta> = {
   external: { icon: 'mdi-key' }, // no format, because external keys are not editable
 }
 
-export function iconFor(node: TreeOut | KeyChildMetaOut, isAlias: boolean): string {
+export function iconFor(vertex: TreeOut | KeyChildMetaOut, isAlias: boolean): string {
   if (isAlias) return 'mdi-link'
-  if (node.category === null) return 'mdi-folder-key-outline'
-  return CATEGORY[node.category]?.icon ?? 'mdi-script-text-key'
+  if (vertex.category === null) return 'mdi-folder-key-outline'
+  return CATEGORY[vertex.category]?.icon ?? 'mdi-script-text-key'
 }
 
 export function languageFor(category: string | null | undefined): string {
   return (category && CATEGORY[category]?.format) || 'yaml'
 }
 
-type RankedNode = { isAlias: boolean; category: string | null; alias: string }
+type RankedVertex = { isAlias: boolean; category: string | null; alias: string }
 
-function rank(node: RankedNode): number {
-  if (node.isAlias) return 2
-  return node.category === null ? 0 : 1
+function rank(vertex: RankedVertex): number {
+  if (vertex.isAlias) return 2
+  return vertex.category === null ? 0 : 1
 }
 
 // Direct bundles first, then direct leaf keys, then aliases, alphabetically
-function compareByKindThenName(a: RankedNode, b: RankedNode): number {
+function compareByKindThenName(a: RankedVertex, b: RankedVertex): number {
   return rank(a) - rank(b) || a.alias.localeCompare(b.alias)
 }
 
-export function sortByKind<T>(items: T[], toRanked: (item: T) => RankedNode): T[] {
+export function sortByKind<T>(items: T[], toRanked: (item: T) => RankedVertex): T[] {
   return items
     .map((item) => ({ item, ranked: toRanked(item) }))
     .sort((a, b) => compareByKindThenName(a.ranked, b.ranked))

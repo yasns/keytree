@@ -12,11 +12,11 @@ from app.db.models import (
     Changeset,
     Key,
     Mode,
-    Node,
     StagedArchival,
     StagedDecommission,
     StagedEdit,
     Subsystem,
+    Vertex,
 )
 from app.routers.commit import (
     _build_key_children,
@@ -96,13 +96,13 @@ def test_build_changeset_assembles_edits_and_ripple():
 
     assert out.id == 7
     assert out.created_by == "jdoe"
-    assert [e.node_name for e in out.edits] == ["clock_source", "conf"]
+    assert [e.vertex_name for e in out.edits] == ["clock_source", "conf"]
 
     assert out.archivals == [
         StagedArchivalOut(
             mode_id=120,
             subsystem_name="cms_run",
-            node_name="conf",
+            vertex_name="conf",
             mode_name="retired",
             archived=True,
         )
@@ -112,7 +112,7 @@ def test_build_changeset_assembles_edits_and_ripple():
         StagedDecommissionOut(
             key_id=42,
             subsystem_name="cms_run",
-            node_name="conf",
+            vertex_name="conf",
             mode_name="default",
             version=3,
             label="cms_run/conf/default/v3",
@@ -250,16 +250,16 @@ def test_get_or_create_open_changeset_is_race_safe(
 async def _forked_mode(
     session_factory: async_sessionmaker[AsyncSession], *, cern_login: str, mode_name: str
 ) -> tuple[int, int]:
-    """Fresh fork, no key yet, staged as v1 on the seeded cms_run/clock_source node."""
+    """Fresh fork, no key yet, staged as v1 on the seeded cms_run/clock_source vertex."""
     async with session_factory() as session:
         session.add(AppUser(cern_login=cern_login, display_name=cern_login))
-        node_id = await session.scalar(
-            select(Node.id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
-            .where(Subsystem.name == "cms_run", Node.name == "clock_source")
+        vertex_id = await session.scalar(
+            select(Vertex.id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+            .where(Subsystem.name == "cms_run", Vertex.name == "clock_source")
         )
-        assert node_id is not None
-        mode = Mode(node_id=node_id, name=mode_name, description="d", created_by=cern_login)
+        assert vertex_id is not None
+        mode = Mode(vertex_id=vertex_id, name=mode_name, description="d", created_by=cern_login)
         session.add(mode)
         changeset = Changeset(created_by=cern_login)
         session.add(changeset)
@@ -294,7 +294,7 @@ def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
                 [
                     StagedEditIn(
                         subsystem_name="cms_run",
-                        node_name="clock_source",
+                        vertex_name="clock_source",
                         mode_name="collisions2026",
                         base_version=1,
                         proposed_payload="new payload",
@@ -369,7 +369,7 @@ def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():
     conflicts = _conflicts(rows)
 
     assert len(conflicts) == 1
-    assert conflicts[0].node_name == "conf"
+    assert conflicts[0].vertex_name == "conf"
     assert conflicts[0].base_version == 1
     assert conflicts[0].expected_version == 2
     assert conflicts[0].tip_version == 2
@@ -395,7 +395,7 @@ def test_build_keys_lands_on_the_tip_not_the_base():
     assert [k.version for k in keys] == [4]
     assert keys[0].label == "cms_run/clock_source/default/v4"
     assert keys[0].mode_id == 118
-    assert keys[0].node_id == 10
+    assert keys[0].vertex_id == 10
     assert keys[0].validation_status == "passed"
 
 
@@ -428,8 +428,8 @@ def test_rebased_edits_move_the_base_and_keep_the_proposal():
 
 
 def test_build_key_children_resolves_none_to_same_changeset_key():
-    parent_key = Key(id=100, mode_id=1, node_id=11, version=2, label="cms_run/conf/default/v2")
-    child_key = Key(id=101, mode_id=2, node_id=20, version=1, label="cms_run/clock/default/v1")
+    parent_key = Key(id=100, mode_id=1, vertex_id=11, version=2, label="cms_run/conf/default/v2")
+    child_key = Key(id=101, mode_id=2, vertex_id=20, version=1, label="cms_run/clock/default/v1")
 
     edit = StagedEdit(
         id=1,
@@ -443,20 +443,20 @@ def test_build_key_children_resolves_none_to_same_changeset_key():
     children = _build_key_children(
         rows,
         keys=[parent_key, child_key],
-        child_node_of={(11, "clock_source"): 20},
-        node_of_key={9: 30},
+        child_vertex_of={(11, "clock_source"): 20},
+        vertex_of_key={9: 30},
     )
 
     by_alias = {c.alias: c for c in children}
     assert by_alias["clock_source"].child_key_id == 101
-    assert by_alias["clock_source"].child_node_id == 20
+    assert by_alias["clock_source"].child_vertex_id == 20
     assert by_alias["other_child"].child_key_id == 9
-    assert by_alias["other_child"].child_node_id == 30
-    assert all(c.parent_key_id == 100 and c.parent_node_id == 11 for c in children)
+    assert by_alias["other_child"].child_vertex_id == 30
+    assert all(c.parent_key_id == 100 and c.parent_vertex_id == 11 for c in children)
 
 
 def test_build_key_children_raises_when_none_has_no_target():
-    parent_key = Key(id=100, mode_id=1, node_id=11, version=2, label="cms_run/conf/default/v2")
+    parent_key = Key(id=100, mode_id=1, vertex_id=11, version=2, label="cms_run/conf/default/v2")
     edit = StagedEdit(
         id=1, changeset_id=7, mode_id=1, base_key_id=5, proposed_children={"clock_source": None}
     )
@@ -466,17 +466,17 @@ def test_build_key_children_raises_when_none_has_no_target():
         _ = _build_key_children(
             rows,
             keys=[parent_key],
-            child_node_of={},
-            node_of_key={},
+            child_vertex_of={},
+            vertex_of_key={},
         )
 
     assert exc_info.value.status_code == 400
 
 
-def test_build_key_children_keys_parent_by_mode_not_node():
-    """Same node, two modes edited: each gets its own parent key, not whichever built last."""
-    default_key = Key(id=100, mode_id=1, node_id=11, version=2, label="cms_run/conf/default/v2")
-    algo_key = Key(id=200, mode_id=2, node_id=11, version=4, label="cms_run/conf/algo/v4")
+def test_build_key_children_keys_parent_by_mode_not_vertex():
+    """Same vertex, two modes edited: each gets its own parent key, not whichever built last."""
+    default_key = Key(id=100, mode_id=1, vertex_id=11, version=2, label="cms_run/conf/default/v2")
+    algo_key = Key(id=200, mode_id=2, vertex_id=11, version=4, label="cms_run/conf/algo/v4")
 
     default_edit = StagedEdit(
         id=1, changeset_id=7, mode_id=1, base_key_id=5, proposed_children={"a": 9}
@@ -492,8 +492,8 @@ def test_build_key_children_keys_parent_by_mode_not_node():
     children = _build_key_children(
         rows,
         keys=[default_key, algo_key],
-        child_node_of={},
-        node_of_key={9: 30},
+        child_vertex_of={},
+        vertex_of_key={9: 30},
     )
 
     by_alias = {c.alias: c for c in children}
@@ -502,7 +502,7 @@ def test_build_key_children_keys_parent_by_mode_not_node():
 
 
 def test_build_key_children_raises_on_unknown_concrete_key_id():
-    parent_key = Key(id=100, mode_id=1, node_id=11, version=2, label="cms_run/conf/default/v2")
+    parent_key = Key(id=100, mode_id=1, vertex_id=11, version=2, label="cms_run/conf/default/v2")
     edit = StagedEdit(
         id=1, changeset_id=7, mode_id=1, base_key_id=5, proposed_children={"clock_source": 999}
     )
@@ -512,8 +512,8 @@ def test_build_key_children_raises_on_unknown_concrete_key_id():
         _ = _build_key_children(
             rows,
             keys=[parent_key],
-            child_node_of={},
-            node_of_key={},
+            child_vertex_of={},
+            vertex_of_key={},
         )
 
     assert exc_info.value.status_code == 400

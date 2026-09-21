@@ -5,7 +5,7 @@ import type { components } from '@/api-types'
 
 type ModeOut = components['schemas']['ModeOut']
 
-/** Refetches a node's modes whenever subsystem/name change. */
+/** Refetches a vertex's modes whenever subsystem/name change. */
 export function useModesByPath(
   subsystem: Ref<string | undefined>,
   name: Ref<string | undefined>,

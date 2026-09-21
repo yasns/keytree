@@ -211,7 +211,7 @@ const childChoice = reactive(new Map<string, ChildChoice>())
 type SelectOption = { title: string; value: string } | { type: 'divider' }
 
 function externalKey(child: KeyChildMetaOut): string {
-  return `${child.subsystem_name}/${child.node_name}`
+  return `${child.subsystem_name}/${child.vertex_name}`
 }
 
 function withDivider(rest: { title: string; value: string }[]): SelectOption[] {
@@ -229,13 +229,13 @@ function ensureExternalOptions(child: KeyChildMetaOut) {
   const key = externalKey(child)
   if (externalOptionsRequested.has(key)) return
   externalOptionsRequested.add(key)
-  resolveExternalOptions(child.subsystem_name, child.node_name)
+  resolveExternalOptions(child.subsystem_name, child.vertex_name)
     .then((options) => externalOptionsCache.set(key, options))
     .catch(() => externalOptionsRequested.delete(key))
 }
 
 function modeOptions(child: KeyChildMetaOut): ModeOut[] {
-  return nav.nodeDetailCache.get(child.node_id)?.modes ?? []
+  return nav.vertexDetailCache.get(child.vertex_id)?.modes ?? []
 }
 
 function committedTip(child: KeyChildMetaOut, modeName: string): number | undefined {
@@ -248,7 +248,7 @@ type Upgrade = { version: number; staged: boolean }
 /** Includes a staged-but-uncommitted version; `staged` marks that case. */
 function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   const committed = committedTip(child, modeName)
-  const edit = changes.stagedForMode(child.subsystem_name, child.node_name, modeName)
+  const edit = changes.stagedForMode(child.subsystem_name, child.vertex_name, modeName)
   const version = edit ? edit.expected_version : committed
   if (version === undefined) return undefined
   return { version, staged: committed !== undefined && version > committed }
@@ -259,7 +259,7 @@ function modeItems(child: KeyChildMetaOut): SelectOption[] {
     modeOptions(child).map((m) => {
       const version = tipOf(child, m.name)?.version ?? m.versions[0]
       return {
-        title: `${child.subsystem_name}/${child.node_name}/${m.name}/v${version}`,
+        title: `${child.subsystem_name}/${child.vertex_name}/${m.name}/v${version}`,
         value: `${m.name}/${version}`,
       }
     }),
@@ -290,14 +290,14 @@ function modeValue(choice: ChildChoice | undefined): string | undefined {
 function selectionLabel(child: KeyChildMetaOut): string {
   const choice = childChoice.get(child.alias)
   if (!choice?.mode) return ''
-  const base = `${child.subsystem_name}/${child.node_name}/${choice.mode}`
+  const base = `${child.subsystem_name}/${child.vertex_name}/${choice.mode}`
   return choice.version === null ? base : `${base}/v${choice.version}`
 }
 
 function baselineExternal(child: KeyChildMetaOut): string {
   const proposed = staged.value?.proposed_children?.[child.alias]
   if (proposed === undefined || proposed?.key_id === child.id) return child.payload ?? ''
-  const sibling = changes.stagedForNode(child.subsystem_name, child.node_name)
+  const sibling = changes.stagedForVertex(child.subsystem_name, child.vertex_name)
   return sibling?.proposed_payload ?? ''
 }
 
@@ -311,7 +311,7 @@ function baselineChild(child: KeyChildMetaOut): ChildChoice {
   if (proposed === undefined) return { keyId: null, mode: '', version: null }
   // null means key this changeset produces; read off the staged edit
   if (proposed === null) {
-    const staged = changes.stagedForNode(child.subsystem_name, child.node_name)
+    const staged = changes.stagedForVertex(child.subsystem_name, child.vertex_name)
     return staged
       ? { keyId: null, mode: staged.mode_name, version: staged.expected_version }
       : { keyId: null, mode: '', version: null }
@@ -361,7 +361,7 @@ async function selectKeyVersion(child: KeyChildMetaOut, modeName: string, tip: U
   }
   const key = await nav.fetchKeyPayload(
     child.subsystem_name,
-    child.node_name,
+    child.vertex_name,
     modeName,
     tip.version,
   )
@@ -474,7 +474,7 @@ function buildEdits(comment: string): {
       if (changed) {
         childEdits.push({
           subsystem_name: locator.subsystem,
-          node_name: locator.name,
+          vertex_name: locator.name,
           mode_name: locator.mode,
           base_version: locator.version,
           proposed_payload: value,
@@ -496,7 +496,7 @@ function buildEdits(comment: string): {
 function baseEdit(comment: string, proposedChildren: Record<string, number | null>) {
   return {
     subsystem_name: props.subsystem,
-    node_name: props.name,
+    vertex_name: props.name,
     mode_name: props.mode,
     base_version: props.version,
     proposed_children: proposedChildren,
@@ -585,9 +585,9 @@ async function load() {
   payload.value = p
   children.value = c
   for (const child of c) {
-    // fetchNodeDetail dedups by node id, so repeated aliases cost nothing
+    // fetchVertexDetail dedups by vertex id, so repeated aliases cost nothing
     if (child.category === 'external') ensureExternalOptions(child)
-    else void nav.fetchNodeDetail(child.node_id).catch(() => {})
+    else void nav.fetchVertexDetail(child.vertex_id).catch(() => {})
   }
   applyBaseline()
 }

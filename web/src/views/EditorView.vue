@@ -2,7 +2,7 @@
   <div class="d-flex flex-column h-100">
     <div class="d-flex flex-column flex-grow-1" style="min-width: 0; min-height: 0">
       <div
-        v-if="detailReady && nav.nodeDetail?.category === null && diffTarget && bundleDiffRoot"
+        v-if="detailReady && nav.vertexDetail?.category === null && diffTarget && bundleDiffRoot"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
@@ -10,10 +10,10 @@
         <DiffBrowser :diff-target="diffTarget"></DiffBrowser>
       </div>
 
-      <KeyBrowser v-else-if="detailReady && nav.nodeDetail?.category === null"></KeyBrowser>
+      <KeyBrowser v-else-if="detailReady && nav.vertexDetail?.category === null"></KeyBrowser>
 
       <div
-        v-else-if="detailReady && nav.nodeDetail && leafLeft && diffTarget && leafRight"
+        v-else-if="detailReady && nav.vertexDetail && leafLeft && diffTarget && leafRight"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
@@ -22,15 +22,15 @@
       </div>
 
       <template
-        v-else-if="detailReady && nav.nodeDetail && selectedMode && selectedVersion !== undefined"
+        v-else-if="detailReady && nav.vertexDetail && selectedMode && selectedVersion !== undefined"
       >
         <KeyPayload
-          :key="nav.nodeDetail.id"
-          :subsystem="nav.nodeDetail.subsystem_name"
-          :name="nav.nodeDetail.name"
+          :key="nav.vertexDetail.id"
+          :subsystem="nav.vertexDetail.subsystem_name"
+          :name="nav.vertexDetail.name"
           :mode="selectedMode.name"
           :version="selectedVersion"
-          :category="nav.nodeDetail.category"
+          :category="nav.vertexDetail.category"
           :pending="isPending"
           :search-query="(route.query.q as string) || undefined"
           :search-regex="route.query.regex === '1'"
@@ -72,13 +72,13 @@ const snackbar = useSnackbarStore()
 
 const detailReady = computed(
   () =>
-    nav.nodeDetail?.subsystem_name === subsystem &&
-    nav.nodeDetail?.name === name &&
-    nav.nodeDetail?.category !== 'external',
+    nav.vertexDetail?.subsystem_name === subsystem &&
+    nav.vertexDetail?.name === name &&
+    nav.vertexDetail?.category !== 'external',
 )
 
 const selectedMode = computed(() =>
-  detailReady.value ? nav.nodeDetail!.modes.find((m) => m.name === mode) : undefined,
+  detailReady.value ? nav.vertexDetail!.modes.find((m) => m.name === mode) : undefined,
 )
 const requestedVersion = computed(() => parseVersion(version))
 
@@ -118,7 +118,7 @@ const bundleDiffRoot = computed<BundleRoot | undefined>(() => {
 
 /** The routed leaf itself, as the "original" side of a comparison. */
 const leafLeft = computed<LeafSide | undefined>(() => {
-  const detail = nav.nodeDetail
+  const detail = nav.vertexDetail
   if (!detailReady.value || !detail || !selectedMode.value || selectedVersion.value === undefined)
     return undefined
   return {
@@ -134,7 +134,7 @@ const leafLeft = computed<LeafSide | undefined>(() => {
 })
 
 const leafRight = computed<LeafSide | undefined>(() => {
-  const detail = nav.nodeDetail
+  const detail = nav.vertexDetail
   const target = diffTarget.value
   if (!detailReady.value || !detail || !target) return undefined
   const root = resolveDiffRoot(
@@ -145,15 +145,15 @@ const leafRight = computed<LeafSide | undefined>(() => {
   return root && { root, category: detail.category }
 })
 
-// Redirect to 404 when the routed mode is invalid for that node
+// Redirect to 404 when the routed mode is invalid for that vertex
 watch(
-  () => [nav.nodeDetail, mode] as const,
+  () => [nav.vertexDetail, mode] as const,
   ([detail, mode]) => {
     if (!detail || detail.subsystem_name !== subsystem || detail.name !== name || !mode) return
     if (detail.category === 'external') return
     if (!detail.modes.some((m) => m.name === mode)) {
       if (changes.stagedForMode(subsystem, name, mode)) return
-      nav.nodeDetail = null
+      nav.vertexDetail = null
       snackbar.notify(`"${mode}" is not a mode of ${name}`, 'error')
       router.replace('/404')
     }
@@ -186,14 +186,14 @@ watch(
 async function syncToRoute() {
   await nav.fetchSubsystems()
   try {
-    await nav.fetchNodeByPath(subsystem, name)
+    await nav.fetchVertexByPath(subsystem, name)
   } catch (err) {
-    nav.nodeDetail = null
+    nav.vertexDetail = null
     snackbar.notifyError(err)
     router.replace('/404')
     return
   }
-  const detail = nav.nodeDetail
+  const detail = nav.vertexDetail
   if (!detail || detail.name !== name) return
 
   if (nav.selectedSubsystemId !== detail.subsystem_id) {
@@ -201,13 +201,13 @@ async function syncToRoute() {
   }
   await nav.fetchTree(detail.subsystem_id)
 
-  const row = nav.findRowByNodeId(detail.id)
+  const row = nav.findRowByVertexId(detail.id)
 
   if (detail.category === 'external') {
     const parent = row && nav.findRow((r) => r.path === row.ancestors.at(-1))
     snackbar.notify(`${detail.name} is selected inside its parent key`, 'info')
     return router.replace(
-      parent ? { name: 'editor', params: { subsystem, name: parent.node.name } } : '/',
+      parent ? { name: 'editor', params: { subsystem, name: parent.vertex.name } } : '/',
     )
   }
 
@@ -218,9 +218,9 @@ async function syncToRoute() {
     nav.activatedRow = [row.path]
   }
 
-  // No mode in the URL: send the user home with mode picker for this node
+  // No mode in the URL: send the user home with mode picker for this vertex
   if (!mode) {
-    nav.pendingNodeId = detail.id
+    nav.pendingVertexId = detail.id
     nav.activePanel = BrowsePanel
     router.replace('/')
   }
@@ -241,7 +241,7 @@ function sameBundleRoot(a: BundleRoot | null, b: BundleRoot): boolean {
 
 // Keep bundleRoot in sync with the route whenever mode/version are already present in it
 watch(
-  [() => nav.nodeDetail, selectedMode, selectedVersion],
+  [() => nav.vertexDetail, selectedMode, selectedVersion],
   ([detail, mode, version]) => {
     if (!detail || detail.category !== null || !mode || version === undefined) return
     const root: BundleRoot = {

@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.db.base import SessionDep
-from app.db.models import Mode, Node, Role, RoleSubsystem, Subsystem
+from app.db.models import Mode, Role, RoleSubsystem, Subsystem, Vertex
 
 
 def claim_roles(claims: dict[str, object]) -> list[str]:
@@ -32,8 +32,8 @@ async def subsystems_of_modes(mode_ids: set[int], session: SessionDep) -> set[st
     rows = await session.scalars(
         select(Subsystem.name)
         .select_from(Mode)
-        .join(Node, Node.id == Mode.node_id)
-        .join(Subsystem, Subsystem.id == Node.subsystem_id)
+        .join(Vertex, Vertex.id == Mode.vertex_id)
+        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
         .where(Mode.id.in_(mode_ids))
     )
     return set(rows)
