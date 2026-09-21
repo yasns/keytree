@@ -40,7 +40,7 @@
             <v-icon :icon="keyIcon(edit)" size="small"></v-icon>
           </template>
           <v-list-item-title class="text-body-medium key-label">
-            {{ edit.subsystem_name }}/{{ edit.node_name }}/{{ edit.mode_name }}/<template
+            {{ edit.subsystem_name }}/{{ edit.vertex_name }}/{{ edit.mode_name }}/<template
               v-if="edit.base_version !== null"
             >
               <s class="text-medium-emphasis">v{{ edit.base_version }}</s>
@@ -81,7 +81,9 @@
           </template>
           <v-list-item-title class="text-body-medium">
             <span :class="{ 'text-decoration-line-through': archival.archived, 'key-label': true }"
-              >{{ archival.subsystem_name }}/{{ archival.node_name }}/{{ archival.mode_name }}</span
+              >{{ archival.subsystem_name }}/{{ archival.vertex_name }}/{{
+                archival.mode_name
+              }}</span
             >
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -198,7 +200,7 @@ function keyIcon(edit: StagedEditOut) {
 async function goToEdit(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
   if (edit.base_version === null) {
-    router.push(keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, 'pending'))
+    router.push(keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'))
     return
   }
   // Already comparing: keep the location from before that comparison started.
@@ -206,17 +208,17 @@ async function goToEdit(edit: StagedEditOut) {
     nav.preDiffLocation = router.currentRoute.value.fullPath
   }
   router.push({
-    ...keyRoute(edit.subsystem_name, edit.node_name, edit.mode_name, edit.base_version),
+    ...keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, edit.base_version),
     query: withDiffQuery({}, { mode: edit.mode_name, version: 'pending' }),
   })
 }
 
 async function goToArchival(archival: StagedArchivalOut) {
   if (!(await changes.confirmDiscard())) return
-  const modes = await nav.fetchModesByPath(archival.subsystem_name, archival.node_name)
+  const modes = await nav.fetchModesByPath(archival.subsystem_name, archival.vertex_name)
   const tip = modes.find((m) => m.name === archival.mode_name)?.versions[0]
   if (tip !== undefined) {
-    router.push(keyRoute(archival.subsystem_name, archival.node_name, archival.mode_name, tip))
+    router.push(keyRoute(archival.subsystem_name, archival.vertex_name, archival.mode_name, tip))
   }
 }
 
@@ -225,7 +227,7 @@ async function goToDecommission(decommission: StagedDecommissionOut) {
   router.push(
     keyRoute(
       decommission.subsystem_name,
-      decommission.node_name,
+      decommission.vertex_name,
       decommission.mode_name,
       decommission.version,
     ),
@@ -288,7 +290,7 @@ async function commit(overwriteConflicts = false) {
     snackbar.notify('Changeset committed', 'success')
     await nav.refreshKeys()
     // follows the version it landed on, which trails the tip, not the base
-    const tip = key && nav.nodeDetail?.modes.find((m) => m.name === key.mode)?.versions[0]
+    const tip = key && nav.vertexDetail?.modes.find((m) => m.name === key.mode)?.versions[0]
     if (key && staged && tip !== undefined && tip !== key.version) {
       await router.replace({
         ...keyRoute(key.subsystem, key.name, key.mode, tip),

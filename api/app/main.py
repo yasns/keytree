@@ -14,10 +14,10 @@ from .db.base import engine
 from .routers.commit import router as commit_router
 from .routers.health import router as health_router
 from .routers.keys import router as keys_router
-from .routers.nodes import router as nodes_router
 from .routers.staging import router as staging_router
 from .routers.subsystems import router as subsystems_router
 from .routers.user import router as user_router
+from .routers.vertices import router as vertices_router
 
 log = logging.getLogger("access")
 
@@ -73,6 +73,6 @@ app.include_router(staging_router, prefix="/api")
 app.include_router(commit_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(keys_router, prefix="/api")
-app.include_router(nodes_router, prefix="/api")
 app.include_router(subsystems_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
+app.include_router(vertices_router, prefix="/api")

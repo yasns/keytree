@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { type Row, useNavStore, walk } from '@/stores/nav'
-import { useClearPending } from '@/composables/usePendingNode'
+import { useClearPending } from '@/composables/usePendingKey'
 import ConfirmDialog from '@/components/dialog/ConfirmDialog.vue'
 import ModePanel from './ModePanel.vue'
 import type { components } from '@/api-types'
@@ -103,7 +103,7 @@ type Subsystem = components['schemas']['SubsystemOut']
 const nav = useNavStore()
 const { clearPending } = useClearPending()
 
-const locked = computed(() => nav.pendingNodeId !== null)
+const locked = computed(() => nav.pendingVertexId !== null)
 const pendingPath = computed(() => nav.activatedRow[0])
 
 const fieldRef = ref<{ $el: HTMLElement } | null>(null)
@@ -117,7 +117,8 @@ function updateMenuMaxHeight() {
 function itemProps(item: Record<string, unknown>) {
   const row = item as Row
   return {
-    disabled: row.node.category === 'external' || (locked.value && row.path !== pendingPath.value),
+    disabled:
+      row.vertex.category === 'external' || (locked.value && row.path !== pendingPath.value),
   }
 }
 
@@ -170,13 +171,13 @@ const aliasJumpOpen = ref(false)
 const aliasJumpRow = ref<Row | undefined>(undefined)
 let aliasJumpPrevious: string[] = []
 const aliasJumpTitle = computed(() => {
-  const subsystemId = aliasJumpRow.value?.node.subsystem_id
+  const subsystemId = aliasJumpRow.value?.vertex.subsystem_id
   const target = subsystemId !== undefined ? nav.subsystemName(subsystemId) : undefined
   return target ? nav.subsystemDisplayName(target) : 'another subsystem'
 })
 
 function confirmAliasJump() {
-  if (aliasJumpRow.value) nav.goToAlias(aliasJumpRow.value.node)
+  if (aliasJumpRow.value) nav.goToAlias(aliasJumpRow.value.vertex)
   aliasJumpRow.value = undefined
 }
 
@@ -209,12 +210,12 @@ watch(
       return
     }
     nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]
-    nav.pendingNodeId = row.node.id
+    nav.pendingVertexId = row.vertex.id
   },
 )
 
 // In chip display order
-const nodeLabels: Record<string, string> = {
+const vertexLabels: Record<string, string> = {
   conf: 'Configuration',
   rs: 'Run Settings',
   algo: 'Algo',
@@ -225,8 +226,8 @@ const nodeLabels: Record<string, string> = {
 }
 
 const chips = computed(() => {
-  const names = new Set([...walk(nav.rows)].filter((r) => !r.isAlias).map((r) => r.node.name))
-  return Object.entries(nodeLabels)
+  const names = new Set([...walk(nav.rows)].filter((r) => !r.isAlias).map((r) => r.vertex.name))
+  return Object.entries(vertexLabels)
     .filter(([name]) => names.has(name))
     .map(([name, label]) => ({ name, label }))
 })

@@ -1,4 +1,4 @@
-"""seed an empty v1 key for every node's default mode
+"""seed an empty v1 key for every vertex's default mode
 
 Revision ID: data_seed_v1_keys
 Revises: data_seed_default_modes
@@ -33,7 +33,7 @@ def upgrade() -> None:
         """)
     )
 
-    # bundle node's proposed_children is a placeholder, backfilled below once child keys exist
+    # bundle vertex's proposed_children is a placeholder, backfilled below once child keys exist
     _ = bind.execute(
         text("""
             INSERT INTO staged_edit
@@ -43,7 +43,7 @@ def upgrade() -> None:
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
                    CASE WHEN n.category IS NULL THEN '{}'::jsonb ELSE NULL END,
                    'Bootstrap v1 seed', 'skipped'
-            FROM mode m JOIN node n ON n.id = m.node_id
+            FROM mode m JOIN vertex n ON n.id = m.vertex_id
             WHERE m.name = 'default'
         """),
         {"changeset_id": changeset_id},
@@ -52,7 +52,7 @@ def upgrade() -> None:
     _ = bind.execute(
         text("""
             INSERT INTO key
-                (mode_id, node_id, version, label, payload, staged_edit_id, created_by, comment,
+                (mode_id, vertex_id, version, label, payload, staged_edit_id, created_by, comment,
                  validation_status)
             SELECT m.id, n.id, 1,
                    s.name || '/' || n.name || '/' || m.name || '/v1',
@@ -60,22 +60,22 @@ def upgrade() -> None:
                    se.id, 'keytree_app', 'Bootstrap v1 seed', se.validation_status
             FROM staged_edit se
             JOIN mode m ON m.id = se.mode_id
-            JOIN node n ON n.id = m.node_id
+            JOIN vertex n ON n.id = m.vertex_id
             JOIN subsystem s ON s.id = n.subsystem_id
             WHERE se.changeset_id = :changeset_id
         """),
         {"changeset_id": changeset_id},
     )
 
-    # (node_id, version=1) is unambiguous: one default mode, one version, per node
+    # (vertex_id, version=1) is unambiguous: one default mode, one version, per vertex
     _ = bind.execute(
         text("""
             INSERT INTO key_child
-                (parent_key_id, alias, child_key_id, parent_node_id, child_node_id)
-            SELECT pk.id, ne.alias, ck.id, ne.parent_node_id, ne.child_node_id
-            FROM node_edge ne
-            JOIN key pk ON pk.node_id = ne.parent_node_id AND pk.version = 1
-            JOIN key ck ON ck.node_id = ne.child_node_id AND ck.version = 1
+                (parent_key_id, alias, child_key_id, parent_vertex_id, child_vertex_id)
+            SELECT pk.id, ne.alias, ck.id, ne.parent_vertex_id, ne.child_vertex_id
+            FROM vertex_edge ne
+            JOIN key pk ON pk.vertex_id = ne.parent_vertex_id AND pk.version = 1
+            JOIN key ck ON ck.vertex_id = ne.child_vertex_id AND ck.version = 1
         """)
     )
 

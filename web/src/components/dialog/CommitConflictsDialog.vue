@@ -9,12 +9,12 @@
         <v-list density="compact" class="py-0">
           <v-list-item
             v-for="conflict in conflicts"
-            :key="`${conflict.subsystem_name}/${conflict.node_name}/${conflict.mode_name}`"
+            :key="`${conflict.subsystem_name}/${conflict.vertex_name}/${conflict.mode_name}`"
             class="px-0"
           >
             <v-list-item-title class="text-body-medium">
               <span class="key-label">
-                {{ conflict.subsystem_name }}/{{ conflict.node_name }}/{{ conflict.mode_name }}
+                {{ conflict.subsystem_name }}/{{ conflict.vertex_name }}/{{ conflict.mode_name }}
               </span>
             </v-list-item-title>
             <v-list-item-subtitle>

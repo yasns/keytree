@@ -36,8 +36,8 @@ class Subsystem(Base):
     )
 
 
-class Node(Base):
-    __tablename__: str = "node"
+class Vertex(Base):
+    __tablename__: str = "vertex"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -58,18 +58,18 @@ class Node(Base):
     )
 
 
-class NodeEdge(Base):
-    __tablename__: str = "node_edge"
+class VertexEdge(Base):
+    __tablename__: str = "vertex_edge"
 
-    parent_node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), primary_key=True)
+    parent_vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), primary_key=True)
 
-    child_node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), primary_key=True)
+    child_vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), primary_key=True)
 
     alias: Mapped[str] = mapped_column(String(64), primary_key=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        UniqueConstraint("parent_node_id", "alias"),
-        CheckConstraint("parent_node_id <> child_node_id", name="no_self_loop"),
+        UniqueConstraint("parent_vertex_id", "alias"),
+        CheckConstraint("parent_vertex_id <> child_vertex_id", name="no_self_loop"),
         CheckConstraint("alias ~ '^[a-z0-9_]+$'", name="alias_slug"),
     )
 
@@ -79,7 +79,7 @@ class Mode(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    node_id: Mapped[int] = mapped_column(ForeignKey("node.id"), nullable=False)
+    vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), nullable=False)
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -101,10 +101,10 @@ class Mode(Base):
 
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(
-            ["forked_from_key_id", "node_id"], ["key.id", "key.node_id"], use_alter=True
+            ["forked_from_key_id", "vertex_id"], ["key.id", "key.vertex_id"], use_alter=True
         ),
-        UniqueConstraint("id", "node_id"),
-        UniqueConstraint("node_id", "name"),
+        UniqueConstraint("id", "vertex_id"),
+        UniqueConstraint("vertex_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
             "(archived_at IS NULL) = (archived_by IS NULL)",
@@ -120,7 +120,7 @@ class Key(Base):
 
     mode_id: Mapped[int] = mapped_column(nullable=False)
 
-    node_id: Mapped[int] = mapped_column(nullable=False)
+    vertex_id: Mapped[int] = mapped_column(nullable=False)
 
     version: Mapped[int] = mapped_column(nullable=False)
 
@@ -151,10 +151,10 @@ class Key(Base):
     )
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["mode_id", "node_id"], ["mode.id", "mode.node_id"]),
+        ForeignKeyConstraint(["mode_id", "vertex_id"], ["mode.id", "mode.vertex_id"]),
         UniqueConstraint("mode_id", "version"),
         UniqueConstraint("id", "mode_id"),
-        UniqueConstraint("id", "node_id"),
+        UniqueConstraint("id", "vertex_id"),
         CheckConstraint(
             "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name="label_format"
         ),
@@ -178,16 +178,16 @@ class KeyChild(Base):
 
     child_key_id: Mapped[int] = mapped_column(nullable=False)
 
-    parent_node_id: Mapped[int] = mapped_column(nullable=False)
+    parent_vertex_id: Mapped[int] = mapped_column(nullable=False)
 
-    child_node_id: Mapped[int] = mapped_column(nullable=False)
+    child_vertex_id: Mapped[int] = mapped_column(nullable=False)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["parent_key_id", "parent_node_id"], ["key.id", "key.node_id"]),
-        ForeignKeyConstraint(["child_key_id", "child_node_id"], ["key.id", "key.node_id"]),
+        ForeignKeyConstraint(["parent_key_id", "parent_vertex_id"], ["key.id", "key.vertex_id"]),
+        ForeignKeyConstraint(["child_key_id", "child_vertex_id"], ["key.id", "key.vertex_id"]),
         ForeignKeyConstraint(
-            ["parent_node_id", "child_node_id", "alias"],
-            ["node_edge.parent_node_id", "node_edge.child_node_id", "node_edge.alias"],
+            ["parent_vertex_id", "child_vertex_id", "alias"],
+            ["vertex_edge.parent_vertex_id", "vertex_edge.child_vertex_id", "vertex_edge.alias"],
         ),
     )
 

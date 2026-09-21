@@ -94,7 +94,7 @@ const staged = computed(() =>
 function targetLabel(child: KeyChildMetaOut): string {
   if (child.category === 'external') return child.payload || '(none)'
   if (!child.mode_name || child.version === null) return '(none)'
-  return `${child.subsystem_name}/${child.node_name}/${child.mode_name}/v${child.version}`
+  return `${child.subsystem_name}/${child.vertex_name}/${child.mode_name}/v${child.version}`
 }
 
 function bindScroller(el: Element | ComponentPublicInstance | null) {

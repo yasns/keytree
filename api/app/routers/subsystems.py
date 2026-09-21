@@ -5,7 +5,7 @@ from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import Node, NodeEdge, Subsystem
+from app.db.models import Subsystem, Vertex, VertexEdge
 
 router = APIRouter(
     prefix="/subsystems",
@@ -28,7 +28,7 @@ class TreeOut(BaseModel):
     alias: str
     name: str
     subsystem_id: int
-    """True owner of a node."""
+    """True owner of a vertex."""
     category: str | None
     """None for bundles."""
     children: list["TreeOut"] = []
@@ -38,33 +38,33 @@ class TreeOut(BaseModel):
 
 def _build_tree(
     subsystem_id: int,
-    nodes: list[Node],
-    edges: list[tuple[int, str, Node]],
+    vertices: list[Vertex],
+    edges: list[tuple[int, str, Vertex]],
 ) -> list[TreeOut]:
     """Roots = no parent in-subsystem; recursion stops at the boundary, far side rendered as a
     leaf."""
-    children_by_parent: dict[int, list[tuple[str, Node]]] = {}
+    children_by_parent: dict[int, list[tuple[str, Vertex]]] = {}
     for parent_id, alias, child in edges:
         children_by_parent.setdefault(parent_id, []).append((alias, child))
 
     has_parent_in_subsystem = {
         child.id for _, _, child in edges if child.subsystem_id == subsystem_id
     }
-    roots = sorted((n for n in nodes if n.id not in has_parent_in_subsystem), key=lambda n: n.id)
+    roots = sorted((n for n in vertices if n.id not in has_parent_in_subsystem), key=lambda n: n.id)
 
-    def build(alias: str, node: Node, ancestors: frozenset[int]) -> TreeOut:
+    def build(alias: str, vertex: Vertex, ancestors: frozenset[int]) -> TreeOut:
         out = TreeOut(
-            id=node.id,
+            id=vertex.id,
             alias=alias,
-            name=node.name,
-            subsystem_id=node.subsystem_id,
-            category=node.category,
+            name=vertex.name,
+            subsystem_id=vertex.subsystem_id,
+            category=vertex.category,
         )
-        if node.subsystem_id == subsystem_id and node.id not in ancestors:
+        if vertex.subsystem_id == subsystem_id and vertex.id not in ancestors:
             out.children = [
-                build(child_alias, child, ancestors | {node.id})
+                build(child_alias, child, ancestors | {vertex.id})
                 for child_alias, child in sorted(
-                    children_by_parent.get(node.id, []), key=lambda pair: (pair[1].id, pair[0])
+                    children_by_parent.get(vertex.id, []), key=lambda pair: (pair[1].id, pair[0])
                 )
             ]
         return out
@@ -81,14 +81,16 @@ async def list_subsystems(session: SessionDep) -> list[SubsystemOut]:
 
 @router.get("/{subsystem_id}/tree")
 async def get_subsystem_tree(subsystem_id: int, session: SessionDep) -> list[TreeOut]:
-    """Returns a subsystem's node hierarchy as a forest. Does not cross subsystem boundaries."""
-    nodes = list(await session.scalars(select(Node).where(Node.subsystem_id == subsystem_id)))
-
-    child = aliased(Node)
-    edges = await session.execute(
-        select(NodeEdge.parent_node_id, NodeEdge.alias, child)
-        .join(child, NodeEdge.child_node_id == child.id)
-        .where(NodeEdge.parent_node_id.in_([n.id for n in nodes]))
+    """Returns a subsystem's vertex hierarchy as a forest. Does not cross subsystem boundaries."""
+    vertices = list(
+        await session.scalars(select(Vertex).where(Vertex.subsystem_id == subsystem_id))
     )
 
-    return _build_tree(subsystem_id, nodes, list(edges.tuples()))
+    child = aliased(Vertex)
+    edges = await session.execute(
+        select(VertexEdge.parent_vertex_id, VertexEdge.alias, child)
+        .join(child, VertexEdge.child_vertex_id == child.id)
+        .where(VertexEdge.parent_vertex_id.in_([n.id for n in vertices]))
+    )
+
+    return _build_tree(subsystem_id, vertices, list(edges.tuples()))

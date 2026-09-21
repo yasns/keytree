@@ -53,7 +53,7 @@ export function parseVersion(v: string | undefined): VersionTarget | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-/** What a comparison is against: a mode of the routed node, at some version. */
+/** What a comparison is against: a mode of the routed vertex, at some version. */
 export type DiffTarget = { mode: string; version: VersionTarget }
 
 function formatDiffTarget(target: DiffTarget): string {

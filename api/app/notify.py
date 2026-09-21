@@ -66,8 +66,8 @@ def bundle_counts(
     return _counts_html(added, removed)
 
 
-def _escaped_path(subsystem_name: str, node_name: str, mode_name: str) -> str:
-    return f"{html.escape(subsystem_name)}/{html.escape(node_name)}/{html.escape(mode_name)}"
+def _escaped_path(subsystem_name: str, vertex_name: str, mode_name: str) -> str:
+    return f"{html.escape(subsystem_name)}/{html.escape(vertex_name)}/{html.escape(mode_name)}"
 
 
 def _url(*parts: str) -> str:
@@ -76,7 +76,7 @@ def _url(*parts: str) -> str:
 
 def edit_entry(
     subsystem_name: str,
-    node_name: str,
+    vertex_name: str,
     mode_name: str,
     base_version: int | None,
     new_version: int,
@@ -84,15 +84,15 @@ def edit_entry(
     comment: str,
     counts: str,
 ) -> Entry:
-    path = _escaped_path(subsystem_name, node_name, mode_name)
+    path = _escaped_path(subsystem_name, vertex_name, mode_name)
     if base_version is not None:
         label_html = f"{path}/<s>v{base_version}</s> → v{new_version}"
         diff = urlencode({"diff": f"{mode_name}/v{new_version}"}, quote_via=quote)
-        url = f"{_url(subsystem_name, node_name, mode_name, f'v{base_version}')}?{diff}"
+        url = f"{_url(subsystem_name, vertex_name, mode_name, f'v{base_version}')}?{diff}"
         link_text = "View changes"
     else:
         label_html = f"{path}/v{new_version}"
-        url = _url(subsystem_name, node_name, mode_name, f"v{new_version}")
+        url = _url(subsystem_name, vertex_name, mode_name, f"v{new_version}")
         link_text = "View key"
     return Entry(
         emoji="\U0001f331" if is_fork else "\U0001f511",  # 🌱 fork, 🔑 new version
@@ -105,21 +105,21 @@ def edit_entry(
     )
 
 
-def archival_entry(subsystem_name: str, node_name: str, mode_name: str, archived: bool) -> Entry:
-    path = _escaped_path(subsystem_name, node_name, mode_name)
+def archival_entry(subsystem_name: str, vertex_name: str, mode_name: str, archived: bool) -> Entry:
+    path = _escaped_path(subsystem_name, vertex_name, mode_name)
     return Entry(
         emoji="\U0001f4e6" if archived else "\U0001f4e4",  # 📦 archive, 📤 unarchive
         label_html=f"<s>{path}</s>" if archived else path,
         detail="Archive mode" if archived else "Unarchive mode",
         counts="",
         comment="",
-        url=_url(subsystem_name, node_name, mode_name),
+        url=_url(subsystem_name, vertex_name, mode_name),
         link_text="View mode",
     )
 
 
 def decommission_entry(
-    subsystem_name: str, node_name: str, mode_name: str, label: str, decommissioned: bool
+    subsystem_name: str, vertex_name: str, mode_name: str, label: str, decommissioned: bool
 ) -> Entry:
     escaped = html.escape(label)
     return Entry(

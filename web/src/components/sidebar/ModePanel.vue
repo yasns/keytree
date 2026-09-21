@@ -145,14 +145,14 @@ import { LOCALE } from '@/format'
 import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
-import { useClearPending } from '@/composables/usePendingNode'
+import { useClearPending } from '@/composables/usePendingKey'
 import { usePendingEditors } from '@/composables/usePendingEditors'
 import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
 import PendingEditorsAlert from '../key/PendingEditorsAlert.vue'
 
 type ModeOut = components['schemas']['ModeOut']
-type NodeOut = components['schemas']['NodeOut']
+type VertexOut = components['schemas']['VertexOut']
 
 const nav = useNavStore()
 const router = useRouter()
@@ -161,13 +161,13 @@ const { clearPending } = useClearPending()
 
 const filter = ref<'active' | 'archived' | 'all'>('active')
 const search = ref('')
-const detail = ref<NodeOut | undefined>(undefined)
+const detail = ref<VertexOut | undefined>(undefined)
 const infoMode = ref<ModeOut | undefined>(undefined)
 
 watch(
-  () => nav.pendingNodeId,
+  () => nav.pendingVertexId,
   async (id) => {
-    detail.value = id !== null ? await nav.fetchNodeDetail(id) : undefined
+    detail.value = id !== null ? await nav.fetchVertexDetail(id) : undefined
   },
   { immediate: true },
 )
@@ -176,7 +176,8 @@ watch(
 watch(
   () => nav.keysToken,
   async () => {
-    if (nav.pendingNodeId !== null) detail.value = await nav.fetchNodeDetail(nav.pendingNodeId)
+    if (nav.pendingVertexId !== null)
+      detail.value = await nav.fetchVertexDetail(nav.pendingVertexId)
   },
 )
 

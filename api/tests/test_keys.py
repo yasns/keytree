@@ -11,10 +11,10 @@ from app.db.models import (
     Changeset,
     Key,
     Mode,
-    Node,
     StagedDecommission,
     StagedEdit,
     Subsystem,
+    Vertex,
 )
 from app.routers.commit import CommitIn, commit_changeset
 from app.routers.keys import (
@@ -40,7 +40,7 @@ def _key() -> Key:
     return Key(
         id=9,
         mode_id=3,
-        node_id=42,
+        vertex_id=42,
         version=2,
         label="ugt/l1_menu/default/v2",
         payload="menu contents",
@@ -75,8 +75,8 @@ def test_build_child_meta_lists_empty_alias_with_null_key():
 
     assert meta.alias == "l1_menu"
     # structural fields come off the edge: row still renders/refills
-    assert meta.node_id == 42
-    assert meta.node_name == "l1_menu"
+    assert meta.vertex_id == 42
+    assert meta.vertex_name == "l1_menu"
     assert meta.subsystem_name == "ugt"
     assert meta.category == "menu"
     # Everything off the child key is absent
@@ -141,20 +141,20 @@ async def _forked_key(
     *,
     cern_login: str,
     subsystem: str,
-    node: str,
+    vertex: str,
     mode_name: str,
     payload: str,
 ) -> None:
-    """Fresh mode on a seeded node, committed straight to v1 with `payload`."""
+    """Fresh mode on a seeded vertex, committed straight to v1 with `payload`."""
     async with session_factory() as session:
         await upsert_app_user({"cern_upn": cern_login, "name": cern_login}, session)
-        node_id = await session.scalar(
-            select(Node.id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
-            .where(Subsystem.name == subsystem, Node.name == node)
+        vertex_id = await session.scalar(
+            select(Vertex.id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+            .where(Subsystem.name == subsystem, Vertex.name == vertex)
         )
-        assert node_id is not None
-        mode = Mode(node_id=node_id, name=mode_name, description="d", created_by=cern_login)
+        assert vertex_id is not None
+        mode = Mode(vertex_id=vertex_id, name=mode_name, description="d", created_by=cern_login)
         session.add(mode)
         changeset = Changeset(created_by=cern_login)
         session.add(changeset)
@@ -180,7 +180,7 @@ async def _restage_key(
     *,
     cern_login: str,
     subsystem: str,
-    node: str,
+    vertex: str,
     mode_name: str,
     base_version: int,
     payload: str,
@@ -192,7 +192,7 @@ async def _restage_key(
             [
                 StagedEditIn(
                     subsystem_name=subsystem,
-                    node_name=node,
+                    vertex_name=vertex,
                     mode_name=mode_name,
                     base_version=base_version,
                     proposed_payload=payload,
@@ -214,14 +214,14 @@ async def _key_id_by_label(session_factory: async_sessionmaker[AsyncSession], la
 
 
 async def _mode_id(
-    session_factory: async_sessionmaker[AsyncSession], subsystem: str, node: str, mode_name: str
+    session_factory: async_sessionmaker[AsyncSession], subsystem: str, vertex: str, mode_name: str
 ) -> int:
     async with session_factory() as session:
         mode_id = await session.scalar(
             select(Mode.id)
-            .join(Node, Node.id == Mode.node_id)
-            .join(Subsystem, Subsystem.id == Node.subsystem_id)
-            .where(Subsystem.name == subsystem, Node.name == node, Mode.name == mode_name)
+            .join(Vertex, Vertex.id == Mode.vertex_id)
+            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+            .where(Subsystem.name == subsystem, Vertex.name == vertex, Mode.name == mode_name)
         )
         assert mode_id is not None
         return mode_id
@@ -236,7 +236,7 @@ def test_toggle_decommission_stages_then_cancels_on_a_second_click(
             session_factory,
             cern_login="decommission_toggle",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="decommission_toggle_mode",
             payload="<menu/>",
         )
@@ -268,7 +268,7 @@ def test_committing_a_staged_decommission_updates_the_key(
             session_factory,
             cern_login="decommission_commit",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="decommission_commit_mode",
             payload="<menu/>",
         )
@@ -317,7 +317,7 @@ def test_discarding_an_open_changeset_clears_its_staged_decommission(
             session_factory,
             cern_login="decommission_discard",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="decommission_discard_mode",
             payload="<menu/>",
         )
@@ -352,7 +352,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
             session_factory,
             cern_login=base_login,
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="guard_base_mode",
             payload="<menu/>",
         )
@@ -369,7 +369,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
                     [
                         StagedEditIn(
                             subsystem_name="ugt",
-                            node_name="l1_menu",
+                            vertex_name="l1_menu",
                             mode_name="guard_base_mode",
                             base_version=1,
                             proposed_payload="attempted v2",
@@ -389,7 +389,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
             session_factory,
             cern_login=child_login,
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="guard_child_source_mode",
             payload="<menu/>",
         )
@@ -405,7 +405,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
             session_factory,
             cern_login=child_login,
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="guard_child_target_mode",
             payload="<menu/>",
         )
@@ -417,7 +417,7 @@ def test_staging_rejects_decommissioned_base_and_child_keys(
                     [
                         StagedEditIn(
                             subsystem_name="ugt",
-                            node_name="l1_menu",
+                            vertex_name="l1_menu",
                             mode_name="guard_child_target_mode",
                             base_version=1,
                             proposed_children={"decommissioned_child": source_key_id},
@@ -448,7 +448,7 @@ def test_staging_rejects_archived_mode_edits(
             session_factory,
             cern_login=committed_login,
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="guard_archived_mode",
             payload="<menu/>",
         )
@@ -465,7 +465,7 @@ def test_staging_rejects_archived_mode_edits(
                     [
                         StagedEditIn(
                             subsystem_name="ugt",
-                            node_name="l1_menu",
+                            vertex_name="l1_menu",
                             mode_name="guard_archived_mode",
                             base_version=1,
                             proposed_payload="attempted v2",
@@ -486,7 +486,7 @@ def test_staging_rejects_archived_mode_edits(
             session_factory,
             cern_login=staged_login,
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="guard_self_archived_mode",
             payload="<menu/>",
         )
@@ -501,7 +501,7 @@ def test_staging_rejects_archived_mode_edits(
                     [
                         StagedEditIn(
                             subsystem_name="ugt",
-                            node_name="l1_menu",
+                            vertex_name="l1_menu",
                             mode_name="guard_self_archived_mode",
                             base_version=1,
                             proposed_payload="attempted v2",
@@ -562,7 +562,7 @@ def test_search_keys_matches_label_and_excludes_external(
             session_factory,
             cern_login="search_label",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="search_label_mode",
             payload="<menu/>",
         )
@@ -570,7 +570,7 @@ def test_search_keys_matches_label_and_excludes_external(
             session_factory,
             cern_login="search_label",
             subsystem="cms_run",
-            node="clock_source",
+            vertex="clock_source",
             mode_name="search_label_mode",
             payload="LHC",
         )
@@ -593,7 +593,7 @@ def test_search_keys_label_with_a_version_bypasses_the_tip_filter(
             session_factory,
             cern_login="search_version",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="search_version_mode",
             payload="v1 payload",
         )
@@ -602,7 +602,7 @@ def test_search_keys_label_with_a_version_bypasses_the_tip_filter(
                 session_factory,
                 cern_login="search_version",
                 subsystem="ugt",
-                node="l1_menu",
+                vertex="l1_menu",
                 mode_name="search_version_mode",
                 base_version=v,
                 payload=f"v{v + 1} payload",
@@ -627,7 +627,7 @@ def test_search_keys_payload_excludes_external_and_only_the_tip_version(
             session_factory,
             cern_login="search_payload",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="search_payload_mode",
             payload="hello v1",
         )
@@ -635,7 +635,7 @@ def test_search_keys_payload_excludes_external_and_only_the_tip_version(
             session_factory,
             cern_login="search_payload",
             subsystem="ugt",
-            node="l1_menu",
+            vertex="l1_menu",
             mode_name="search_payload_mode",
             base_version=1,
             payload="HELLO v2",
@@ -644,7 +644,7 @@ def test_search_keys_payload_excludes_external_and_only_the_tip_version(
             session_factory,
             cern_login="search_payload",
             subsystem="cms_run",
-            node="clock_source",
+            vertex="clock_source",
             mode_name="search_payload_mode",
             payload="hello external",
         )

@@ -79,15 +79,15 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = unwrap(await api.GET('/api/staging/'))
   }
 
-  /** Any staged edit on a node, whichever mode. */
-  function stagedForNode(subsystem: string, name: string): StagedEditOut | undefined {
-    return edits.value.find((e) => e.subsystem_name === subsystem && e.node_name === name)
+  /** Any staged edit on a vertex, whichever mode. */
+  function stagedForVertex(subsystem: string, name: string): StagedEditOut | undefined {
+    return edits.value.find((e) => e.subsystem_name === subsystem && e.vertex_name === name)
   }
 
   /** At most one edit per mode, whatever version it's based on. */
   function stagedForMode(subsystem: string, name: string, mode: string): StagedEditOut | undefined {
     return edits.value.find(
-      (e) => e.subsystem_name === subsystem && e.node_name === name && e.mode_name === mode,
+      (e) => e.subsystem_name === subsystem && e.vertex_name === name && e.mode_name === mode,
     )
   }
 
@@ -180,7 +180,7 @@ export const useChangesStore = defineStore('changes', () => {
     pendingCount,
     load,
     stagedFor,
-    stagedForNode,
+    stagedForVertex,
     stagedForMode,
     stagedForColumn,
     stagedArchival,

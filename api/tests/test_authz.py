@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.authz import require_writable, subsystems_of_modes, writable_subsystems
-from app.db.models import Mode, Node, Subsystem
+from app.db.models import Mode, Subsystem, Vertex
 
 
 def _claims(roles: list[str]) -> dict[str, object]:
@@ -78,9 +78,9 @@ def test_subsystems_of_modes_resolves_a_seeded_mode(
         async with session_factory() as session:
             mode_id = await session.scalar(
                 select(Mode.id)
-                .join(Node, Node.id == Mode.node_id)
-                .join(Subsystem, Subsystem.id == Node.subsystem_id)
-                .where(Subsystem.name == "cms_run", Node.name == "clock_source")
+                .join(Vertex, Vertex.id == Mode.vertex_id)
+                .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+                .where(Subsystem.name == "cms_run", Vertex.name == "clock_source")
             )
             assert mode_id is not None
             return await subsystems_of_modes({mode_id}, session)

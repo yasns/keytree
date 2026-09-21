@@ -2,7 +2,7 @@ import { useRouter } from 'vue-router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 
-/** Exits the current pending-node selection, discarding it after confirmation. */
+/** Exits the current pending key selection, discarding it after confirmation. */
 export function useClearPending() {
   const nav = useNavStore()
   const changes = useChangesStore()
@@ -10,7 +10,7 @@ export function useClearPending() {
 
   async function clearPending() {
     if (!(await changes.confirmDiscard())) return
-    nav.pendingNodeId = null
+    nav.pendingVertexId = null
     nav.bundleRoot = null
     nav.bundlePath = []
     nav.activatedRow = []
