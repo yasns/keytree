@@ -1,174 +1,347 @@
 {
   "title": "ShepHerd configuration file",
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "system": {
+  "description": "ShepHerd test-runner configuration: the system's crates/boards/links, link settings, command parameter values, command-line variables, and included files. See the ShepHerd \"Configuration files\" user guide for full details: https://shepherd-fwk.docs.cern.ch/user-guide/config-file.html",
+  "allOf": [
+    {
       "type": "object",
+      "errorMessage": "Top level must be a YAML mapping, e.g. with keys like \"system\", \"variables\", \"contexts\", \"link_settings\", \"include\"."
+    },
+    {
       "additionalProperties": false,
       "properties": {
-        "crates": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["building", "rack", "height", "csp_id"],
-            "properties": {
-              "building": { "type": ["string", "integer"] },
-              "rack": { "type": "string" },
-              "height": { "type": "integer" },
-              "description": { "type": "string" },
-              "csp_id": { "type": "integer" }
-            }
-          }
-        },
-        "boards": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["hostname", "crate", "slot"],
-            "properties": {
-              "hostname": { "type": "string" },
-              "port": { "type": "integer" },
-              "crate": { "type": "string" },
-              "slot": { "type": "integer" }
-            }
-          }
-        },
-        "external_boards": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["crate", "slot", "outputs"],
-            "properties": {
-              "crate": { "type": "string" },
-              "slot": { "type": "integer" },
-              "outputs": {
-                "type": "object",
-                "additionalProperties": { "$ref": "#/definitions/indexList" }
+        "system": {
+          "description": "Declares the crates, boards, and links in the system, and how they're connected.",
+          "allOf": [
+            {
+              "type": "object",
+              "errorMessage": "system must be a mapping with at least \"crates\", \"boards\", \"links\" (and optionally \"external_boards\", \"daq_boards\", \"frontends\")."
+            },
+            {
+              "additionalProperties": false,
+              "required": ["crates", "boards", "links"],
+              "properties": {
+                "crates": {
+                  "type": "object",
+                  "description": "Crates in the system, keyed by an arbitrary crate ID string (e.g. \"myCrate\").",
+                  "errorMessage": "crates must be a mapping of crate ID to crate properties.",
+                  "additionalProperties": {
+                    "description": "A crate's physical location and CSP identity.",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "A crate entry must be a mapping with \"building\", \"rack\", \"height\", \"csp_id\" (and optional \"description\")."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["building", "rack", "height", "csp_id"],
+                        "properties": {
+                          "building": {
+                            "type": ["string", "integer"],
+                            "description": "The crate's building, e.g. \"904\"."
+                          },
+                          "rack": {
+                            "type": "string",
+                            "description": "The crate's rack within the building, e.g. \"E1A05\"."
+                          },
+                          "height": {
+                            "type": "integer",
+                            "description": "Position of the bottom of the crate in the rack, in rack units (U) — i.e. the lowest occupied U."
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "Optional free-text note about the crate. Defaults to an empty string if omitted."
+                          },
+                          "csp_id": {
+                            "type": "integer",
+                            "description": "The crate's ID for the CSP protocol. Checked against the sender-identifier field in CSP link filler words, to verify the link map in this file matches what's implemented in hardware."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "boards": {
+                  "type": "object",
+                  "description": "Boards in the system, keyed by an arbitrary board ID string (e.g. \"boardN\").",
+                  "errorMessage": "boards must be a mapping of board ID to board properties.",
+                  "additionalProperties": {
+                    "description": "A board's network address and crate slot.",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "A board entry must be a mapping with \"hostname\", \"crate\", \"slot\" (and optional \"port\")."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["hostname", "crate", "slot"],
+                        "properties": {
+                          "hostname": { "type": "string", "description": "The board's hostname or IP address." },
+                          "port": {
+                            "type": "integer",
+                            "description": "TCP port of the HERD application on this board. Defaults to 3000 if omitted."
+                          },
+                          "crate": {
+                            "type": "string",
+                            "description": "ID of the crate hosting this board — must match a key under system.crates."
+                          },
+                          "slot": { "type": "integer", "description": "The board's logical slot number in its crate." }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "external_boards": {
+                  "type": "object",
+                  "description": "Boards that send or receive data but aren't configured by this framework — add an entry here only when a test receives data from such a board. A link can't have both endpoints outside system.boards.",
+                  "errorMessage": "external_boards must be a mapping of board ID to externally-controlled board properties.",
+                  "additionalProperties": {
+                    "description": "An externally-controlled board's crate/slot and output channel mapping.",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "An external board entry must be a mapping with \"crate\", \"slot\", \"outputs\"."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["crate", "slot", "outputs"],
+                        "properties": {
+                          "crate": { "type": "string", "description": "ID of the crate hosting this board." },
+                          "slot": { "type": "integer", "description": "The board's logical slot number in its crate." },
+                          "outputs": {
+                            "type": "object",
+                            "description": "Maps each of the board's main data-processing FPGAs to the CSP IDs of its output channels.",
+                            "errorMessage": "outputs must be a mapping of FPGA name to a CSP output channel index list.",
+                            "additionalProperties": {
+                              "allOf": [{ "$ref": "#/definitions/indexList" }],
+                              "description": "CSP output channel IDs for this FPGA, e.g. \"0-127\"."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "daq_boards": {
+                  "type": "object",
+                  "description": "DAQ-800 / DTH-400 boards used for links to/from the DAQ system.",
+                  "errorMessage": "daq_boards must be a mapping of DAQ board ID to its input/output properties.",
+                  "additionalProperties": {
+                    "description": "A DAQ board's input and output port mappings, each keyed by processor name.",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "A DAQ board entry must be a mapping with \"inputs\" and \"outputs\"."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["inputs", "outputs"],
+                        "properties": {
+                          "inputs": {
+                            "type": "object",
+                            "description": "Maps each processor name to the index list of its input ports.",
+                            "errorMessage": "inputs must be a mapping of processor name to an input port index list.",
+                            "additionalProperties": {
+                              "allOf": [{ "$ref": "#/definitions/indexList" }],
+                              "description": "Input port indices on this processor, e.g. \"0-23\"."
+                            }
+                          },
+                          "outputs": {
+                            "type": "object",
+                            "description": "Maps each processor name to the index list of its output ports.",
+                            "errorMessage": "outputs must be a mapping of processor name to an output port index list.",
+                            "additionalProperties": {
+                              "allOf": [{ "$ref": "#/definitions/indexList" }],
+                              "description": "Output port indices on this processor, e.g. \"0-4\"."
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "frontends": {
+                  "type": "object",
+                  "description": "Frontend modules, keyed by an arbitrary module ID (e.g. \"feX\").",
+                  "errorMessage": "frontends must be a mapping of frontend module ID to its properties.",
+                  "additionalProperties": {
+                    "description": "A frontend module's manufacturing serial and lpGBT physical IDs.",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "A frontend entry must be a mapping with \"serial\" and \"lpgbt_fuseids\"."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["serial", "lpgbt_fuseids"],
+                        "properties": {
+                          "serial": {
+                            "type": "string",
+                            "description": "Manufacturing serial number, e.g. \"companyName_NNN\"."
+                          },
+                          "lpgbt_fuseids": {
+                            "allOf": [{ "$ref": "#/definitions/indexList" }],
+                            "description": "Comma-separated physical lpGBT fuse IDs; position in the list gives the port number starting from port 0 — e.g. \"51,32,103\" assigns fuse ID 51 to port 0, 32 to port 1, 103 to port 2."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "links": {
+                  "type": "object",
+                  "description": "Links between boards, keyed by an arbitrary link ID (e.g. \"linkN\"). A comma-separated index list in square brackets in the ID (e.g. \"link[0-7]\"), combined with a matching index-list string in from/to, expands to multiple links in one entry.",
+                  "errorMessage": "links must be a mapping of link ID to link properties.",
+                  "additionalProperties": {
+                    "description": "A single link (or, with a bracketed index range in the link ID, a matching set of links).",
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "errorMessage": "A link entry must be a mapping with \"from\" and \"to\"."
+                      },
+                      {
+                        "additionalProperties": false,
+                        "required": ["from", "to"],
+                        "properties": {
+                          "from": {
+                            "allOf": [{ "$ref": "#/definitions/linkEndpoint" }],
+                            "description": "Sender endpoint: [board_id, fpga_or_optics_id, channel_index]."
+                          },
+                          "to": {
+                            "allOf": [{ "$ref": "#/definitions/linkEndpoint" }],
+                            "description": "Receiver endpoint: [board_id, fpga_or_optics_id, channel_index]."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
               }
             }
-          }
+          ]
         },
-        "daq_boards": {
+        "link_settings": {
+          "type": "array",
+          "description": "Type and format of data sent over board-to-board links (PRBS or CSP), as an ordered list: the first entry sets defaults for all links, then each later entry overrides settings for whichever links it selects via from/to.",
+          "items": { "$ref": "#/definitions/linkSettingsEntry" }
+        },
+        "contexts": {
           "type": "object",
+          "description": "Parameter values for commands, organized into named contexts so shared values only need to be specified once. Values are looked up first in the context for the specific board/processor, then in progressively more general contexts (hardware-type-specific, then the shared \"processors\"/\"serviceModules\" context).",
+          "errorMessage": "contexts must be a mapping of context ID to context properties.",
           "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["inputs", "outputs"],
-            "properties": {
-              "inputs": {
+            "description": "A single context's command parameter values.",
+            "allOf": [
+              {
                 "type": "object",
-                "additionalProperties": { "$ref": "#/definitions/indexList" }
+                "errorMessage": "A context entry must be a mapping containing \"parameters\"."
               },
-              "outputs": {
-                "type": "object",
-                "additionalProperties": { "$ref": "#/definitions/indexList" }
-              }
-            }
-          }
-        },
-        "frontends": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["serial", "lpgbt_fuseids"],
-            "properties": {
-              "serial": { "type": "string" },
-              "lpgbt_fuseids": { "$ref": "#/definitions/indexList" }
-            }
-          }
-        },
-        "links": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["from", "to"],
-            "properties": {
-              "from": { "$ref": "#/definitions/linkEndpoint" },
-              "to": { "$ref": "#/definitions/linkEndpoint" }
-            }
-          }
-        }
-      }
-    },
-    "link_settings": {
-      "type": "array",
-      "items": { "$ref": "#/definitions/linkSettingsEntry" }
-    },
-    "contexts": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "parameters": {
-            "type": "object",
-            "propertyNames": { "pattern": "^§?[\\w.*-]+(,[\\w.*-]+)*(:[\\w.*-]+){0,2}$" },
-            "patternProperties": {
-              "^§": {
-                "anyOf": [
-                  { "$ref": "#/definitions/paramValue" },
-                  {
+              {
+                "additionalProperties": false,
+                "required": ["parameters"],
+                "properties": {
+                  "parameters": {
                     "type": "object",
+                    "description": "Parameter values for this context, keyed by parameter name (applies to any command), \"command:parameter\" (one command), \"namespace:command:parameter\" (one command in one transition), or \"§command\"/\"§namespace:command\" (a map of several parameters for one command). The command part may be a comma-separated list to share one value across several commands.",
+                    "errorMessage": "parameters must be a mapping of parameter/command keys to their values.",
+                    "propertyNames": {
+                      "pattern": "^§?[\\w.*-]+(,[\\w.*-]+)*(:[\\w.*-]+){0,2}$",
+                      "patternErrorMessage": "Parameter key must be one or more command names (optionally §-prefixed, comma-separated) followed by up to two optional \":field\" suffixes, e.g. \"configureRxBuffers,alignMGTs:ids\" or \"program:package\"."
+                    },
+                    "patternProperties": {
+                      "^§": {
+                        "anyOf": [
+                          { "$ref": "#/definitions/paramValue" },
+                          {
+                            "type": "object",
+                            "description": "Parameter values for this command, keyed by parameter name.",
+                            "additionalProperties": { "$ref": "#/definitions/paramValue" }
+                          }
+                        ]
+                      }
+                    },
                     "additionalProperties": { "$ref": "#/definitions/paramValue" }
                   }
-                ]
+                }
               }
-            },
-            "additionalProperties": { "$ref": "#/definitions/paramValue" }
+            ]
           }
+        },
+        "variables": {
+          "type": "object",
+          "description": "Values settable from the command line with --var str:name=value; a command-line value takes precedence over the one given here.",
+          "errorMessage": "variables must be a mapping of variable name to value.",
+          "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+        },
+        "include": {
+          "type": "array",
+          "description": "Other YAML config files to merge in, so a system description or parameter set can be reused across configs. May only be used once, at the top level.",
+          "items": { "type": "string" }
         }
       }
-    },
-    "variables": {
-      "type": "object",
-      "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
-    },
-    "include": {
-      "type": "array",
-      "items": { "type": "string" }
     }
-  },
+  ],
   "definitions": {
     "indexList": {
       "type": "string",
-      "pattern": "^\\s*\\d+(\\s*-\\s*\\d+)?(\\s*,\\s*\\d+(\\s*-\\s*\\d+)?)*\\s*$"
+      "description": "A comma-separated list of integers and/or hyphenated ranges, e.g. \"1-3,5\" expands to indices 1, 2, 3, 5.",
+      "pattern": "^\\s*\\d+(\\s*-\\s*\\d+)?(\\s*,\\s*\\d+(\\s*-\\s*\\d+)?)*\\s*$",
+      "patternErrorMessage": "Must be a comma-separated list of integers or ranges, e.g. \"0-3,5,7\" or \"0-123\"."
     },
     "linkEndpoint": {
       "type": "array",
+      "description": "A link endpoint: [board_id, fpga_or_optics_id, channel_index]. The channel index may itself be an index-list string, to expand into multiple links.",
       "minItems": 3,
       "maxItems": 3,
+      "errorMessage": "Must be [board, fpga_or_optics_id, channel_index], e.g. [serenity127, FF_N4_tx, \"0-11\"].",
       "items": [{ "type": "string" }, { "type": "string" }, { "type": ["string", "integer"] }]
     },
     "selector": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "board": { "type": "string" },
-        "processor": { "type": "string" },
-        "port": { "type": ["string", "integer"] }
-      }
+      "description": "Selects a subset of links by matching their endpoints.",
+      "allOf": [
+        {
+          "type": "object",
+          "errorMessage": "Must be a mapping with one or more of \"board\", \"processor\", \"port\"."
+        },
+        {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "board": { "type": "string", "description": "Regex matched against the board ID." },
+            "processor": {
+              "type": "string",
+              "description": "Regex matched against the FPGA/optical-module (processor) ID."
+            },
+            "port": {
+              "type": ["string", "integer"],
+              "description": "Regex matched against the port ID if given as a string, or an exact port index if given as an integer."
+            }
+          }
+        }
+      ]
     },
     "mode": {
+      "description": "Link operating mode: one of the PRBS test patterns, or a CSP packet spec optionally followed by an idle method.",
       "anyOf": [
-        { "enum": ["prbs7", "prbs9", "prbs15", "prbs23", "prbs31"] },
+        {
+          "enum": ["prbs7", "prbs9", "prbs15", "prbs23", "prbs31"],
+          "description": "A pseudorandom binary sequence (PRBS) link test pattern."
+        },
         {
           "type": "array",
+          "description": "CSP packet spec without an explicit idle method: [\"csp\", packet_length_frames, packet_period_frames].",
           "minItems": 3,
           "maxItems": 3,
           "additionalItems": false,
+          "errorMessage": "Must be [\"csp\", packet-length-in-frames, packet-period-in-frames], e.g. [csp, 156, 162].",
           "items": [{ "const": "csp" }, { "type": "integer" }, { "type": "integer" }]
         },
         {
           "type": "array",
+          "description": "CSP packet spec with an explicit idle method: [\"csp\", packet_length_frames, packet_period_frames, idle_method]. Use \"idle1\" for links to an Apollo, Serenity, X2O or BMTL1; \"idle2\" for links to an APx.",
           "minItems": 4,
           "maxItems": 4,
           "additionalItems": false,
+          "errorMessage": "Must be [\"csp\", packet-length-in-frames, packet-period-in-frames, \"idle1\"|\"idle2\"], e.g. [csp, 128, 256, idle1].",
           "items": [
             { "const": "csp" },
             { "type": "integer" },
@@ -179,36 +352,88 @@
       ]
     },
     "linkSettingsEntry": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "default": { "type": "null" },
-        "from": { "$ref": "#/definitions/selector" },
-        "to": { "$ref": "#/definitions/selector" },
-        "mask": { "type": "boolean" },
-        "mode": { "$ref": "#/definitions/mode" }
-      }
+      "description": "One entry in link_settings. The first entry may set \"default: null\" to mark it as the fallback applied to all links; other entries use from/to to select the links they override.",
+      "allOf": [
+        {
+          "type": "object",
+          "errorMessage": "A link_settings entry must be a mapping with optional \"default\", \"from\", \"to\", \"mask\", \"mode\"."
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "type": "null",
+              "description": "Marks this as the default entry applied to all links before later, more specific entries override it. Only meaningful on the first entry."
+            },
+            "from": {
+              "allOf": [{ "$ref": "#/definitions/selector" }],
+              "description": "Selects links by their sender endpoint."
+            },
+            "to": {
+              "allOf": [{ "$ref": "#/definitions/selector" }],
+              "description": "Selects links by their receiver endpoint."
+            },
+            "mask": {
+              "type": "boolean",
+              "description": "If true, disables (masks) the selected links instead of setting a mode."
+            },
+            "mode": { "$ref": "#/definitions/mode" }
+          },
+          "anyOf": [
+            { "required": ["mode"], "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"." },
+            { "required": ["mask"], "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"." }
+          ],
+          "if": { "required": ["default"] },
+          "else": {
+            "anyOf": [
+              { "required": ["from"], "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"." },
+              { "required": ["to"], "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"." }
+            ]
+          }
+        }
+      ]
     },
     "replaceWith": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["replace_with"],
-      "properties": {
-        "replace_with": { "type": "string" }
-      }
+      "description": "Substitutes a value supplied on the command line via --var str:NAME=value in place of a literal parameter value.",
+      "allOf": [
+        {
+          "type": "object",
+          "errorMessage": "Must be a mapping with \"replace_with\", e.g. { replace_with: INPUT_FILE }."
+        },
+        {
+          "additionalProperties": false,
+          "required": ["replace_with"],
+          "properties": {
+            "replace_with": {
+              "type": "string",
+              "description": "Name of the command-line variable to substitute in, e.g. \"INPUT_FILE\"."
+            }
+          }
+        }
+      ]
     },
     "fileValue": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type"],
-      "properties": {
-        "type": { "const": "file" },
-        "path": {
-          "anyOf": [{ "type": "string" }, { "$ref": "#/definitions/replaceWith" }]
+      "description": "A file-type parameter value.",
+      "allOf": [
+        {
+          "type": "object",
+          "errorMessage": "Must be a mapping with \"type: file\" (and optional \"path\")."
+        },
+        {
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "file" },
+            "path": {
+              "anyOf": [{ "type": "string" }, { "$ref": "#/definitions/replaceWith" }],
+              "description": "Path to the file. Omit to give a null/empty file value."
+            }
+          }
         }
-      }
+      ]
     },
     "paramValue": {
+      "description": "A parameter value: a scalar (bool/int/float/string/null), a file value, a command-line variable substitution, or a vector (array) of any of these — whichever type the command's plugin declares for this parameter.",
       "anyOf": [
         { "type": ["string", "number", "boolean", "null"] },
         { "$ref": "#/definitions/fileValue" },
