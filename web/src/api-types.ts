@@ -843,6 +843,8 @@ export interface components {
             expected_version: number;
             /** Category */
             category: string | null;
+            /** Visible */
+            visible: boolean;
             /** Proposed Payload */
             proposed_payload: string | null;
             /** Proposed Children */

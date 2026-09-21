@@ -21,7 +21,7 @@ async def writable_subsystems(claims: dict[str, object], session: SessionDep) ->
         select(Subsystem.name)
         .join(RoleSubsystem, RoleSubsystem.subsystem_id == Subsystem.id)
         .join(Role, Role.id == RoleSubsystem.role_id)
-        .where(Role.name.in_(roles))
+        .where(Role.cern_role_name.in_(roles))
     )
     return set(rows)
 

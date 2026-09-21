@@ -24,6 +24,9 @@ services:
     env_file: api/.env
     environment:
       POSTGRES_HOST: db
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      APP_BASE_URL: http://localhost:5173
     ports:
       - "8080:8080"
     volumes:
@@ -31,6 +34,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025" # web UI
+      - "1025:1025" # smtp
 
   web:
     build:

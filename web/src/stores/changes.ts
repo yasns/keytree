@@ -69,8 +69,7 @@ export const useChangesStore = defineStore('changes', () => {
   const archivals = computed(() => changeset.value?.archivals ?? [])
   const decommissions = computed(() => changeset.value?.decommissions ?? [])
 
-  // Hide external leaf edits
-  const visibleEdits = computed(() => edits.value.filter((e) => e.category !== 'external'))
+  const visibleEdits = computed(() => edits.value.filter((e) => e.visible))
 
   const pendingCount = computed(
     () => visibleEdits.value.length + archivals.value.length + decommissions.value.length,

@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -75,7 +76,7 @@ def test_committing_a_staged_archival_updates_the_mode(
         async with session_factory() as session:
             await toggle_archival(ArchivalIn(mode_id=mode_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
         async with session_factory() as session:
             archived = await session.get(Mode, mode_id)
             assert archived is not None
@@ -84,7 +85,7 @@ def test_committing_a_staged_archival_updates_the_mode(
         async with session_factory() as session:
             await toggle_archival(ArchivalIn(mode_id=mode_id), request, session)
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session)
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
         async with session_factory() as session:
             unarchived = await session.get(Mode, mode_id)
             assert unarchived is not None
