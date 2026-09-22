@@ -257,22 +257,10 @@ export const useNavStore = defineStore('nav', () => {
   /** Repoints a committed child at whatever its parent's staged edit proposes for that alias. */
   function stagedChild(parent: BundleRoot, child: KeyChildMetaOut): KeyChildMetaOut {
     const changes = useChangesStore()
-    const proposed = changes.stagedForMode(
-      parent.subsystem,
-      parent.name,
-      parent.mode,
-    )?.proposed_children
-    if (!proposed) return child
-    const target = proposed[child.alias]
-    // alias absent from map means changeset clears it
-    if (target === undefined) return { ...child, id: null, mode_name: null, version: null }
-    if (target)
-      return { ...child, id: target.key_id, mode_name: target.mode_name, version: target.version }
-    // null means key this changeset produces; read off the staged edit
-    const edit = changes.stagedForVertex(child.subsystem_name, child.vertex_name)
-    return edit
-      ? { ...child, id: null, mode_name: edit.mode_name, version: edit.expected_version }
-      : child
+    return changes.overlayStagedChild(
+      changes.stagedForMode(parent.subsystem, parent.name, parent.mode),
+      child,
+    )
   }
 
   /** Points a bundle-path entry at its own newly staged version. */
@@ -298,7 +286,7 @@ export const useNavStore = defineStore('nav', () => {
       )
       const found = children.find((c) => c.alias === alias)
       if (!found) break
-      const child = stagedChild(locator, found)
+      const child = locator.pending ? stagedChild(locator, found) : found
       path.push(child)
       if (child.category !== null) break // leaf: nothing further to descend into
       const next = childLocator(child)

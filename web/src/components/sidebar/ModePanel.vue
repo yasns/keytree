@@ -28,6 +28,16 @@
                 </template>
               </span>
               <v-chip
+                v-if="row.uncommitted"
+                size="small"
+                density="compact"
+                label
+                variant="tonal"
+                color="info"
+              >
+                pending
+              </v-chip>
+              <v-chip
                 v-if="row.archived || row.pending"
                 size="small"
                 density="compact"
@@ -214,6 +224,7 @@ const filteredModes = computed(() =>
         mode,
         archived: staged?.archived ?? mode.archived_at !== null,
         pending: !!staged,
+        uncommitted: mode.versions.length === 0,
       }
     })
     .filter(

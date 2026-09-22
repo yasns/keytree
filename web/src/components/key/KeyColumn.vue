@@ -117,6 +117,7 @@
                       : 'A newer version is available.'
                   }}
                   <a
+                    v-if="!readOnly"
                     href="#"
                     class="text-primary hover-underline"
                     @click.stop.prevent="updateToLatest(row.child, row.upgrade)"
@@ -302,28 +303,13 @@ function selectionTail(child: KeyChildMetaOut): string {
 }
 
 function baselineExternal(child: KeyChildMetaOut): string {
-  const proposed = staged.value?.proposed_children?.[child.alias]
-  if (proposed === undefined || proposed?.key_id === child.id) return child.payload ?? ''
-  const sibling = changes.stagedForVertex(child.subsystem_name, child.vertex_name)
-  return sibling?.proposed_payload ?? ''
+  return changes.overlayStagedChild(props.pending ? staged.value : undefined, child).payload ?? ''
 }
 
 /** Committed child, or what the changeset stages. */
 function baselineChild(child: KeyChildMetaOut): ChildChoice {
-  const committed = { keyId: child.id, mode: child.mode_name ?? '', version: child.version }
-  const proposedChildren = staged.value?.proposed_children
-  // no child map staged: row still points at the committed key
-  if (!proposedChildren) return committed
-  const proposed = proposedChildren[child.alias]
-  if (proposed === undefined) return { keyId: null, mode: '', version: null }
-  // null means key this changeset produces; read off the staged edit
-  if (proposed === null) {
-    const staged = changes.stagedForVertex(child.subsystem_name, child.vertex_name)
-    return staged
-      ? { keyId: null, mode: staged.mode_name, version: staged.expected_version }
-      : { keyId: null, mode: '', version: null }
-  }
-  return { keyId: proposed.key_id, mode: proposed.mode_name, version: proposed.version }
+  const effective = changes.overlayStagedChild(props.pending ? staged.value : undefined, child)
+  return { keyId: effective.id, mode: effective.mode_name ?? '', version: effective.version }
 }
 
 function applyBaselineRow(child: KeyChildMetaOut) {
@@ -587,7 +573,7 @@ async function load() {
   externalChoice.clear()
   childChoice.clear()
   const token = ++loadToken
-  const source = staged.value?.based_on
+  const source = props.pending ? staged.value?.based_on : undefined
   const sourceMode = source?.mode_name ?? props.mode
   const sourceVersion = source?.version ?? props.version
   const [p, c] = await Promise.all([
