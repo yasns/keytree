@@ -34,6 +34,7 @@
           :pending="isPending"
           :search-query="(route.query.q as string) || undefined"
           :search-regex="route.query.regex === '1'"
+          :reveal-first-problem="route.query.problem === '1'"
         ></KeyPayload>
       </template>
 

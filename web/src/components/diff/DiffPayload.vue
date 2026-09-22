@@ -3,7 +3,7 @@
     <div
       v-if="showBackToSplit"
       v-ripple
-      class="d-flex align-center justify-center cursor-pointer back-strip bg-surface-light"
+      class="d-flex align-center justify-center cursor-pointer back-strip elevation-5 elevation-overlay"
       style="width: 2rem"
       @click="emit('back')"
     >

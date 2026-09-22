@@ -1,5 +1,5 @@
 <template>
-  <v-expansion-panels variant="accordion" class="rounded-bottom border-b" flat v-model="panel">
+  <v-expansion-panels variant="accordion" flat v-model="panel">
     <v-expansion-panel>
       <v-expansion-panel-title>
         <div class="d-flex flex-column align-start ga-2" style="min-width: 0">
@@ -74,8 +74,17 @@
           <div class="font-weight-medium">Key label</div>
           <div class="d-flex align-center ga-1">
             <CopyButton :text="ownFields.displayLabel"></CopyButton>
-            <span class="key-label text-truncate"
-              ><DiffText :runs="displayLabelRuns" :highlight-class="diffHighlightClass"></DiffText
+            <span class="key-label key-label-truncate"
+              ><span class="key-label-head"
+                ><DiffText
+                  :runs="displayLabelRuns[0]"
+                  :highlight-class="diffHighlightClass"
+                ></DiffText></span
+              ><span class="key-label-tail"
+                ><DiffText
+                  :runs="displayLabelRuns[1]"
+                  :highlight-class="diffHighlightClass"
+                ></DiffText></span
             ></span>
           </div>
         </label>
@@ -157,20 +166,28 @@
 
           <div>
             <div class="font-weight-medium">Based on</div>
-            <div class="d-flex align-center ga-1">
-              <v-btn
-                icon="mdi-open-in-new"
-                size="small"
-                variant="text"
-                density="comfortable"
-                :href="basedOnHref"
-                target="_blank"
-                rel="noopener"
-              ></v-btn>
-              <span class="key-label text-truncate"
-                ><DiffText :runs="basedOnRuns" :highlight-class="diffHighlightClass"></DiffText
+            <a
+              class="based-on-link d-flex align-center ga-1"
+              :href="basedOnHref"
+              target="_blank"
+              rel="noopener"
+            >
+              <span class="key-label key-label-truncate hover-underline"
+                ><span class="key-label-head"
+                  ><DiffText
+                    :runs="basedOnRuns[0]"
+                    :highlight-class="diffHighlightClass"
+                  ></DiffText></span
+                ><span class="key-label-tail"
+                  ><DiffText
+                    :runs="basedOnRuns[1]"
+                    :highlight-class="diffHighlightClass"
+                  ></DiffText></span
               ></span>
-            </div>
+
+              <v-icon icon="mdi-open-in-new" size="small"></v-icon>
+              <v-tooltip activator="parent" location="left">Open in new tab</v-tooltip>
+            </a>
           </div>
         </template>
       </v-expansion-panel-text>
@@ -188,7 +205,12 @@ import { keyRoute } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useChangesStore } from '@/stores/changes'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
-import { runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useDiff'
+import {
+  runsFor,
+  runsForLabel,
+  sideHighlightClass,
+  type ColumnDiffData,
+} from '@/composables/useDiff'
 import CopyButton from '../CopyButton.vue'
 import DiffText from '../diff/DiffText.vue'
 
@@ -305,7 +327,7 @@ const counterpartFields = computed(
 )
 
 const displayLabelRuns = computed(() =>
-  runsFor(ownFields.value.displayLabel, counterpartFields.value?.displayLabel),
+  runsForLabel(ownFields.value.displayLabel, counterpartFields.value?.displayLabel),
 )
 const modeRuns = computed(() => runsFor(ownFields.value.mode, counterpartFields.value?.mode))
 const versionRuns = computed(() =>
@@ -315,7 +337,7 @@ const commentRuns = computed(() =>
   runsFor(ownFields.value.comment, counterpartFields.value?.comment),
 )
 const basedOnRuns = computed(() =>
-  runsFor(ownFields.value.basedOnLabel, counterpartFields.value?.basedOnLabel),
+  runsForLabel(ownFields.value.basedOnLabel, counterpartFields.value?.basedOnLabel),
 )
 const createdByRuns = computed(() =>
   runsFor(ownFields.value.createdByText, counterpartFields.value?.createdByText),
@@ -328,3 +350,10 @@ const validationStatusRuns = computed(() =>
 )
 const diffHighlightClass = computed(() => sideHighlightClass(props.side))
 </script>
+
+<style scoped>
+.based-on-link {
+  color: inherit;
+  text-decoration: none;
+}
+</style>

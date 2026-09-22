@@ -1,6 +1,7 @@
 import { computed, ref, type Ref, watch } from 'vue'
 import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
+import { useSnackbarStore } from '@/stores/snackbar'
 import type { components } from '@/api-types'
 
 type ModeOut = components['schemas']['ModeOut']
@@ -36,4 +37,16 @@ export function useCurrentMode(
 export function useIsArchived(mode: Ref<ModeOut | undefined>): Ref<boolean> {
   const changes = useChangesStore()
   return computed(() => !!mode.value && changes.archived(mode.value))
+}
+
+export function useToggleArchival() {
+  const changes = useChangesStore()
+  const snackbar = useSnackbarStore()
+  return async function toggleArchival(mode: ModeOut) {
+    await changes.toggleArchival(mode.id)
+    snackbar.notify(
+      changes.archived(mode) ? 'Mode archive staged' : 'Mode unarchive staged',
+      'info',
+    )
+  }
 }

@@ -1,9 +1,12 @@
 <template>
   <div class="d-flex flex-column h-100">
-    <div class="d-flex flex-column" style="flex: 1 1 0; min-height: 0">
-      <div>
+    <div class="d-flex flex-column" style="flex: 2 1 0; min-height: 0">
+      <div class="border-b-sm pb-4">
+        <div class="pa-4"><span class="text-title-small">Browse</span></div>
+
         <v-autocomplete
           ref="fieldRef"
+          class="px-4"
           :model-value="nav.selectedSubsystemId"
           :items="autocompleteItems"
           item-title="title"
@@ -16,7 +19,7 @@
           @update:model-value="onSubsystemSelect"
         ></v-autocomplete>
 
-        <v-chip-group v-if="chips.length" column class="px-2 align-center">
+        <v-chip-group v-if="chips.length" column class="px-4 pb-0 mt-3">
           <v-chip
             v-for="chip in chips"
             :key="chip.name"
@@ -30,13 +33,13 @@
         </v-chip-group>
       </div>
 
-      <div
+      <v-empty-state
         v-if="nav.selectedSubsystemId === null"
-        class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4"
+        class="flex-grow-1"
         style="min-height: 0"
-      >
-        Select a subsystem to browse its keys.
-      </div>
+        icon="mdi-folder-key-outline"
+        text="Select a subsystem to browse its keys."
+      ></v-empty-state>
 
       <div v-else class="overflow-y-auto flex-grow-1" style="min-height: 0">
         <v-treeview
@@ -209,6 +212,7 @@ watch(
       aliasJumpOpen.value = true
       return
     }
+    nav.openedRowBeforeModeSelect = nav.openedRow
     nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]
     nav.pendingVertexId = row.vertex.id
   },

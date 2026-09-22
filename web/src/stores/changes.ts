@@ -24,6 +24,10 @@ export function pendingSource(edit: StagedEditOut | undefined) {
   return edit?.base_version === null ? edit.copied_from : null
 }
 
+export function keyIcon(edit: StagedEditOut | undefined) {
+  return edit?.base_version === null && edit.copied_from ? 'mdi-source-fork' : 'mdi-key-plus'
+}
+
 export const useChangesStore = defineStore('changes', () => {
   const changeset = ref<ChangesetOut | null>(null)
 

@@ -12,7 +12,7 @@
         >
           <span>Yours</span><span></span><span>Theirs</span>
         </div>
-        <v-list density="compact" class="py-0 conflict-grid">
+        <v-list density="compact" class="conflict-grid">
           <template v-for="conflict in conflicts" :key="conflictKey(conflict)">
             <KeyChangeListItem
               :key-label="conflictKey(conflict)"
@@ -21,11 +21,16 @@
               :subtitle="conflictSubtitle(conflict)"
               :counts="yourDiffCounts(conflict)"
               @click="emit('diff', conflict, 'yours')"
-            ></KeyChangeListItem>
+            >
+              <template #prepend>
+                <v-icon :icon="keyIcon(conflict)" size="small"></v-icon>
+              </template>
+            </KeyChangeListItem>
             <div class="d-flex align-center justify-center">
               <v-btn
                 icon="mdi-compare-horizontal"
-                variant="tonal"
+                variant="flat"
+                color="primary"
                 density="comfortable"
                 @click="emit('compare', conflict)"
               >
@@ -40,7 +45,11 @@
               :subtitle="theirSubtitle(conflict)"
               :counts="theirDiffCounts(conflict)"
               @click="emit('diff', conflict, 'theirs')"
-            ></KeyChangeListItem>
+            >
+              <template #prepend>
+                <v-icon :icon="keyIcon(conflict)" size="small"></v-icon>
+              </template>
+            </KeyChangeListItem>
           </template>
         </v-list>
         <p>
@@ -71,7 +80,7 @@ import {
   useDiffCountCache,
   type KeyRef,
 } from '@/composables/useDiff'
-import { type Conflict, useChangesStore } from '@/stores/changes'
+import { type Conflict, keyIcon as stagedEditKeyIcon, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import KeyChangeListItem from '../key/KeyChangeListItem.vue'
 
@@ -107,6 +116,10 @@ function stagedEdit(conflict: Conflict) {
 
 function conflictSubtitle(conflict: Conflict): string {
   return stagedEdit(conflict)?.comment ?? ''
+}
+
+function keyIcon(conflict: Conflict) {
+  return stagedEditKeyIcon(stagedEdit(conflict))
 }
 
 const fetchPayload = memoizeByRef((ref: KeyRef) =>

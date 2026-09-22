@@ -88,6 +88,7 @@ export const useNavStore = defineStore('nav', () => {
 
   const openedRow = ref<string[]>([])
   const activatedRow = ref<string[]>([])
+  const openedRowBeforeModeSelect = ref<string[] | null>(null)
 
   const activePanel = shallowRef<Component | null>(null)
   const subsystemMenuOpen = ref(false)
@@ -338,9 +339,7 @@ export const useNavStore = defineStore('nav', () => {
   function goToName(name: string) {
     const row = findRow((r) => !r.isAlias && r.vertex.name === name)
     if (!row) return
-    const opened = [...row.ancestors]
-    if (row.children) opened.push(row.path)
-    openedRow.value = opened
+
     activatedRow.value = [row.path]
   }
 
@@ -360,6 +359,7 @@ export const useNavStore = defineStore('nav', () => {
     selectedSubsystemId,
     openedRow,
     activatedRow,
+    openedRowBeforeModeSelect,
     activePanel,
     subsystemMenuOpen,
     vertexDetail,

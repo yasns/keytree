@@ -52,7 +52,7 @@
             <div
               v-ripple
               v-bind="tooltipProps"
-              class="collapse-strip h-100 bg-surface-light d-flex align-center justify-center cursor-pointer"
+              class="collapse-strip h-100 d-flex align-center justify-center cursor-pointer elevation-5 elevation-overlay"
               style="flex: 0 0 auto; width: 2rem"
               @click="collapsed = !collapsed"
             >
@@ -80,7 +80,9 @@
       </template>
     </template>
 
-    <Spinner v-else></Spinner>
+    <div v-else class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+      <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
+    </div>
   </div>
 </template>
 
@@ -111,7 +113,6 @@ import { childLocator, useNavStore } from '@/stores/nav'
 import { useAuthStore } from '@/stores/auth'
 import KeyColumn from './KeyColumn.vue'
 import KeyPayload from './KeyPayload.vue'
-import Spinner from '../Spinner.vue'
 
 const nav = useNavStore()
 const auth = useAuthStore()

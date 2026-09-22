@@ -13,7 +13,7 @@
         <template v-for="(side, i) in sides" :key="side.name">
           <div
             v-if="i > 0"
-            class="h-100 border-e-sm border-s-sm bg-surface"
+            class="h-100 border-e-sm border-s-sm elevation-4 elevation-overlay"
             style="flex: 0 0 auto; width: 1rem"
           ></div>
 
@@ -70,7 +70,14 @@
         </template>
       </template>
 
-      <Spinner v-else></Spinner>
+      <template v-else>
+        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+          <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
+        </div>
+        <div class="h-100 border-e-sm border-s-sm" style="flex: 0 0 auto; width: 400px">
+          <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -86,7 +93,6 @@ import { resolveDiffRoot, type DiffTarget } from '@/router'
 import { leafLocatorFor, parseBundlePath } from '../key/KeyBrowser.vue'
 import DiffColumn from './DiffColumn.vue'
 import DiffPayload, { type LeafSide } from './DiffPayload.vue'
-import Spinner from '../Spinner.vue'
 import type { components } from '@/api-types'
 
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']

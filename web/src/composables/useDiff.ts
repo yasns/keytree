@@ -46,6 +46,40 @@ export function runsFor(own: string, other: string | undefined): DiffRun[] {
   return runs
 }
 
+/** Splits diff runs at a character index, so a label's mode/version tail can render separately from its head. */
+export function splitRunsAt(runs: DiffRun[], index: number): [DiffRun[], DiffRun[]] {
+  const head: DiffRun[] = []
+  const tail: DiffRun[] = []
+  let pos = 0
+  for (const run of runs) {
+    const end = pos + run.text.length
+    if (end <= index) {
+      head.push(run)
+    } else if (pos >= index) {
+      tail.push(run)
+    } else {
+      const cut = index - pos
+      head.push({ text: run.text.slice(0, cut), changed: run.changed })
+      tail.push({ text: run.text.slice(cut), changed: run.changed })
+    }
+    pos = end
+  }
+  return [head, tail]
+}
+
+/** Index of the 2nd "/" in a `subsystem/vertex/mode/vN` label, so the tail keeps the slash plus mode+version. */
+export function labelTailStart(label: string): number {
+  const first = label.indexOf('/')
+  if (first < 0) return 0
+  const second = label.indexOf('/', first + 1)
+  return second < 0 ? 0 : second
+}
+
+/** Diff runs for a label, split into head/tail at `labelTailStart` so the mode+version stays visible. */
+export function runsForLabel(own: string, other: string | undefined): [DiffRun[], DiffRun[]] {
+  return splitRunsAt(runsFor(own, other), labelTailStart(own))
+}
+
 export type DiffCounts = { added: number; removed: number }
 
 const MAX_DIFF_CELLS = 4_000_000

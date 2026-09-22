@@ -1,15 +1,17 @@
 <template>
   <div class="d-flex flex-column h-100" style="min-height: 0">
-    <div
-      v-if="!changes.pendingCount"
-      class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4 mt-2"
-      style="min-height: 0"
-    >
-      No pending changes.
-    </div>
+    <div class="pa-4 border-b-sm"><span class="text-title-small">Pending Changes</span></div>
 
-    <div v-else class="overflow-y-auto flex-grow-1 mt-2" style="min-height: 0">
-      <v-list density="compact" class="py-0">
+    <v-empty-state
+      v-if="!changes.pendingCount"
+      class="flex-grow-1"
+      style="min-height: 0"
+      icon="mdi-source-branch"
+      text="No pending changes."
+    ></v-empty-state>
+
+    <div v-else class="overflow-y-auto flex-grow-1" style="min-height: 0">
+      <v-list density="compact">
         <KeyChangeListItem
           v-for="edit in changes.visibleEdits"
           :key="edit.id"
@@ -19,21 +21,24 @@
           :subtitle="edit.comment"
           :counts="diffCounts(edit)"
           :error-text="edit.validation_status === 'failed' ? 'Validation failed' : undefined"
-          :error-lines="errorCache.get(edit.id)"
           discardable
           @click="goToEdit(edit)"
           @discard="discardEdit(edit)"
-          @load-error-detail="loadErrors(edit)"
+          @view-problems="viewProblems(edit)"
         >
+          <template #prepend>
+            <v-icon :icon="keyIcon(edit)" size="small"></v-icon>
+          </template>
           <template #append>
             <v-btn
               class="edit-btn"
               icon
+              size="small"
               variant="text"
-              density="compact"
+              density="comfortable"
               @click.stop="goToPayload(edit)"
             >
-              <v-icon icon="mdi-pencil" size="x-small"></v-icon>
+              <v-icon icon="mdi-pencil" size="small"></v-icon>
               <v-tooltip activator="parent" location="top">Edit this key</v-tooltip>
             </v-btn>
           </template>
@@ -51,10 +56,15 @@
             ></v-icon>
           </template>
           <v-list-item-title class="text-body-medium">
-            <span :class="{ 'text-decoration-line-through': archival.archived, 'key-label': true }"
-              >{{ archival.subsystem_name }}/{{ archival.vertex_name }}/{{
-                archival.mode_name
-              }}</span
+            <span
+              :class="{
+                'text-decoration-line-through': archival.archived,
+                'key-label': true,
+                'key-label-truncate': true,
+              }"
+              ><span class="key-label-head"
+                >{{ archival.subsystem_name }}/{{ archival.vertex_name }}</span
+              ><span class="key-label-tail">/{{ archival.mode_name }}</span></span
             >
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -78,8 +88,13 @@
               :class="{
                 'text-decoration-line-through': decommission.decommissioned,
                 'key-label': true,
+                'key-label-truncate': true,
               }"
-              >{{ decommission.label }}</span
+              ><span class="key-label-head"
+                >{{ decommission.subsystem_name }}/{{ decommission.vertex_name }}</span
+              ><span class="key-label-tail"
+                >/{{ decommission.mode_name }}/v{{ decommission.version }}</span
+              ></span
             >
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -90,10 +105,15 @@
     </div>
 
     <ConfirmDialog
-      v-model="confirmInvalidCommit"
-      title="Commit with validation errors?"
-      text="Some staged edits failed validation. Commit anyway?"
-      confirm-text="Commit"
+      v-model="confirmCommit"
+      :title="hasInvalidEdits ? 'Commit with validation errors?' : 'Commit changes?'"
+      :text="
+        hasInvalidEdits
+          ? 'Some saved edits failed validation. Commit anyway?'
+          : 'This will permanently write every saved edit in this changeset to the database. This cannot be undone.'
+      "
+      :confirm-text="hasInvalidEdits ? 'Accept Risk & Commit' : 'Commit'"
+      :confirm-color="hasInvalidEdits ? 'error' : 'primary'"
       @confirm="commit()"
     ></ConfirmDialog>
 
@@ -108,10 +128,9 @@
       @compare="goToCompare"
     ></CommitConflictsDialog>
 
-    <div class="px-2 py-2 border-t-sm d-flex ga-1">
+    <div class="px-4 py-3 border-t-sm d-flex ga-1">
       <v-btn
         variant="tonal"
-        color="error"
         class="w-auto"
         :disabled="!changes.pendingCount"
         @click="confirmDiscardAll = true"
@@ -122,12 +141,13 @@
       <ConfirmDialog
         v-model="confirmDiscardAll"
         title="Discard all changes?"
-        text="This will discard every staged edit in this changeset."
+        text="This will discard every saved edit in this changeset."
         confirm-text="Discard"
         @confirm="discardAll"
       ></ConfirmDialog>
 
       <v-btn
+        variant="flat"
         color="primary"
         prepend-icon="mdi-source-commit"
         class="flex-grow-1"
@@ -142,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { components } from '@/api-types'
 import {
@@ -151,9 +171,15 @@ import {
   useDiffCountCache,
   type KeyRef,
 } from '@/composables/useDiff'
-import { validatePayload } from '@/composables/useMonaco'
+import { pluralize } from '@/format'
 import { keyRoute, parseVersion, pushDiffRoute } from '@/router'
-import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
+import {
+  type Conflict,
+  conflictsFrom,
+  keyIcon,
+  pendingSource,
+  useChangesStore,
+} from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import ConfirmDialog from '../dialog/ConfirmDialog.vue'
@@ -171,7 +197,7 @@ const route = useRoute()
 const router = useRouter()
 
 const confirmDiscardAll = ref(false)
-const confirmInvalidCommit = ref(false)
+const confirmCommit = ref(false)
 const committing = ref(false)
 const rebasing = ref(false)
 const conflicts = ref<Conflict[]>([])
@@ -190,13 +216,9 @@ const { get: diffCounts } = useDiffCountCache(
   (edit) => diffAgainstAncestor(edit, fetchPayload, fetchChildren),
 )
 
-const errorCache = reactive(new Map<number, string[]>())
-
-async function loadErrors(edit: StagedEditOut) {
-  if (edit.validation_status !== 'failed' || edit.proposed_payload === null) return
-  if (errorCache.has(edit.id)) return
-  errorCache.set(edit.id, await validatePayload(edit.proposed_payload, edit.category))
-}
+const hasInvalidEdits = computed(() =>
+  changes.visibleEdits.some((e) => e.validation_status === 'failed'),
+)
 
 async function goToEdit(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
@@ -209,6 +231,14 @@ async function goToEdit(edit: StagedEditOut) {
 async function goToPayload(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
   router.push(keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'))
+}
+
+async function viewProblems(edit: StagedEditOut) {
+  if (!(await changes.confirmDiscard())) return
+  router.push({
+    ...keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'),
+    query: { problem: '1' },
+  })
 }
 
 async function goToConflict(conflict: Conflict, side: 'yours' | 'theirs') {
@@ -283,9 +313,11 @@ async function discardAll() {
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
   const source = pendingSource(staged)
+  const count = changes.pendingCount
   await changes.discardAll()
 
-  if (key) await returnToSource(key.subsystem, key.name, source)
+  const returned = key && (await returnToSource(key.subsystem, key.name, source))
+  if (!returned) snackbar.notify(`Discarded ${pluralize(count, 'change')}`, 'info')
   await nav.refreshKeys()
 }
 
@@ -300,7 +332,8 @@ async function discardEdit(edit: StagedEditOut) {
 
   const returned =
     onThisEdit && (await returnToSource(edit.subsystem_name, edit.vertex_name, source))
-  if (!returned) snackbar.notify('Edit discarded', 'info')
+  if (!returned)
+    snackbar.notify(`Discarded edit on "${edit.vertex_name}/${edit.mode_name}"`, 'info')
   await nav.refreshKeys()
 }
 
@@ -309,7 +342,7 @@ async function rebase() {
   try {
     await changes.rebase()
     conflictsOpen.value = false
-    snackbar.notify('Staged changes rebased onto the newer versions', 'info')
+    snackbar.notify('Saved changes rebased onto the newer versions', 'info')
   } catch (err) {
     snackbar.notifyError(err)
   } finally {
@@ -318,11 +351,7 @@ async function rebase() {
 }
 
 function onCommitClick() {
-  if (changes.visibleEdits.some((e) => e.validation_status === 'failed')) {
-    confirmInvalidCommit.value = true
-  } else {
-    void commit()
-  }
+  confirmCommit.value = true
 }
 
 async function commit(overwriteConflicts = false) {
@@ -330,10 +359,11 @@ async function commit(overwriteConflicts = false) {
   // only moves if this changeset edits it; capture before commit clears the edits
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
+  const count = changes.pendingCount
   try {
     await changes.commit(overwriteConflicts)
     conflictsOpen.value = false
-    snackbar.notify('Changeset committed', 'success')
+    snackbar.notify(`Committed ${pluralize(count, 'change')}. Job well done.`, 'success')
     await nav.refreshKeys()
     // follows the version it landed on, which trails the tip, not the base
     const tip = key && nav.vertexDetail?.modes.find((m) => m.name === key.mode)?.versions[0]

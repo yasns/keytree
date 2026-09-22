@@ -9,4 +9,11 @@ export default createVuetify({
   display: {
     mobileBreakpoint: 'md',
   },
+  defaults: {
+    VTextField: { density: 'compact' },
+    VTextarea: { density: 'compact' },
+    VSelect: { density: 'compact' },
+    VAutocomplete: { density: 'compact' },
+    VCombobox: { density: 'compact' },
+  },
 })

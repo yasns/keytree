@@ -20,8 +20,9 @@ def _key(id: int, mode_id: int, version: int) -> Key:
 def test_build_vertex_detail_versions_and_archived_modes():
     vertex = Vertex(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
 
+    # ids deliberately reversed relative to name order, to prove sorting is by name
     active = Mode(
-        id=118,
+        id=119,
         vertex_id=42,
         name="default",
         description="Starter mode seed.",
@@ -29,7 +30,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
         created_at=datetime(2025, 1, 1, tzinfo=UTC),
     )
     archived = Mode(
-        id=119,
+        id=118,
         vertex_id=42,
         name="retired_line",
         description="Old line.",
@@ -39,7 +40,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
         archived_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
-    keys = [_key(1, mode_id=118, version=1), _key(2, mode_id=118, version=2)]
+    keys = [_key(1, mode_id=119, version=1), _key(2, mode_id=119, version=2)]
 
     display_names = {"keytree_app": "Keytree App", "alice": "Alice"}
     out = _build_vertex_detail(vertex, "ugt", [archived, active], keys, display_names)
@@ -48,7 +49,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
     assert out.category == "run_settings"
     assert out.subsystem_id == 3
     assert out.subsystem_name == "ugt"
-    # sorted by mode id regardless of input order
+    # sorted alphabetically by name, not by id or input order
     assert [m.name for m in out.modes] == ["default", "retired_line"]
 
     default_mode, retired_mode = out.modes

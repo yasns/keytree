@@ -10,6 +10,8 @@ export function useClearPending() {
 
   async function clearPending() {
     if (!(await changes.confirmDiscard())) return
+    if (nav.openedRowBeforeModeSelect) nav.openedRow = nav.openedRowBeforeModeSelect
+    nav.openedRowBeforeModeSelect = null
     nav.pendingVertexId = null
     nav.bundleRoot = null
     nav.bundlePath = []

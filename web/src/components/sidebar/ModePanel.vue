@@ -1,85 +1,99 @@
 <template>
-  <div v-if="detail" class="d-flex flex-column border-t-sm" style="flex: 1 1 0; min-height: 0">
-    <div class="d-flex align-center justify-space-between pa-4 ga-1">
-      <span class="text-title-small">Select mode</span>
+  <div
+    v-if="detail"
+    class="d-flex flex-column elevation-2 elevation-overlay"
+    style="flex: 3 1 0; min-height: 0"
+  >
+    <div class="d-flex align-center justify-space-between pa-4 ga-1 border-b-sm">
+      <div class="text-title-small">Select mode</div>
 
-      <v-btn prepend-icon="mdi-arrow-left" variant="plain" size="small" @click="clearPending"
+      <v-btn prepend-icon="mdi-arrow-left" variant="text" size="small" @click="clearPending"
         >Back to Browsing</v-btn
       >
     </div>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
-      <v-list v-if="filteredModes.length" density="compact" class="py-0">
-        <v-list-item
-          v-for="row in filteredModes"
-          :key="row.mode.id"
-          :active="isSelected(row.mode)"
-          @click="activate(row.mode, defaultTarget(row.mode))"
-        >
-          <v-list-item-title class="d-flex align-center ga-1">
-            {{ row.mode.name }}
-            <v-chip
-              v-if="row.archived || row.pending"
-              size="small"
-              density="compact"
-              label
-              variant="tonal"
-              :color="row.pending ? 'warning' : undefined"
-            >
-              {{
-                row.pending ? (row.archived ? 'archive pending' : 'unarchive pending') : 'archived'
-              }}
-            </v-chip>
-          </v-list-item-title>
-          <template v-slot:append>
-            <v-menu>
-              <template v-slot:activator="{ props }">
-                <v-chip
-                  variant="plain"
-                  append-icon="mdi-chevron-down"
-                  @click.stop
-                  v-bind="props"
-                  density="compact"
-                >
-                  v{{ selectedVersion(row.mode) }}
-                </v-chip>
-              </template>
-              <v-list density="compact">
-                <v-list-item
-                  v-for="opt in versionOptions(row.mode)"
-                  :key="opt.version"
-                  :title="opt.label"
-                  @click="activate(row.mode, opt.version)"
-                ></v-list-item>
-              </v-list>
-            </v-menu>
+      <v-list v-if="filteredModes.length" density="compact">
+        <template v-for="(row, i) in filteredModes" :key="row.mode.id">
+          <v-divider v-if="i"></v-divider>
+          <v-list-item
+            :active="isSelected(row.mode)"
+            @click="activate(row.mode, defaultTarget(row.mode))"
+          >
+            <v-list-item-title class="d-flex align-center ga-1">
+              <span>
+                <template v-for="(seg, i) in highlightName(row.mode.name)" :key="i">
+                  <mark v-if="seg.matched">{{ seg.text }}</mark>
+                  <template v-else>{{ seg.text }}</template>
+                </template>
+              </span>
+              <v-chip
+                v-if="row.archived || row.pending"
+                size="small"
+                density="compact"
+                label
+                variant="tonal"
+                :color="row.pending ? 'warning' : undefined"
+              >
+                {{
+                  row.pending
+                    ? row.archived
+                      ? 'archive pending'
+                      : 'unarchive pending'
+                    : 'archived'
+                }}
+              </v-chip>
+            </v-list-item-title>
+            <template v-slot:append>
+              <v-menu>
+                <template v-slot:activator="{ props }">
+                  <v-chip
+                    variant="plain"
+                    append-icon="mdi-chevron-down"
+                    @click.stop
+                    v-bind="props"
+                    density="compact"
+                  >
+                    v{{ selectedVersion(row.mode) }}
+                  </v-chip>
+                </template>
+                <v-list density="compact">
+                  <v-list-item
+                    v-for="opt in versionOptions(row.mode)"
+                    :key="opt.version"
+                    :title="opt.label"
+                    @click="activate(row.mode, opt.version)"
+                  ></v-list-item>
+                </v-list>
+              </v-menu>
 
-            <v-menu>
-              <template v-slot:activator="{ props }">
-                <v-btn
-                  icon="mdi-dots-vertical"
-                  size="small"
-                  variant="plain"
-                  density="compact"
-                  @click.stop
-                  v-bind="props"
-                ></v-btn>
-              </template>
-              <v-list density="compact">
-                <v-list-item
-                  title="Get Info"
-                  prepend-icon="mdi-information-outline"
-                  @click="infoMode = row.mode"
-                ></v-list-item>
-                <v-list-item
-                  :title="row.archived ? 'Unarchive Mode' : 'Archive Mode'"
-                  :prepend-icon="row.archived ? 'mdi-archive-off-outline' : 'mdi-archive-outline'"
-                  @click="changes.toggleArchival(row.mode.id)"
-                ></v-list-item>
-              </v-list>
-            </v-menu>
-          </template>
-        </v-list-item>
+              <v-menu>
+                <template v-slot:activator="{ props }">
+                  <v-btn
+                    icon="mdi-dots-vertical"
+                    size="small"
+                    variant="text"
+                    density="compact"
+                    @click.stop
+                    v-bind="props"
+                  ></v-btn>
+                </template>
+                <v-list density="compact">
+                  <v-list-item
+                    title="Get Info"
+                    prepend-icon="mdi-information-outline"
+                    @click="infoMode = row.mode"
+                  ></v-list-item>
+                  <v-list-item
+                    :title="row.archived ? 'Unarchive Mode' : 'Archive Mode'"
+                    :prepend-icon="row.archived ? 'mdi-archive-off-outline' : 'mdi-archive-outline'"
+                    @click="toggleArchival(row.mode)"
+                  ></v-list-item>
+                </v-list>
+              </v-menu>
+            </template>
+          </v-list-item>
+        </template>
       </v-list>
       <p v-else class="text-medium-emphasis px-4">No {{ filter === 'all' ? '' : filter }} modes.</p>
     </div>
@@ -88,14 +102,13 @@
       <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
     </div>
 
-    <div class="d-flex flex-wrap align-center ga-2">
+    <div class="d-flex flex-wrap align-center ga-2 border-t-sm px-4 pt-3 pb-3">
       <v-text-field
         v-model="search"
         label="Search modes..."
-        density="compact"
         hide-details
         clearable
-        style="min-width: 180px"
+        style="min-width: 160px"
       ></v-text-field>
 
       <v-chip-group v-model="filter" mandatory>
@@ -104,6 +117,14 @@
         <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
       </v-chip-group>
     </div>
+  </div>
+  <div
+    v-else-if="nav.pendingVertexId !== null"
+    class="d-flex flex-column elevation-2 elevation-overlay"
+    style="flex: 2 1 0; min-height: 0"
+  >
+    <div class="pa-4"><v-skeleton-loader type="text" width="140"></v-skeleton-loader></div>
+    <v-skeleton-loader type="list-item@6"></v-skeleton-loader>
   </div>
 
   <v-dialog :model-value="!!infoMode" @update:model-value="infoMode = undefined" width="auto">
@@ -141,12 +162,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { LOCALE } from '@/format'
+import { highlightMatch, LOCALE } from '@/format'
 import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useClearPending } from '@/composables/usePendingKey'
 import { usePendingEditors } from '@/composables/usePendingEditors'
+import { useToggleArchival } from '@/composables/useModes'
 import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
 import PendingEditorsAlert from '../key/PendingEditorsAlert.vue'
@@ -158,6 +180,7 @@ const nav = useNavStore()
 const router = useRouter()
 const changes = useChangesStore()
 const { clearPending } = useClearPending()
+const toggleArchival = useToggleArchival()
 
 const filter = ref<'active' | 'archived' | 'all'>('active')
 const search = ref('')
@@ -181,6 +204,8 @@ watch(
   },
 )
 
+const needle = computed(() => (search.value ?? '').trim().toLowerCase())
+
 const filteredModes = computed(() =>
   (detail.value?.modes ?? [])
     .map((mode) => {
@@ -194,9 +219,13 @@ const filteredModes = computed(() =>
     .filter(
       (row) =>
         (filter.value === 'all' || !row.archived === (filter.value === 'active')) &&
-        row.mode.name.toLowerCase().includes((search.value ?? '').trim().toLowerCase()),
+        row.mode.name.toLowerCase().includes(needle.value),
     ),
 )
+
+function highlightName(name: string) {
+  return highlightMatch(name, needle.value)
+}
 
 function isSelected(mode: ModeOut) {
   const root = nav.bundleRoot

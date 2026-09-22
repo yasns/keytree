@@ -1,32 +1,27 @@
 <template>
-  <v-toolbar density="compact" class="bg-surface border-b-sm">
+  <v-toolbar density="compact" class="px-4">
     <template v-slot:prepend>
-      <ReadOnlyTooltip v-if="dirty" :read-only="readOnly">
-        <v-btn
-          @click="discardDialog = true"
-          prepend-icon="mdi-trash-can-outline"
-          variant="tonal"
-          :disabled="readOnly"
+      <DisabledTooltip :reason="discardDisabledReason">
+        <v-btn @click="discardDialog = true" variant="tonal" :disabled="!!discardDisabledReason"
           >Discard</v-btn
         >
-      </ReadOnlyTooltip>
+      </DisabledTooltip>
     </template>
 
     <template v-slot:append>
-      <ReadOnlyTooltip v-if="dirty" :read-only="readOnly">
+      <DisabledTooltip :reason="saveDisabledReason">
         <v-btn
-          :prepend-icon="canQueue ? 'mdi-check' : 'mdi-check-all'"
+          :prepend-icon="canQueue ? 'mdi-arrow-left' : 'mdi-content-save'"
           @click="saveDialog = true"
           variant="flat"
           color="primary"
-          :disabled="readOnly"
+          class="me-1"
+          :disabled="!!saveDisabledReason"
         >
           Save
-          <span v-if="props.canQueue">&nbsp;and Queue</span>
+          <span v-if="props.canQueue">&nbsp;& Queue</span>
         </v-btn>
-      </ReadOnlyTooltip>
-
-      <v-divider v-if="dirty" vertical inset class="mx-1"></v-divider>
+      </DisabledTooltip>
 
       <v-tooltip v-if="validationErrors">
         <template v-slot:activator="{ props }">
@@ -35,7 +30,9 @@
               validationErrors.length ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'
             "
             :color="validationErrors.length ? 'error' : 'success'"
+            variant="text"
             density="comfortable"
+            @click="emit('show-problems')"
             v-bind="props"
           ></v-btn>
         </template>
@@ -47,7 +44,12 @@
 
       <v-menu>
         <template v-slot:activator="{ props }">
-          <v-btn icon="mdi-dots-vertical" density="comfortable" v-bind="props"></v-btn>
+          <v-btn
+            icon="mdi-dots-vertical"
+            variant="text"
+            density="comfortable"
+            v-bind="props"
+          ></v-btn>
         </template>
         <v-list density="compact">
           <template v-if="subsystem && name && mode">
@@ -115,8 +117,8 @@
 
   <SaveDialog
     v-model="copyLatestDialog"
-    title="Copy to latest version"
-    confirm-text="Stage"
+    title="Copy to Latest Version"
+    confirm-text="Copy"
     :initial-comment="`Copy of ${subsystem}/${name}/${mode}/v${version}`"
     :warning="pendingWarning"
     @save="(comment) => emit('copy-to', mode ?? '', comment)"
@@ -137,16 +139,22 @@
 import { computed, ref, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import ConfirmDialog from '../dialog/ConfirmDialog.vue'
+import DisabledTooltip from './DisabledTooltip.vue'
 import SaveDialog from '../dialog/SaveDialog.vue'
 import ForkModeDialog from '../dialog/ForkModeDialog.vue'
 import CopyToModeDialog from '../dialog/CopyToModeDialog.vue'
 import CompareDialog from '../dialog/CompareDialog.vue'
-import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
+import {
+  useCurrentMode,
+  useIsArchived,
+  useModesByPath,
+  useToggleArchival,
+} from '@/composables/useModes'
 import { readOnlyReason, useIsDecommissioned, useReadOnly } from '@/composables/useReadOnly'
 import { useChangesStore } from '@/stores/changes'
+import { useSnackbarStore } from '@/stores/snackbar'
 import { pushDiffRoute, type DiffTarget } from '@/router'
 import type { components } from '@/api-types'
-import ReadOnlyTooltip from './ReadOnlyTooltip.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 
@@ -178,10 +186,22 @@ const emit = defineEmits<{
   'copy-to': [mode: string, comment: string]
   'export-payload': []
   'import-payload': []
+  'show-problems': []
 }>()
 
 const changes = useChangesStore()
+const snackbar = useSnackbarStore()
 const router = useRouter()
+
+async function toggleDecommission(keyId: number) {
+  await changes.toggleDecommission(keyId)
+  snackbar.notify(
+    decommissioned.value ? 'Key decommission staged' : 'Key recommission staged',
+    'info',
+  )
+}
+
+const toggleArchival = useToggleArchival()
 
 const saveDialog = ref(false)
 const discardDialog = ref(false)
@@ -200,11 +220,23 @@ const isOldVersion = computed(() => {
   return props.committed && !!versions?.length && props.version !== versions[0]
 })
 
+const discardDisabledReason = computed(() => {
+  if (authReadOnly.value || props.readOnly) return readOnlyReason
+  if (!props.dirty) return 'No changes to discard'
+  return undefined
+})
+
+const saveDisabledReason = computed(() => {
+  if (authReadOnly.value || props.readOnly) return readOnlyReason
+  if (!props.dirty) return 'No changes to save'
+  return undefined
+})
+
 /** Staging a copy onto this mode would replace its existing pending version, if any. */
 const pendingWarning = computed(() => {
   if (!props.subsystem || !props.name || !props.mode) return undefined
   return changes.stagedForMode(props.subsystem, props.name, props.mode)
-    ? 'This mode already has a pending version. Staging this copy will replace it.'
+    ? 'This mode already has a pending version. Copying this will replace it.'
     : undefined
 })
 
@@ -290,15 +322,15 @@ const menuGroups = computed(() => {
     lifecycleItems.push({
       title: decommissioned.value ? 'Recommission Key' : 'Decommission Key',
       icon: decommissioned.value ? 'mdi-key-plus' : 'mdi-key-remove',
-      onClick: () => void changes.toggleDecommission(payload.id),
+      onClick: () => void toggleDecommission(payload.id),
     })
   }
   if (currentMode.value) {
-    const modeId = currentMode.value.id
+    const mode = currentMode.value
     lifecycleItems.push({
       title: archived.value ? 'Unarchive Mode' : 'Archive Mode',
       icon: archived.value ? 'mdi-archive-off-outline' : 'mdi-archive-outline',
-      onClick: () => void changes.toggleArchival(modeId),
+      onClick: () => void toggleArchival(mode),
     })
   }
   if (lifecycleItems.length) {
