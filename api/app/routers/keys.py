@@ -107,6 +107,25 @@ async def keys_or_404(locators: list[_KeyLocator], session: SessionDep) -> list[
     return keys
 
 
+async def key_ancestry(
+    key_ids: set[int], session: SessionDep
+) -> tuple[dict[int, str | None], dict[int, dict[str, int]]]:
+    """Key id -> payload, and key id -> {alias: child_key_id}."""
+    if not key_ids:
+        return {}, {}
+    payload_rows = await session.execute(select(Key.id, Key.payload).where(Key.id.in_(key_ids)))
+    payloads = dict(payload_rows.tuples().all())
+    child_rows = await session.execute(
+        select(KeyChild.parent_key_id, KeyChild.alias, KeyChild.child_key_id).where(
+            KeyChild.parent_key_id.in_(key_ids)
+        )
+    )
+    children: dict[int, dict[str, int]] = {}
+    for parent_key_id, alias, child_key_id in child_rows.tuples():
+        children.setdefault(parent_key_id, {})[alias] = child_key_id
+    return payloads, children
+
+
 async def key_or_404(
     subsystem_name: str, vertex_name: str, mode_name: str, version: int, session: SessionDep
 ) -> Key:
@@ -164,8 +183,7 @@ async def search_keys(
     regex: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[KeyMatchOut]:
-    """Keys whose label or payload matches `q`, restricted to each mode's tip version unless the
-    query already names one."""
+    """Keys matching `q`, restricted to each mode's tip unless the query already names a version."""
     column = Key.label if field == "label" else Key.payload
     names_version = field == "label" and bool(_VERSION_SEGMENT.search(q))
 

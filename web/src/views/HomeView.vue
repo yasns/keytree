@@ -51,7 +51,7 @@
 <script setup lang="ts">
 import { useNavStore } from '@/stores/nav'
 import BrowsePanel from '@/components/sidebar/BrowsePanel.vue'
-import VersionControlPanel from '@/components/sidebar/VersionControlPanel.vue'
+import PendingChangesPanel from '@/components/sidebar/PendingChangesPanel.vue'
 
 const nav = useNavStore()
 
@@ -61,6 +61,6 @@ function browseKeys() {
 }
 
 function viewPendingChanges() {
-  if (nav.activePanel !== VersionControlPanel) nav.activePanel = VersionControlPanel
+  if (nav.activePanel !== PendingChangesPanel) nav.activePanel = PendingChangesPanel
 }
 </script>

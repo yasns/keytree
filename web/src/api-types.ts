@@ -233,6 +233,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/staging/edits/{edit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Discard Edit
+         * @description Discards one staged edit, keeping the rest of the changeset intact.
+         */
+        delete: operations["discard_edit_api_staging_edits__edit_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/commit/rebase": {
         parameters: {
             query?: never;
@@ -244,8 +264,7 @@ export interface paths {
         put?: never;
         /**
          * Rebase Changeset
-         * @description Moves every conflicting edit onto the version committed since it was staged, keeping its
-         *     proposed payload and children.
+         * @description Moves conflicting edits onto the new tip, preserving their proposed content.
          */
         post: operations["rebase_changeset_api_commit_rebase_post"];
         delete?: never;
@@ -323,8 +342,7 @@ export interface paths {
         };
         /**
          * Search Keys
-         * @description Keys whose label or payload matches `q`, restricted to each mode's tip version unless the
-         *     query already names one.
+         * @description Keys matching `q`, restricted to each mode's tip unless the query already names a version.
          */
         get: operations["search_keys_api_keys_search_get"];
         put?: never;
@@ -1335,6 +1353,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ChangesetOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_edit_api_staging_edits__edit_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                edit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

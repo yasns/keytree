@@ -108,7 +108,7 @@
 
   <v-dialog :model-value="!!infoMode" @update:model-value="infoMode = undefined" width="auto">
     <v-card v-if="infoMode" :title="infoMode.name" min-width="320">
-      <v-card-text class="text-caption text-body-medium">
+      <v-card-text class="text-body-medium">
         <div class="meta-grid">
           <span class="font-weight-medium">Subsystem:</span>
           <span>{{ detail?.subsystem_name }}</span>
@@ -206,11 +206,12 @@ function isSelected(mode: ModeOut) {
 const selectedMode = computed(() => detail.value?.modes.find(isSelected))
 const pendingEditors = usePendingEditors(computed(() => selectedMode.value?.id))
 
+// Not deduped against mode.versions: a conflict can leave your pending version and
+// someone else's committed one sharing the same number, and both need to stay selectable.
 function pendingVersion(mode: ModeOut): number | undefined {
   const d = detail.value
   const staged = d && changes.stagedForMode(d.subsystem_name, d.name, mode.name)
-  if (!staged || mode.versions.includes(staged.expected_version)) return undefined
-  return staged.expected_version
+  return staged?.expected_version
 }
 
 function selectedVersion(mode: ModeOut) {

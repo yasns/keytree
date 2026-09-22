@@ -12,6 +12,7 @@
       label="Mode name"
       autofocus
       maxlength="64"
+      counter
       hide-details="auto"
       :rules="rules"
       class="mb-4"

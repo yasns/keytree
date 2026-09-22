@@ -186,7 +186,7 @@ const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const { navigateToStaged, showStaged } = useStagedNavigation()
+const { navigateToStaged, showStaged, afterStage } = useStagedNavigation()
 
 const payload = ref<KeyOut>()
 const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
@@ -509,14 +509,20 @@ async function save(comment: string) {
   if (!children.value) return
   const { childEdits, proposedChildren } = buildEdits(comment)
   await changes.stage([...childEdits, baseEdit(comment, proposedChildren)])
-  if (props.pending) return
+  const { edit, left } = afterStage(
+    props.subsystem,
+    props.name,
+    props.mode,
+    props.version,
+    props.pending,
+  )
+  if (left || props.pending) return
   if (!props.canQueue) {
     // no parent to queue into: this column owns the route
     showStaged(props.subsystem, props.name, props.mode)
     return
   }
   // point this column's bundle-path entry at what it just staged
-  const edit = changes.stagedForMode(props.subsystem, props.name, props.mode)
   if (edit) nav.markPathStaged(props.depth - 1, edit.expected_version)
 }
 

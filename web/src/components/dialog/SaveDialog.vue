@@ -9,6 +9,8 @@
           rows="3"
           autofocus
           hide-details="auto"
+          maxlength="255"
+          counter
           :rules="[(v) => !!v.trim() || 'A comment is required']"
         ></v-textarea>
       </v-card-text>

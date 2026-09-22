@@ -654,3 +654,37 @@ def test_search_keys_payload_excludes_external_and_only_the_tip_version(
 
     labels = asyncio.run(run())
     assert labels == ["ugt/l1_menu/search_payload_mode/v2"]
+
+
+@pytest.mark.docker
+def test_restaging_the_original_payload_undoes_the_staged_edit(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> list[str]:
+        await _forked_key(
+            session_factory,
+            cern_login="restage_to_baseline",
+            subsystem="ugt",
+            vertex="l1_menu",
+            mode_name="restage_to_baseline_mode",
+            payload="<menu/>",
+        )
+        request = _fake_request("restage_to_baseline")
+        async with session_factory() as session:
+            changeset = await stage_edits(
+                [
+                    StagedEditIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="restage_to_baseline_mode",
+                        base_version=1,
+                        proposed_payload="<menu/>",
+                        comment="no-op",
+                    )
+                ],
+                request,
+                session,
+            )
+        return [e.mode_name for e in changeset.edits]
+
+    assert asyncio.run(run()) == []

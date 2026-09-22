@@ -92,7 +92,7 @@ import { useChangesStore } from '@/stores/changes'
 import { type Component, computed } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
 import SearchPanel from './SearchPanel.vue'
-import VersionControlPanel from './VersionControlPanel.vue'
+import PendingChangesPanel from './PendingChangesPanel.vue'
 
 const auth = useAuthStore()
 const theme = useTheme()
@@ -104,10 +104,8 @@ const menuItems = computed(() => [
   { icon: 'mdi-magnify', title: 'Search', component: SearchPanel },
   {
     icon: 'mdi-source-branch',
-    title:
-      'Version Control' +
-      (changes.pendingCount > 0 ? ` – ${changes.pendingCount} pending changes` : ''),
-    component: VersionControlPanel,
+    title: 'Pending Changes' + (changes.pendingCount > 0 ? ` (${changes.pendingCount})` : ''),
+    component: PendingChangesPanel,
     badge: changes.pendingCount,
   },
 ])

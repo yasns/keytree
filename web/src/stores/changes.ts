@@ -159,6 +159,13 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = null
   }
 
+  async function discardEdit(editId: number) {
+    unwrap(
+      await api.DELETE('/api/staging/edits/{edit_id}', { params: { path: { edit_id: editId } } }),
+    )
+    await load()
+  }
+
   async function commit(overwriteConflicts = false) {
     unwrap(
       await api.POST('/api/commit/', {
@@ -193,6 +200,7 @@ export const useChangesStore = defineStore('changes', () => {
     fork,
     copyTo,
     discardAll,
+    discardEdit,
     commit,
     rebase,
     setDirty,

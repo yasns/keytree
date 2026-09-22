@@ -2,7 +2,7 @@ diff --git a/node_modules/monaco-worker-manager/index.js b/node_modules/monaco-w
 index 6527afa..93a6f9e 100644
 --- a/node_modules/monaco-worker-manager/index.js
 +++ b/node_modules/monaco-worker-manager/index.js
-@@ -40,11 +40,16 @@ export function createWorkerManager(monaco, options) {
+@@ -40,11 +40,20 @@ export function createWorkerManager(monaco, options) {
              }
              lastUsedTime = Date.now();
              if (!worker) {
@@ -12,14 +12,18 @@ index 6527afa..93a6f9e 100644
 -                    moduleId,
 -                });
 +                // monaco-editor >=0.53 dropped {label, moduleId, createData}; build the worker
-+                // ourselves and deliver createData as the 2nd message (1st is a bootstrap kick).
++                // ourselves and slip createData in right after createWebWorker's own handshake ping below.
 +                const monacoEnvironment = typeof self === 'object' ? self.MonacoEnvironment : undefined;
 +                if (!monacoEnvironment || typeof monacoEnvironment.getWorker !== 'function') {
 +                    throw new Error(`MonacoEnvironment.getWorker must be defined to create the "${label}" worker`);
 +                }
 +                const rawWorker = monacoEnvironment.getWorker(moduleId, label);
-+                rawWorker.postMessage('monaco-worker-manager-bootstrap');
-+                rawWorker.postMessage(createData);
++                const nativePostMessage = rawWorker.postMessage.bind(rawWorker);
++                rawWorker.postMessage = (data, transfer) => {
++                    rawWorker.postMessage = nativePostMessage;
++                    nativePostMessage(data, transfer);
++                    nativePostMessage(createData);
++                };
 +                worker = monaco.editor.createWebWorker({ worker: rawWorker });
              }
              return worker.withSyncedResources(resources);

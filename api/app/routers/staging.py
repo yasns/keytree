@@ -22,7 +22,7 @@ from app.db.models import (
     Subsystem,
     Vertex,
 )
-from app.routers.keys import key_or_404, keys_by_locator
+from app.routers.keys import key_ancestry, key_or_404, keys_by_locator
 from app.routers.user import upsert_app_user
 
 router = APIRouter(
@@ -402,6 +402,10 @@ class _ResolvedBase(NamedTuple):
     copied_from_key_id: int | None
 
 
+def _baseline_id(base: _ResolvedBase) -> int | None:
+    return base.base_key_id if base.base_key_id is not None else base.copied_from_key_id
+
+
 async def _resolve_bases(
     edits: list[StagedEditIn], changeset_id: int, session: SessionDep
 ) -> list[_ResolvedBase]:
@@ -490,7 +494,16 @@ async def stage_edits(
         )
     )
 
+    baseline_ids = {bid for base in bases if (bid := _baseline_id(base)) is not None}
+    baseline_payloads, baseline_children = await key_ancestry(baseline_ids, session)
+
     for edit_in, base in zip(edits, bases, strict=True):
+        baseline_key_id = _baseline_id(base)
+        if baseline_key_id is not None:
+            if edit_in.proposed_payload == baseline_payloads.get(baseline_key_id) and (
+                edit_in.proposed_children or {}
+            ) == baseline_children.get(baseline_key_id, {}):
+                continue  # re-staged to the exact baseline: leave it undone
         session.add(
             StagedEdit(
                 changeset_id=changeset.id,
@@ -684,6 +697,18 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
     return await changeset_out(changeset, session)
 
 
+async def _delete_orphan_modes(cern_login: str, session: SessionDep) -> None:
+    """Modes created while forking that no longer have any staged or committed content."""
+    _ = await session.execute(
+        delete(Mode).where(
+            Mode.created_by == cern_login,
+            ~select(Key.id).where(Key.mode_id == Mode.id).exists(),
+            ~select(StagedEdit.id).where(StagedEdit.mode_id == Mode.id).exists(),
+            ~select(StagedArchival.mode_id).where(StagedArchival.mode_id == Mode.id).exists(),
+        )
+    )
+
+
 @router.delete("/", status_code=204)
 async def discard_changeset(request: Request, session: SessionDep) -> None:
     """Discards the caller's open changeset and all its staged edits, including any modes created
@@ -694,12 +719,25 @@ async def discard_changeset(request: Request, session: SessionDep) -> None:
             Changeset.created_by == cern_login, Changeset.committed_at.is_(None)
         )
     )
-    _ = await session.execute(
-        delete(Mode).where(
-            Mode.created_by == cern_login,
-            ~select(Key.id).where(Key.mode_id == Mode.id).exists(),
-            ~select(StagedEdit.id).where(StagedEdit.mode_id == Mode.id).exists(),
-            ~select(StagedArchival.mode_id).where(StagedArchival.mode_id == Mode.id).exists(),
-        )
+    await _delete_orphan_modes(cern_login, session)
+    await session.commit()
+
+
+@router.delete("/edits/{edit_id}", status_code=204)
+async def discard_edit(edit_id: int, request: Request, session: SessionDep) -> None:
+    """Discards one staged edit, keeping the rest of the changeset intact."""
+    cern_login = request.state.claims["cern_upn"]
+    changeset = await open_changeset(cern_login, session)
+    if changeset is None:
+        raise HTTPException(status_code=404, detail="no open changeset")
+    result = await session.execute(
+        delete(StagedEdit)
+        .where(StagedEdit.id == edit_id, StagedEdit.changeset_id == changeset.id)
+        .returning(StagedEdit.base_key_id)
     )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="staged edit not found")
+    if row[0] is None:  # was a fork's v1 edit: its mode may now be orphaned
+        await _delete_orphan_modes(cern_login, session)
     await session.commit()

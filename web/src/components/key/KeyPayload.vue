@@ -95,7 +95,7 @@ const emit = defineEmits<{ queue: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const { navigateToStaged, showStaged } = useStagedNavigation()
+const { navigateToStaged, showStaged, afterStage } = useStagedNavigation()
 
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
@@ -229,6 +229,8 @@ function baseEdit(comment: string) {
 
 async function save(comment: string) {
   await changes.stage([baseEdit(comment)])
+  const { edit, left } = afterStage(subsystem, name, mode, version, pending)
+  if (left) return
   resetToBaseline()
   if (pending) return
   if (!canQueue) {
@@ -236,7 +238,6 @@ async function save(comment: string) {
     return
   }
   if (depth === undefined) return
-  const edit = changes.stagedForMode(subsystem, name, mode)
   if (edit) nav.markPathStaged(depth - 1, edit.expected_version)
 }
 
