@@ -1,8 +1,14 @@
-import { createRouter, createWebHistory, type RouteLocationNormalizedGeneric } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type Router,
+  type RouteLocationNormalizedGeneric,
+} from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import EditorView from '@/views/EditorView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import { useChangesStore } from '@/stores/changes'
+import { useNavStore } from '@/stores/nav'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -101,6 +107,28 @@ export function resolveDiffRoot(
       : { ...base, mode: target.mode, version, pending: true }
   }
   return { ...base, mode: target.mode, version: target.version, pending: false }
+}
+
+/** Navigates into diff mode, remembering where to return to; null fromVersion means nothing to diff against. */
+export function pushDiffRoute(
+  router: Router,
+  subsystem: string,
+  name: string,
+  mode: string,
+  fromVersion: VersionTarget | null,
+  target: DiffTarget,
+) {
+  if (fromVersion === null) {
+    router.push(keyRoute(subsystem, name, mode, target.version))
+    return
+  }
+  if (!router.currentRoute.value.query.diff) {
+    useNavStore().preDiffLocation = router.currentRoute.value.fullPath
+  }
+  router.push({
+    ...keyRoute(subsystem, name, mode, fromVersion),
+    query: withDiffQuery({}, target),
+  })
 }
 
 export default router

@@ -29,7 +29,7 @@ def _counts_html(added: int, removed: int) -> str:
 
 
 def payload_counts(ancestor: str | None, proposed: str) -> str:
-    """'+added -removed' lines vs the ancestor, colored; '' if no ancestor to diff against."""
+    """'+added -removed' lines vs the ancestor. '' if no ancestor to diff against."""
     if ancestor is None:
         return ""
     removed = added = 0
@@ -49,7 +49,7 @@ def bundle_counts(
     proposed: dict[str, int | None],
     self_key_id: int,
 ) -> str:
-    """'+added -removed' aliases vs the ancestor, colored; a retarget counts as both."""
+    """'+added -removed' aliases vs the ancestor. A retarget counts as both."""
     if ancestor is None:
         return ""
     resolved = {

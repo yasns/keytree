@@ -1,25 +1,5 @@
 <template>
   <div class="d-flex flex-column h-100" style="min-height: 0">
-    <div class="px-2 mt-2 text-right">
-      <v-btn
-        variant="outlined"
-        color="error"
-        prepend-icon="mdi-trash-can-outline"
-        :disabled="!changes.pendingCount"
-        @click="confirmDiscardAll = true"
-      >
-        Discard All
-      </v-btn>
-    </div>
-
-    <ConfirmDialog
-      v-model="confirmDiscardAll"
-      title="Discard all changes?"
-      text="This will discard every staged edit in this changeset."
-      confirm-text="Discard"
-      @confirm="discardAll"
-    ></ConfirmDialog>
-
     <div
       v-if="!changes.pendingCount"
       class="d-flex flex-grow-1 align-center justify-center text-medium-emphasis px-4 mt-2"
@@ -30,43 +10,34 @@
 
     <div v-else class="overflow-y-auto flex-grow-1 mt-2" style="min-height: 0">
       <v-list density="compact" class="py-0">
-        <v-list-item
+        <KeyChangeListItem
           v-for="edit in changes.visibleEdits"
           :key="edit.id"
-          slim
+          :key-label="`${edit.subsystem_name}/${edit.vertex_name}/${edit.mode_name}`"
+          :from-version="edit.base_version"
+          :to-version="edit.expected_version"
+          :subtitle="edit.comment"
+          :counts="diffCounts(edit)"
+          :error-text="edit.validation_status === 'failed' ? 'Validation failed' : undefined"
+          :error-lines="errorCache.get(edit.id)"
+          discardable
           @click="goToEdit(edit)"
+          @discard="discardEdit(edit)"
+          @load-error-detail="loadErrors(edit)"
         >
-          <template #prepend>
-            <v-icon :icon="keyIcon(edit)" size="small"></v-icon>
-          </template>
-          <v-list-item-title class="text-body-medium key-label">
-            {{ edit.subsystem_name }}/{{ edit.vertex_name }}/{{ edit.mode_name }}/<template
-              v-if="edit.base_version !== null"
+          <template #append>
+            <v-btn
+              class="edit-btn"
+              icon
+              variant="text"
+              density="compact"
+              @click.stop="goToPayload(edit)"
             >
-              <s class="text-medium-emphasis">v{{ edit.base_version }}</s>
-              <v-icon icon="mdi-arrow-right" size="x-small"></v-icon> </template
-            >v{{ edit.expected_version }}
-          </v-list-item-title>
-          <v-list-item-subtitle class="text-truncate">{{ edit.comment }}</v-list-item-subtitle>
-          <template v-if="edit.validation_status !== 'skipped'" #append>
-            <v-icon
-              :icon="
-                edit.validation_status === 'passed'
-                  ? 'mdi-check-circle-outline'
-                  : 'mdi-alert-circle-outline'
-              "
-              :color="edit.validation_status === 'passed' ? 'success' : 'error'"
-              size="small"
-            ></v-icon>
-            <v-tooltip
-              activator="parent"
-              location="top"
-              @update:model-value="(open) => open && loadErrors(edit)"
-            >
-              <div v-for="(line, i) in tooltipLines(edit)" :key="i">{{ line }}</div>
-            </v-tooltip>
+              <v-icon icon="mdi-pencil" size="x-small"></v-icon>
+              <v-tooltip activator="parent" location="top">Edit this key</v-tooltip>
+            </v-btn>
           </template>
-        </v-list-item>
+        </KeyChangeListItem>
         <v-list-item
           v-for="archival in changes.archivals"
           :key="`archival-${archival.mode_id}`"
@@ -133,13 +104,33 @@
       :committing="committing"
       @rebase="rebase"
       @overwrite="commit(true)"
+      @diff="goToConflict"
+      @compare="goToCompare"
     ></CommitConflictsDialog>
 
-    <div class="px-2 py-2 border-t-sm">
+    <div class="px-2 py-2 border-t-sm d-flex ga-1">
       <v-btn
-        block
+        variant="tonal"
+        color="error"
+        class="w-auto"
+        :disabled="!changes.pendingCount"
+        @click="confirmDiscardAll = true"
+      >
+        Discard All
+      </v-btn>
+
+      <ConfirmDialog
+        v-model="confirmDiscardAll"
+        title="Discard all changes?"
+        text="This will discard every staged edit in this changeset."
+        confirm-text="Discard"
+        @confirm="discardAll"
+      ></ConfirmDialog>
+
+      <v-btn
         color="primary"
         prepend-icon="mdi-source-commit"
+        class="flex-grow-1"
         :disabled="!changes.pendingCount"
         :loading="committing"
         @click="onCommitClick"
@@ -154,13 +145,20 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { components } from '@/api-types'
+import {
+  diffAgainstAncestor,
+  memoizeByRef,
+  useDiffCountCache,
+  type KeyRef,
+} from '@/composables/useDiff'
 import { validatePayload } from '@/composables/useMonaco'
-import { keyRoute, parseVersion, withDiffQuery } from '@/router'
+import { keyRoute, parseVersion, pushDiffRoute } from '@/router'
 import { type Conflict, conflictsFrom, pendingSource, useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
 import ConfirmDialog from '../dialog/ConfirmDialog.vue'
 import CommitConflictsDialog from '../dialog/CommitConflictsDialog.vue'
+import KeyChangeListItem from '../key/KeyChangeListItem.vue'
 
 type StagedEditOut = components['schemas']['StagedEditOut']
 type StagedArchivalOut = components['schemas']['StagedArchivalOut']
@@ -179,6 +177,19 @@ const rebasing = ref(false)
 const conflicts = ref<Conflict[]>([])
 const conflictsOpen = ref(false)
 
+const fetchPayload = memoizeByRef((ref: KeyRef) =>
+  nav.fetchKeyPayload(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+)
+const fetchChildren = memoizeByRef((ref: KeyRef) =>
+  nav.fetchKeyChildren(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+)
+
+const { get: diffCounts } = useDiffCountCache(
+  () => changes.visibleEdits,
+  (edit) => edit.id,
+  (edit) => diffAgainstAncestor(edit, fetchPayload, fetchChildren),
+)
+
 const errorCache = reactive(new Map<number, string[]>())
 
 async function loadErrors(edit: StagedEditOut) {
@@ -187,30 +198,44 @@ async function loadErrors(edit: StagedEditOut) {
   errorCache.set(edit.id, await validatePayload(edit.proposed_payload, edit.category))
 }
 
-function tooltipLines(edit: StagedEditOut): string[] {
-  if (edit.validation_status === 'passed') return ['No validation problems']
-  const errors = errorCache.get(edit.id)
-  return errors?.length ? errors : ['Validation failed']
-}
-
-function keyIcon(edit: StagedEditOut) {
-  return edit.base_version === null && edit.copied_from ? 'mdi-source-fork' : 'mdi-key-plus'
-}
-
 async function goToEdit(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
-  if (edit.base_version === null) {
-    router.push(keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'))
-    return
-  }
-  // Already comparing: keep the location from before that comparison started.
-  if (!router.currentRoute.value.query.diff) {
-    nav.preDiffLocation = router.currentRoute.value.fullPath
-  }
-  router.push({
-    ...keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, edit.base_version),
-    query: withDiffQuery({}, { mode: edit.mode_name, version: 'pending' }),
+  pushDiffRoute(router, edit.subsystem_name, edit.vertex_name, edit.mode_name, edit.base_version, {
+    mode: edit.mode_name,
+    version: 'pending',
   })
+}
+
+async function goToPayload(edit: StagedEditOut) {
+  if (!(await changes.confirmDiscard())) return
+  router.push(keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'))
+}
+
+async function goToConflict(conflict: Conflict, side: 'yours' | 'theirs') {
+  if (!(await changes.confirmDiscard())) return
+  conflictsOpen.value = false
+  const target = side === 'yours' ? 'pending' : conflict.tip_version
+  pushDiffRoute(
+    router,
+    conflict.subsystem_name,
+    conflict.vertex_name,
+    conflict.mode_name,
+    conflict.base_version,
+    { mode: conflict.mode_name, version: target },
+  )
+}
+
+async function goToCompare(conflict: Conflict) {
+  if (!(await changes.confirmDiscard())) return
+  conflictsOpen.value = false
+  pushDiffRoute(
+    router,
+    conflict.subsystem_name,
+    conflict.vertex_name,
+    conflict.mode_name,
+    conflict.tip_version,
+    { mode: conflict.mode_name, version: 'pending' },
+  )
 }
 
 async function goToArchival(archival: StagedArchivalOut) {
@@ -241,20 +266,41 @@ function routedKey() {
   return { subsystem, name, mode, version: parsed }
 }
 
+/** Notifies and routes back to the pre-edit source, if any. Returns whether it did. */
+async function returnToSource(
+  subsystem: string,
+  name: string,
+  source: ReturnType<typeof pendingSource>,
+) {
+  if (!source) return false
+  snackbar.notify(`Discarded. Back on "${source.mode_name}" v${source.version}`, 'info')
+  const { at: _at, ...query } = route.query
+  await router.replace({ ...keyRoute(subsystem, name, source.mode_name, source.version), query })
+  return true
+}
+
 async function discardAll() {
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
   const source = pendingSource(staged)
   await changes.discardAll()
 
-  if (key && source) {
-    snackbar.notify(`Discarded. Back on "${source.mode_name}" v${source.version}`, 'info')
-    const { at: _at, ...query } = route.query
-    await router.replace({
-      ...keyRoute(key.subsystem, key.name, source.mode_name, source.version),
-      query,
-    })
-  }
+  if (key) await returnToSource(key.subsystem, key.name, source)
+  await nav.refreshKeys()
+}
+
+async function discardEdit(edit: StagedEditOut) {
+  const key = routedKey()
+  const onThisEdit =
+    key?.subsystem === edit.subsystem_name &&
+    key.name === edit.vertex_name &&
+    key.mode === edit.mode_name
+  const source = pendingSource(edit)
+  await changes.discardEdit(edit.id)
+
+  const returned =
+    onThisEdit && (await returnToSource(edit.subsystem_name, edit.vertex_name, source))
+  if (!returned) snackbar.notify('Edit discarded', 'info')
   await nav.refreshKeys()
 }
 
@@ -302,6 +348,7 @@ async function commit(overwriteConflicts = false) {
     if (found) {
       conflicts.value = found
       conflictsOpen.value = true
+      void nav.refreshKeys()
     } else {
       snackbar.notifyError(err)
     }
@@ -310,3 +357,15 @@ async function commit(overwriteConflicts = false) {
   }
 }
 </script>
+
+<style scoped>
+.edit-btn {
+  display: none;
+}
+.discardable:hover .edit-btn {
+  display: inline-flex;
+}
+:deep(.v-list-item:not(:last-child)) {
+  border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>

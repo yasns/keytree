@@ -1,4 +1,4 @@
-import { reactive, onBeforeUnmount } from 'vue'
+import { reactive, shallowReactive, onBeforeUnmount, watch } from 'vue'
 import type { ScrollSide } from './useSyncedScroll'
 import type { components } from '@/api-types'
 
@@ -44,6 +44,158 @@ export function runsFor(own: string, other: string | undefined): DiffRun[] {
   if (ownEnd > start) runs.push({ text: own.slice(start, ownEnd), changed: true })
   if (ownEnd < own.length) runs.push({ text: own.slice(ownEnd), changed: false })
   return runs
+}
+
+export type DiffCounts = { added: number; removed: number }
+
+const MAX_DIFF_CELLS = 4_000_000
+
+/** Classic unified-diff line counts (added/removed), via longest common subsequence length. */
+export function lineDiffCounts(before: string, after: string): DiffCounts | undefined {
+  const a = before ? before.split('\n') : []
+  const b = after ? after.split('\n') : []
+  // O(n*m) DP; bail out above MAX_DIFF_CELLS instead of freezing the main thread on a huge payload.
+  if ((a.length + 1) * (b.length + 1) > MAX_DIFF_CELLS) return undefined
+  let prevRow: number[] = Array.from({ length: b.length + 1 }, () => 0)
+  let curRow: number[] = Array.from({ length: b.length + 1 }, () => 0)
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      curRow[j] =
+        a[i] === b[j]
+          ? (prevRow[j + 1] ?? 0) + 1
+          : Math.max(prevRow[j + 1] ?? 0, curRow[j + 1] ?? 0)
+    }
+    ;[prevRow, curRow] = [curRow, prevRow]
+  }
+  const lcs = prevRow[0] ?? 0
+  return { added: b.length - lcs, removed: a.length - lcs }
+}
+
+/** '+added -removed' aliases vs the ancestor. A retarget counts as both. */
+export function bundleDiffCounts(
+  ancestor: Record<string, number>,
+  proposed: Record<string, number | null>,
+): DiffCounts {
+  const SELF = -1 // no null proposed target ("supplied by this changeset") ever matches a real ancestor id
+  const resolved: Record<string, number> = {}
+  for (const [alias, target] of Object.entries(proposed)) resolved[alias] = target ?? SELF
+  const aliases = new Set([...Object.keys(ancestor), ...Object.keys(resolved)])
+  let added = 0
+  let removed = 0
+  for (const alias of aliases) {
+    if (ancestor[alias] === resolved[alias]) continue
+    if (alias in ancestor) removed++
+    if (alias in resolved) added++
+  }
+  return { added, removed }
+}
+
+export type KeyRef = {
+  subsystem_name: string
+  vertex_name: string
+  mode_name: string
+  version: number
+}
+
+/** A key's children, as alias -> child key id (entries with no child yet are dropped). */
+export function childrenToIdMap(children: KeyChildMetaOut[]): Record<string, number> {
+  return Object.fromEntries(
+    children.filter((c) => c.id !== null).map((c) => [c.alias, c.id as number]),
+  )
+}
+
+/** Dedupes repeated fetches for the same key ref, for the memoizer's lifetime. */
+export function memoizeByRef<R>(fetch: (ref: KeyRef) => Promise<R>): (ref: KeyRef) => Promise<R> {
+  const cache = new Map<string, Promise<R>>()
+  return (ref) => {
+    const key = `${ref.subsystem_name}/${ref.vertex_name}/${ref.mode_name}/${ref.version}`
+    let result = cache.get(key)
+    if (!result) {
+      result = fetch(ref)
+      cache.set(key, result)
+    }
+    return result
+  }
+}
+
+/** Diff counts for a proposed payload/children against a specific key version. */
+export async function diffAgainstRef(
+  ref: KeyRef,
+  proposedPayload: string | null,
+  proposedChildrenMap: Record<string, number | null> | null,
+  fetchPayload: (ref: KeyRef) => Promise<KeyOut | undefined>,
+  fetchChildren: (ref: KeyRef) => Promise<KeyChildMetaOut[]>,
+): Promise<DiffCounts | undefined> {
+  if (proposedPayload !== null) {
+    const before = (await fetchPayload(ref))?.payload ?? ''
+    return lineDiffCounts(before, proposedPayload)
+  }
+  const refMap = childrenToIdMap(await fetchChildren(ref))
+  return bundleDiffCounts(refMap, proposedChildrenMap ?? {})
+}
+
+/** Diff counts for a staged edit's proposal against its fork/copy source (or prior version). */
+export function diffAgainstAncestor(
+  edit: StagedEditOut | undefined,
+  fetchPayload: (ref: KeyRef) => Promise<KeyOut | undefined>,
+  fetchChildren: (ref: KeyRef) => Promise<KeyChildMetaOut[]>,
+): Promise<DiffCounts | undefined> {
+  const ancestor = edit?.based_on
+  if (!edit || !ancestor) return Promise.resolve(undefined)
+  const proposedChildrenMap = edit.proposed_children
+    ? Object.fromEntries(
+        Object.entries(edit.proposed_children).map(([alias, child]) => [
+          alias,
+          child?.key_id ?? null,
+        ]),
+      )
+    : null
+  return diffAgainstRef(
+    {
+      subsystem_name: edit.subsystem_name,
+      vertex_name: edit.vertex_name,
+      mode_name: ancestor.mode_name,
+      version: ancestor.version,
+    },
+    edit.proposed_payload,
+    proposedChildrenMap,
+    fetchPayload,
+    fetchChildren,
+  )
+}
+
+/** A reactive cache of per-item async results, pruned and refilled whenever `source()` changes. */
+export function useDiffCountCache<T, K, V>(
+  source: () => T[],
+  keyFn: (item: T) => K,
+  load: (item: T) => Promise<V | undefined>,
+) {
+  const cache = shallowReactive(new Map<K, V>())
+
+  async function ensure(item: T) {
+    const key = keyFn(item)
+    if (cache.has(key)) return
+    try {
+      const value = await load(item)
+      if (value !== undefined) cache.set(key, value)
+    } catch {
+      // Decorative badge only; skip quietly on fetch failure.
+    }
+  }
+
+  watch(
+    source,
+    (items) => {
+      const keys = new Set(items.map(keyFn))
+      for (const k of cache.keys()) {
+        if (!keys.has(k)) cache.delete(k)
+      }
+      items.forEach((item) => void ensure(item))
+    },
+    { immediate: true },
+  )
+
+  return { get: (item: T) => cache.get(keyFn(item)) }
 }
 
 export function sideHighlightClass(side: ScrollSide | undefined): string | undefined {

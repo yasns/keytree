@@ -34,6 +34,7 @@ from app.notify import (
     edit_entry,
     payload_counts,
 )
+from app.routers.keys import key_ancestry
 from app.routers.staging import (
     ChangesetOut,
     changeset_out,
@@ -124,8 +125,7 @@ def _build_key_children(
     child_vertex_of: dict[tuple[int, str], int],
     vertex_of_key: dict[int, int],
 ) -> list[KeyChild]:
-    """None means the key this changeset produces for that alias's vertex; alias absent from map
-    means cleared."""
+    """None means the key this changeset produces; alias absent from map means cleared."""
     by_mode = {key.mode_id: key for key in keys}
     by_vertex = {key.vertex_id: key for key in keys}
     children: list[KeyChild] = []
@@ -231,21 +231,7 @@ async def _ancestor_data(
         for row in notifiable_rows
         if row.edit.base_key_id or row.edit.copied_from_key_id
     }
-    if not ancestor_ids:
-        return {}, {}
-    payload_rows = await session.execute(
-        select(Key.id, Key.payload).where(Key.id.in_(ancestor_ids))
-    )
-    payloads = dict(payload_rows.tuples().all())
-    child_rows = await session.execute(
-        select(KeyChild.parent_key_id, KeyChild.alias, KeyChild.child_key_id).where(
-            KeyChild.parent_key_id.in_(ancestor_ids)
-        )
-    )
-    children: dict[int, dict[str, int]] = {}
-    for parent_key_id, alias, child_key_id in child_rows.tuples():
-        children.setdefault(parent_key_id, {})[alias] = child_key_id
-    return payloads, children
+    return await key_ancestry(ancestor_ids, session)
 
 
 async def _notification_entries(
@@ -353,8 +339,7 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
 
 
 def _proposed_child_refs(rows: list[_CommitRow]) -> tuple[set[tuple[int, str]], set[int]]:
-    """(vertex_id, alias) pairs needing a VertexEdge lookup, and key ids needing a Key -> vertex_id
-    lookup."""
+    """(vertex_id, alias) pairs needing a VertexEdge lookup, and key ids needing a vertex_id."""
     none_aliases: set[tuple[int, str]] = set()
     concrete_ids: set[int] = set()
     for row in rows:
@@ -388,8 +373,7 @@ def _rebased_edits(
 
 @router.post("/rebase")
 async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOut:
-    """Moves every conflicting edit onto the version committed since it was staged, keeping its
-    proposed payload and children."""
+    """Moves conflicting edits onto the new tip, preserving their proposed content."""
     changeset = await open_changeset(request.state.claims["cern_upn"], session)
     if changeset is None:
         raise HTTPException(status_code=404, detail="no open changeset")

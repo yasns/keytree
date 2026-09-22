@@ -1,10 +1,15 @@
 import { useRoute, useRouter } from 'vue-router'
 import { keyRoute } from '@/router'
+import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 import { useSnackbarStore } from '@/stores/snackbar'
+import type { components } from '@/api-types'
+
+type StagedEditOut = components['schemas']['StagedEditOut']
 
 /** Navigates to the version a mode's staged edit will produce, for a mode with no key yet. */
 export function useStagedNavigation() {
+  const changes = useChangesStore()
   const nav = useNavStore()
   const snackbar = useSnackbarStore()
   const router = useRouter()
@@ -21,5 +26,24 @@ export function useStagedNavigation() {
     void router.replace({ ...keyRoute(subsystem, name, mode, 'pending'), query: route.query })
   }
 
-  return { navigateToStaged, showStaged }
+  /** Falls back off the pending route */
+  function backToVersion(subsystem: string, name: string, mode: string, version: number) {
+    void router.replace({ ...keyRoute(subsystem, name, mode, version), query: route.query })
+  }
+
+  /** What a save actually staged; `left` marks a no-op re-stage that fell back off the pending route. */
+  function afterStage(
+    subsystem: string,
+    name: string,
+    mode: string,
+    version: number,
+    pending: boolean,
+  ): { edit: StagedEditOut | undefined; left: boolean } {
+    const edit = changes.stagedForMode(subsystem, name, mode)
+    const left = pending && !edit
+    if (left) backToVersion(subsystem, name, mode, version)
+    return { edit, left }
+  }
+
+  return { navigateToStaged, showStaged, backToVersion, afterStage }
 }

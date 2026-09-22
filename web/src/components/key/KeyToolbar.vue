@@ -144,8 +144,7 @@ import CompareDialog from '../dialog/CompareDialog.vue'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { readOnlyReason, useIsDecommissioned, useReadOnly } from '@/composables/useReadOnly'
 import { useChangesStore } from '@/stores/changes'
-import { useNavStore } from '@/stores/nav'
-import { keyRoute, withDiffQuery, type DiffTarget } from '@/router'
+import { pushDiffRoute, type DiffTarget } from '@/router'
 import type { components } from '@/api-types'
 import ReadOnlyTooltip from './ReadOnlyTooltip.vue'
 
@@ -182,7 +181,6 @@ const emit = defineEmits<{
 }>()
 
 const changes = useChangesStore()
-const nav = useNavStore()
 const router = useRouter()
 
 const saveDialog = ref(false)
@@ -324,13 +322,6 @@ async function onCompare(target: DiffTarget) {
   const { subsystem, name, mode } = props
   if (!subsystem || !name || !mode || currentVersionTarget.value === undefined) return
   if (!(await changes.confirmDiscard())) return
-  // Already comparing: keep the location from before that comparison started.
-  if (!router.currentRoute.value.query.diff) {
-    nav.preDiffLocation = router.currentRoute.value.fullPath
-  }
-  router.push({
-    ...keyRoute(subsystem, name, mode, currentVersionTarget.value),
-    query: withDiffQuery({}, target),
-  })
+  pushDiffRoute(router, subsystem, name, mode, currentVersionTarget.value, target)
 }
 </script>

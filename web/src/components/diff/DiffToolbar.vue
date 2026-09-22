@@ -2,17 +2,9 @@
   <v-toolbar density="compact" class="bg-surface border-b-sm px-4">
     <template v-slot:prepend>
       <span class="key-label ml-1">{{ keyALabel }}</span>
-      <v-btn
-        icon="mdi-pencil"
-        size="small"
-        variant="tonal"
-        class="ml-1"
-        @click="editA"
-        density="comfortable"
+      <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editA"
+        >Edit</v-btn
       >
-        <v-icon icon="mdi-pencil" size="small"></v-icon>
-        <v-tooltip activator="parent" location="bottom">Edit</v-tooltip>
-      </v-btn>
     </template>
 
     <template v-slot:default>
@@ -33,17 +25,9 @@
 
     <template v-slot:append>
       <span class="key-label ml-1">{{ keyBLabel }}</span>
-      <v-btn
-        icon="mdi-pencil"
-        size="small"
-        variant="tonal"
-        class="ml-1"
-        @click="editB"
-        density="comfortable"
+      <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editB"
+        >Edit</v-btn
       >
-        <v-icon icon="mdi-pencil" size="small"></v-icon>
-        <v-tooltip activator="parent" location="bottom">Edit</v-tooltip>
-      </v-btn>
     </template>
   </v-toolbar>
 </template>
@@ -72,7 +56,6 @@ const changes = useChangesStore()
 
 const keyPrefix = computed(() => `${route.params.subsystem}/${route.params.name}`)
 
-/** Resolves a 'pending' target to the staged edit's expected version, so it doesn't show literally. */
 function versionLabel(mode: string, version: VersionTarget | undefined): string {
   if (version !== 'pending') return version === undefined ? '' : `v${version}`
   const staged = changes.stagedForMode(
@@ -80,7 +63,7 @@ function versionLabel(mode: string, version: VersionTarget | undefined): string 
     route.params.name as string,
     mode,
   )
-  return staged ? `v${staged.expected_version}` : 'pending'
+  return staged ? `v${staged.expected_version}` : ''
 }
 
 const keyALabel = computed(

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -19,13 +19,16 @@ from app.db.models import (
     Vertex,
 )
 from app.routers.commit import (
+    CommitIn,
     _build_key_children,
     _build_keys,
     _CommitRow,
     _conflicts,
     _rebased_edits,
+    commit_changeset,
 )
 from app.routers.staging import (
+    ForkIn,
     ProposedChildOut,
     StagedArchivalOut,
     StagedDecommissionOut,
@@ -33,8 +36,12 @@ from app.routers.staging import (
     _build_changeset,
     _get_or_create_open_changeset,
     _resolve_bases,
+    discard_edit,
+    fork_mode,
     pending_editors,
+    stage_edits,
 )
+from app.routers.user import upsert_app_user
 
 
 def _fake_request(cern_login: str) -> SimpleNamespace:
@@ -280,6 +287,65 @@ async def _forked_mode(
 
 
 @pytest.mark.docker
+def test_discard_edit_removes_only_that_edit_and_its_orphan_fork(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    async def run() -> tuple[bool, bool, bool]:
+        changeset_id, forked_mode_id = await _forked_mode(
+            session_factory, cern_login="discarder", mode_name="fork_to_discard"
+        )
+        async with session_factory() as session:
+            edit_id = await session.scalar(
+                select(StagedEdit.id).where(StagedEdit.mode_id == forked_mode_id)
+            )
+            assert edit_id is not None
+
+            vertex_id = await session.scalar(
+                select(Vertex.id)
+                .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+                .where(Subsystem.name == "cms_run", Vertex.name == "clock_source")
+            )
+            other_mode = Mode(
+                vertex_id=vertex_id, name="fork_to_keep", description="d", created_by="discarder"
+            )
+            session.add(other_mode)
+            await session.flush()
+            session.add(
+                StagedEdit(
+                    changeset_id=changeset_id,
+                    mode_id=other_mode.id,
+                    base_key_id=None,
+                    expected_version=1,
+                    proposed_payload="LHC",
+                    comment="fork",
+                    validation_status="skipped",
+                )
+            )
+            await session.commit()
+            other_mode_id = other_mode.id
+
+        request = _fake_request("discarder")
+        async with session_factory() as session:
+            await discard_edit(edit_id, request, session)
+
+        async with session_factory() as session:
+            discarded_edit_gone = (await session.get(StagedEdit, edit_id)) is None
+            forked_mode_gone = (await session.get(Mode, forked_mode_id)) is None
+            other_edit_remains = (
+                await session.scalar(
+                    select(StagedEdit.id).where(StagedEdit.mode_id == other_mode_id)
+                )
+            ) is not None
+
+        return discarded_edit_gone, forked_mode_gone, other_edit_remains
+
+    discarded_edit_gone, forked_mode_gone, other_edit_remains = asyncio.run(run())
+    assert discarded_edit_gone
+    assert forked_mode_gone
+    assert other_edit_remains
+
+
+@pytest.mark.docker
 def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
     session_factory: async_sessionmaker[AsyncSession],
 ):
@@ -310,6 +376,103 @@ def test_resolve_bases_restages_onto_a_forked_modes_own_edit(
     assert base.base_key_id is None
     assert base.expected_version == 1
     assert base.copied_from_key_id is None
+
+
+@pytest.mark.docker
+def test_restaging_a_fresh_fork_back_to_its_source_leaves_nothing_pending(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """A freshly-forked mode has no base_key_id yet, only copied_from_key_id; the no-op
+    suppression must compare against that too, not just an already-committed mode's base_key_id."""
+    cern_login = "fork_noop"
+    request = SimpleNamespace(
+        state=SimpleNamespace(
+            claims={
+                "cern_upn": cern_login,
+                "name": cern_login,
+                "resource_access": {"keytree": {"roles": ["keytree_superuser"]}},
+            }
+        )
+    )
+
+    async def run() -> int | None:
+        async with session_factory() as session:
+            await upsert_app_user({"cern_upn": cern_login, "name": cern_login}, session)
+            vertex_id = await session.scalar(
+                select(Vertex.id)
+                .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+                .where(Subsystem.name == "cms_run", Vertex.name == "clock_source")
+            )
+            assert vertex_id is not None
+            source_mode = Mode(
+                vertex_id=vertex_id,
+                name="fork_noop_source",
+                description="d",
+                created_by=cern_login,
+            )
+            session.add(source_mode)
+            changeset = Changeset(created_by=cern_login)
+            session.add(changeset)
+            await session.flush()
+            session.add(
+                StagedEdit(
+                    changeset_id=changeset.id,
+                    mode_id=source_mode.id,
+                    base_key_id=None,
+                    expected_version=1,
+                    proposed_payload="original content",
+                    comment="seed",
+                    validation_status="skipped",
+                )
+            )
+            await session.commit()
+
+        async with session_factory() as session:
+            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
+
+        async with session_factory() as session:
+            await fork_mode(
+                ForkIn(
+                    subsystem_name="cms_run",
+                    vertex_name="clock_source",
+                    mode_name="fork_noop_source",
+                    base_version=1,
+                    proposed_payload="original content",
+                    comment="fork",
+                    new_mode_name="fork_noop_target",
+                    description="fork",
+                ),
+                request,
+                session,
+            )
+
+        # Re-stage the freshly-forked mode back to the exact content it was copied from.
+        async with session_factory() as session:
+            await stage_edits(
+                [
+                    StagedEditIn(
+                        subsystem_name="cms_run",
+                        vertex_name="clock_source",
+                        mode_name="fork_noop_target",
+                        base_version=1,
+                        proposed_payload="original content",
+                        comment="revert",
+                    )
+                ],
+                request,
+                session,
+            )
+
+        async with session_factory() as session:
+            target_mode_id = await session.scalar(
+                select(Mode.id).where(Mode.vertex_id == vertex_id, Mode.name == "fork_noop_target")
+            )
+            return await session.scalar(
+                select(StagedEdit.id).where(StagedEdit.mode_id == target_mode_id)
+            )
+
+    remaining_edit_id = asyncio.run(run())
+    assert remaining_edit_id is None
 
 
 @pytest.mark.docker

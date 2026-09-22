@@ -26,8 +26,8 @@
               density="compact"
               label
               variant="tonal"
-              :color="isLatest ? 'success' : undefined"
-              >{{ isLatest ? 'latest' : 'old' }}</v-chip
+              :color="isLatest ? 'success' : 'warning'"
+              >{{ isLatest ? 'latest' : 'outdated' }}</v-chip
             >
             <v-chip
               v-if="archived || archivalPending"
@@ -69,7 +69,7 @@
           </div>
         </div>
       </v-expansion-panel-title>
-      <v-expansion-panel-text v-if="hasDetail" class="text-caption text-body-medium">
+      <v-expansion-panel-text v-if="hasDetail" class="text-body-medium">
         <label>
           <div class="font-weight-medium">Key label</div>
           <div class="d-flex align-center ga-1">

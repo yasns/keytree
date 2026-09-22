@@ -23,6 +23,8 @@
       label="Comment"
       rows="3"
       hide-details="auto"
+      maxlength="255"
+      counter
       :rules="[(v: string) => !!v.trim() || 'A comment is required']"
     ></v-textarea>
   </FormDialog>
