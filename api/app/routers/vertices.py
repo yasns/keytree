@@ -87,7 +87,7 @@ def _build_vertex_detail(
                 versions=versions_by_mode.get(mode.id, []),
                 decommissioned_versions=decommissioned_versions_by_mode.get(mode.id, []),
             )
-            for mode in sorted(modes, key=lambda m: m.id)
+            for mode in sorted(modes, key=lambda m: m.name.lower())
         ],
     )
 

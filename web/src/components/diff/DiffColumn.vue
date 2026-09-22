@@ -1,5 +1,5 @@
 <template>
-  <v-card class="d-flex flex-column h-100 elevation-overlay" style="min-height: 0">
+  <div class="d-flex flex-column h-100 elevation-1 elevation-overlay" style="min-height: 0">
     <KeyMetadata
       :subsystem="subsystem"
       :name="name"
@@ -34,20 +34,30 @@
           <template v-slot:title>
             <div class="d-flex flex-column">
               <span class="text-body-small text-medium-emphasis">{{ child.alias }}</span>
-              <span class="key-label text-truncate"
-                ><DiffText
-                  :runs="targetLabelRuns(child)"
-                  :highlight-class="diffHighlightClass"
-                ></DiffText
+              <span class="key-label key-label-truncate"
+                ><span class="key-label-head"
+                  ><DiffText
+                    :runs="targetLabelRuns(child)[0]"
+                    :highlight-class="diffHighlightClass"
+                  ></DiffText></span
+                ><span class="key-label-tail"
+                  ><DiffText
+                    :runs="targetLabelRuns(child)[1]"
+                    :highlight-class="diffHighlightClass"
+                  ></DiffText></span
               ></span>
             </div>
+          </template>
+
+          <template v-if="child.category !== 'external'" v-slot:append>
+            <v-icon icon="mdi-chevron-right" size="small"></v-icon>
           </template>
         </v-list-item>
       </v-list>
 
-      <Spinner v-else></Spinner>
+      <v-skeleton-loader v-else type="list-item@6"></v-skeleton-loader>
     </div>
-  </v-card>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -56,10 +66,15 @@ import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { iconFor } from '@/category'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
-import { useDiff, runsFor, sideHighlightClass, type ColumnDiffData } from '@/composables/useDiff'
+import {
+  useDiff,
+  runsForLabel,
+  sideHighlightClass,
+  type DiffRun,
+  type ColumnDiffData,
+} from '@/composables/useDiff'
 import type { components } from '@/api-types'
 import KeyMetadata from '../key/KeyMetadata.vue'
-import Spinner from '../Spinner.vue'
 import DiffText from './DiffText.vue'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -210,9 +225,9 @@ function rowClasses(child: KeyChildMetaOut) {
   }
 }
 
-function targetLabelRuns(child: KeyChildMetaOut) {
+function targetLabelRuns(child: KeyChildMetaOut): [DiffRun[], DiffRun[]] {
   const match = counterpartChild(child)
-  return runsFor(targetLabel(child), match && targetLabel(match))
+  return runsForLabel(targetLabel(child), match && targetLabel(match))
 }
 
 const diffHighlightClass = computed(() => sideHighlightClass(props.diffContext?.side))
@@ -221,6 +236,9 @@ const diffHighlightClass = computed(() => sideHighlightClass(props.diffContext?.
 <style scoped>
 .v-list-item + .v-list-item {
   border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+:deep(.v-list-item__append) {
+  margin-inline-start: 4px;
 }
 .row-diff-left {
   background-color: rgba(var(--v-theme-error), 0.12);

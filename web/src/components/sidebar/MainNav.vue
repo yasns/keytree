@@ -1,5 +1,10 @@
 <template>
-  <v-navigation-drawer rail permanent>
+  <v-navigation-drawer
+    rail
+    permanent
+    :class="{ 'nav-edge--active': resizing && !nav.activePanel }"
+    class="elevation-2 elevation-overlay"
+  >
     <v-list density="compact" nav>
       <v-tooltip v-for="item in menuItems" :key="item.title" :text="item.title" location="end">
         <template v-slot:activator="{ props: activatorProps }">
@@ -44,6 +49,21 @@
           </template>
         </v-tooltip>
 
+        <v-tooltip text="Report a Bug" location="end">
+          <template v-slot:activator="{ props: props }">
+            <v-list-item
+              href="https://its.cern.ch/jira/projects/CMSLITOLSW/"
+              target="_blank"
+              rel="noopener"
+              v-bind="props"
+            >
+              <template v-slot:prepend>
+                <v-icon icon="mdi-bug-outline"></v-icon>
+              </template>
+            </v-list-item>
+          </template>
+        </v-tooltip>
+
         <v-menu>
           <template v-slot:activator="{ props: menuProps }">
             <v-tooltip text="Account" location="end">
@@ -56,7 +76,7 @@
               </template>
             </v-tooltip>
           </template>
-          <v-card style="width: 300px" class="elevation-overlay">
+          <v-card style="width: 300px" class="elevation-overlay" elevation="4">
             <v-card-text>
               <div class="mx-auto text-center">
                 <v-avatar color="secondary" size="large">
@@ -79,9 +99,21 @@
     </template>
   </v-navigation-drawer>
 
-  <v-navigation-drawer v-model="panelOpen" permanent width="400">
+  <v-navigation-drawer
+    v-model="panelOpen"
+    permanent
+    class="elevation-1 elevation-overlay"
+    :width="panelWidth"
+    :class="{ 'nav-edge--active': resizing && nav.activePanel }"
+  >
     <component :is="nav.activePanel" v-if="nav.activePanel" />
   </v-navigation-drawer>
+
+  <div
+    class="resize-handle"
+    :style="{ left: handleLeft - 3 + 'px' }"
+    @pointerdown="startResize"
+  ></div>
 </template>
 
 <script setup lang="ts">
@@ -89,10 +121,53 @@ import { useTheme } from 'vuetify'
 import { useAuthStore } from '@/stores/auth'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
-import { type Component, computed } from 'vue'
+import { type Component, computed, ref, shallowRef } from 'vue'
 import BrowsePanel from './BrowsePanel.vue'
 import SearchPanel from './SearchPanel.vue'
 import PendingChangesPanel from './PendingChangesPanel.vue'
+
+const RAIL_WIDTH = 56
+const MIN_WIDTH = 280
+const MAX_WIDTH = 640
+const CUTOFF = 180
+
+const panelWidth = ref(400)
+const lastPanel = shallowRef<Component | null>(null)
+const resizing = ref(false)
+const handleLeft = computed(() => RAIL_WIDTH + (nav.activePanel ? panelWidth.value : 0))
+
+function closePanel() {
+  lastPanel.value = nav.activePanel
+  nav.activePanel = null
+}
+
+function startResize(down: PointerEvent) {
+  down.preventDefault()
+  const startX = down.clientX
+  const startWidth = nav.activePanel ? panelWidth.value : 0
+  function onMove(move: PointerEvent) {
+    const width = startWidth + (move.clientX - startX)
+    if (nav.activePanel && width < CUTOFF) {
+      closePanel()
+      return
+    }
+    if (!nav.activePanel) {
+      if (width < CUTOFF) return
+      nav.activePanel = lastPanel.value ?? BrowsePanel
+    }
+    panelWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width))
+  }
+  function onUp() {
+    resizing.value = false
+    document.body.style.userSelect = ''
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+  }
+  resizing.value = true
+  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
 
 const auth = useAuthStore()
 const theme = useTheme()
@@ -100,7 +175,7 @@ const nav = useNavStore()
 const changes = useChangesStore()
 
 const menuItems = computed(() => [
-  { icon: 'mdi-key-chain', title: 'Browse', component: BrowsePanel },
+  { icon: 'mdi-folder-key', title: 'Browse', component: BrowsePanel },
   { icon: 'mdi-magnify', title: 'Search', component: SearchPanel },
   {
     icon: 'mdi-source-branch',
@@ -113,8 +188,24 @@ const menuItems = computed(() => [
 nav.activePanel ??= BrowsePanel
 const panelOpen = computed(() => nav.activePanel !== null)
 function togglePanel(component: Component) {
-  nav.activePanel = nav.activePanel === component ? null : component
+  if (nav.activePanel === component) closePanel()
+  else nav.activePanel = component
 }
 
 const isDark = computed(() => theme.current.value.dark)
 </script>
+
+<style scoped>
+.resize-handle {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2000;
+}
+
+.nav-edge--active {
+  border-right: 6px solid rgb(var(--v-theme-primary));
+}
+</style>

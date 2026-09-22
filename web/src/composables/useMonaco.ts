@@ -38,22 +38,17 @@ export function formatMarkers(markers: monaco.editor.IMarker[]): string[] {
     )
 }
 
-/** Runs payload through the yaml worker off-screen and resolves with the same messages the live editor would show. */
-export function validatePayload(payload: string, category: string | null): Promise<string[]> {
-  if (languageFor(category) !== 'yaml') return Promise.resolve([])
-  const model = createPayloadModel(payload, category)
+/** Resolves once the yaml worker has posted markers for this model, or after a timeout (e.g. markers were already empty). */
+export function waitForMarkers(model: monaco.editor.ITextModel): Promise<void> {
   return new Promise((resolve) => {
     const finish = () => {
       listener.dispose()
       clearTimeout(timeout)
-      const markers = monaco.editor.getModelMarkers({ resource: model.uri, owner: 'yaml' })
-      model.dispose()
-      resolve(formatMarkers(markers))
+      resolve()
     }
     const listener = monaco.editor.onDidChangeMarkers((uris) => {
       if (uris.some((uri) => uri.toString() === model.uri.toString())) finish()
     })
-    // Falls back if the worker never reports a change, e.g. markers were already empty.
     const timeout = setTimeout(finish, 2000)
   })
 }

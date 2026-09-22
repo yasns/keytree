@@ -11,7 +11,7 @@
             {{ editor.cern_login }}
           </a>
         </template> </v-tooltip
-      >) has unsaved staged edits on this mode.
+      >) has unsaved changes on this mode.
     </div>
   </v-alert>
 </template>

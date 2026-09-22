@@ -15,7 +15,6 @@
         label="Mode"
         disabled
         hide-details
-        density="comfortable"
       ></v-autocomplete>
       <v-select
         :model-value="props.currentVersion"
@@ -24,7 +23,6 @@
         disabled
         hide-details
         style="max-width: 130px"
-        density="comfortable"
       ></v-select>
     </div>
 
@@ -38,7 +36,6 @@
         label="Mode"
         autofocus
         hide-details
-        density="comfortable"
       ></v-autocomplete>
       <v-select
         v-model="selectedVersion"
@@ -48,7 +45,6 @@
         label="Version"
         hide-details
         style="max-width: 130px"
-        density="comfortable"
       >
         <template #selection="{ item }">{{ item.plain }}</template>
       </v-select>

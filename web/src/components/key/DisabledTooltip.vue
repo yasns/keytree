@@ -1,5 +1,5 @@
 <template>
-  <v-tooltip :disabled="!readOnly" :text="readOnlyReason">
+  <v-tooltip :disabled="!reason" :text="reason">
     <template v-slot:activator="{ props }">
       <div v-bind="props"><slot></slot></div>
     </template>
@@ -7,7 +7,5 @@
 </template>
 
 <script setup lang="ts">
-import { readOnlyReason } from '@/composables/useReadOnly'
-
-defineProps<{ readOnly?: boolean }>()
+defineProps<{ reason?: string }>()
 </script>

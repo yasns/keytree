@@ -1,7 +1,10 @@
 <template>
-  <v-toolbar density="compact" class="bg-surface border-b-sm px-4">
+  <v-toolbar density="compact" class="px-4">
     <template v-slot:prepend>
-      <span class="key-label ml-1">{{ keyALabel }}</span>
+      <span class="key-label ml-1 key-label-truncate"
+        ><span class="key-label-head">{{ keyPrefix }}</span
+        ><span class="key-label-tail">{{ keyASuffix }}</span></span
+      >
       <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editA"
         >Edit</v-btn
       >
@@ -9,22 +12,18 @@
 
     <template v-slot:default>
       <v-btn size="small" variant="tonal" prepend-icon="mdi-swap-horizontal" @click="swap">
-        Swap sides
+        Swap Sides
       </v-btn>
-      <v-btn
-        size="small"
-        variant="tonal"
-        color="error"
-        class="ml-1"
-        prepend-icon="mdi-close"
-        @click="exitDiff"
-      >
-        Exit comparison
+      <v-btn size="small" variant="tonal" class="ml-1" prepend-icon="mdi-close" @click="exitDiff">
+        Exit Comparison
       </v-btn>
     </template>
 
     <template v-slot:append>
-      <span class="key-label ml-1">{{ keyBLabel }}</span>
+      <span class="key-label ml-1 key-label-truncate"
+        ><span class="key-label-head">{{ keyPrefix }}</span
+        ><span class="key-label-tail">{{ keyBSuffix }}</span></span
+      >
       <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editB"
         >Edit</v-btn
       >
@@ -66,14 +65,14 @@ function versionLabel(mode: string, version: VersionTarget | undefined): string 
   return staged ? `v${staged.expected_version}` : ''
 }
 
-const keyALabel = computed(
-  () =>
-    `${keyPrefix.value}/${route.params.mode}/${versionLabel(route.params.mode as string, parseVersion(route.params.version as string))}`,
+function suffixFor(mode: string, version: VersionTarget | undefined): string {
+  return `/${mode}/${versionLabel(mode, version)}`
+}
+
+const keyASuffix = computed(() =>
+  suffixFor(route.params.mode as string, parseVersion(route.params.version as string)),
 )
-const keyBLabel = computed(
-  () =>
-    `${keyPrefix.value}/${props.diffTarget.mode}/${versionLabel(props.diffTarget.mode, props.diffTarget.version)}`,
-)
+const keyBSuffix = computed(() => suffixFor(props.diffTarget.mode, props.diffTarget.version))
 
 function exitDiff() {
   const returnTo = nav.preDiffLocation

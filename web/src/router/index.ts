@@ -10,17 +10,29 @@ import NotFoundView from '@/views/NotFoundView.vue'
 import { useChangesStore } from '@/stores/changes'
 import { useNavStore } from '@/stores/nav'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    title?: string | ((to: RouteLocationNormalizedGeneric) => string)
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', component: HomeView },
+    { path: '/', component: HomeView, meta: { title: 'Keytree' } },
     {
       path: '/:subsystem/:name/:mode?/:version?',
       name: 'editor',
       component: EditorView,
       props: true,
+      meta: {
+        title: (to) => {
+          const { subsystem, name, mode, version } = to.params as Record<string, string>
+          return `${[subsystem, name, mode, version].filter(Boolean).join('/')} - Keytree`
+        },
+      },
     },
-    { path: '/404', component: NotFoundView },
+    { path: '/404', component: NotFoundView, meta: { title: 'Not Found - Keytree' } },
     { path: '/:pathMatch(.*)*', redirect: '/404' },
   ],
 })
@@ -34,6 +46,11 @@ router.beforeEach(async (to, from) => {
   if (sameKey(to, from)) return
   const changes = useChangesStore()
   if (!(await changes.confirmDiscard())) return false
+})
+
+router.afterEach((to) => {
+  const title = to.meta.title
+  document.title = typeof title === 'function' ? title(to) : (title ?? 'Keytree')
 })
 
 /** 'pending' = the version a mode's staged edit would produce. */

@@ -1,43 +1,45 @@
 <template>
-  <v-card class="d-flex flex-column h-100 elevation-overlay" style="min-height: 0">
-    <KeyMetadata
-      :subsystem="subsystem"
-      :name="name"
-      :mode="mode"
-      :version="version"
-      :payload="payload"
-      :staged="staged"
-      :pending="pending"
-    ></KeyMetadata>
+  <div class="d-flex flex-column h-100 elevation-1 elevation-overlay" style="min-height: 0">
+    <div>
+      <KeyMetadata
+        :subsystem="subsystem"
+        :name="name"
+        :mode="mode"
+        :version="version"
+        :payload="payload"
+        :staged="staged"
+        :pending="pending"
+      ></KeyMetadata>
 
-    <div v-if="readOnly" class="flex-shrink-0">
-      <ReadOnlyAlert :reason="readOnlyText"></ReadOnlyAlert>
-    </div>
-    <div v-if="payload?.retired_descendants.length" class="flex-shrink-0">
-      <RetiredDescendantsAlert :refs="payload.retired_descendants"></RetiredDescendantsAlert>
-    </div>
-    <div v-if="pendingEditors.length" class="flex-shrink-0">
-      <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
-    </div>
+      <div v-if="readOnly" class="flex-shrink-0">
+        <ReadOnlyAlert :reason="readOnlyText"></ReadOnlyAlert>
+      </div>
+      <div v-if="payload?.retired_descendants.length" class="flex-shrink-0">
+        <RetiredDescendantsAlert :refs="payload.retired_descendants"></RetiredDescendantsAlert>
+      </div>
+      <div v-if="pendingEditors.length" class="flex-shrink-0">
+        <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
+      </div>
 
-    <KeyToolbar
-      :dirty="dirty"
-      :staged="!!staged"
-      :staged-comment="staged?.comment"
-      :can-queue="!!canQueue"
-      :subsystem="subsystem"
-      :name="name"
-      :mode="mode"
-      :version="version"
-      :committed="!pending"
-      :read-only="readOnly"
-      :payload="payload"
-      @save="save"
-      @save-and-queue="saveAndQueue"
-      @discard="applyBaseline"
-      @fork="fork"
-      @copy-to="copyTo"
-    ></KeyToolbar>
+      <KeyToolbar
+        :dirty="dirty"
+        :staged="!!staged"
+        :staged-comment="staged?.comment"
+        :can-queue="!!canQueue"
+        :subsystem="subsystem"
+        :name="name"
+        :mode="mode"
+        :version="version"
+        :committed="!pending"
+        :read-only="readOnly"
+        :payload="payload"
+        @save="save"
+        @save-and-queue="saveAndQueue"
+        @discard="applyBaseline"
+        @fork="fork"
+        @copy-to="copyTo"
+      ></KeyToolbar>
+    </div>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
       <v-list v-if="children" activatable slim>
@@ -69,7 +71,6 @@
               :label="row.child.alias"
               placeholder="Select key"
               hide-details
-              density="compact"
               @click.stop
               @update:model-value="(v) => externalChoice.set(row.child.alias, v)"
             >
@@ -87,7 +88,6 @@
                   :label="row.child.alias"
                   placeholder="Select key"
                   hide-details
-                  density="compact"
                   :disabled="readOnly"
                   @click.stop
                   @update:model-value="(v) => onModeSelect(row.child, v)"
@@ -96,7 +96,13 @@
                     <v-divider v-if="'type' in item && item.type === 'divider'"></v-divider>
                     <v-list-item v-else v-bind="itemProps" class="key-label"></v-list-item>
                   </template>
-                  <template #selection>{{ selectionLabel(row.child) }}</template>
+                  <template #selection
+                    ><span class="key-label-truncate w-100"
+                      ><span class="key-label-head"
+                        >{{ row.child.subsystem_name }}/{{ row.child.vertex_name }}</span
+                      ><span class="key-label-tail">{{ selectionTail(row.child) }}</span></span
+                    ></template
+                  >
                 </v-select>
 
                 <div v-if="row.upgrade" class="text-label-medium text-info">
@@ -112,7 +118,7 @@
                   }}
                   <a
                     href="#"
-                    class="text-primary"
+                    class="text-primary hover-underline"
                     @click.stop.prevent="updateToLatest(row.child, row.upgrade)"
                     >Update to v{{ row.upgrade.version }}</a
                   >
@@ -137,13 +143,16 @@
                 </div>
               </div>
             </template>
+            <template v-if="row.child.category !== 'external'">
+              <v-icon icon="mdi-chevron-right" size="small"></v-icon>
+            </template>
           </div>
         </v-list-item>
       </v-list>
 
-      <Spinner v-else></Spinner>
+      <v-skeleton-loader v-else type="list-item@6"></v-skeleton-loader>
     </div>
-  </v-card>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -163,7 +172,6 @@ import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
 import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
 import PendingEditorsAlert from './PendingEditorsAlert.vue'
-import Spinner from '../Spinner.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
@@ -286,12 +294,11 @@ function modeValue(choice: ChildChoice | undefined): string | undefined {
   return `${choice.mode}/${choice.version ?? ''}`
 }
 
-/** May be behind the mode's tip. */
-function selectionLabel(child: KeyChildMetaOut): string {
+/** Tail (slash + mode + version) always shown in full; head truncates first. May be behind the mode's tip. */
+function selectionTail(child: KeyChildMetaOut): string {
   const choice = childChoice.get(child.alias)
   if (!choice?.mode) return ''
-  const base = `${child.subsystem_name}/${child.vertex_name}/${choice.mode}`
-  return choice.version === null ? base : `${base}/v${choice.version}`
+  return choice.version === null ? `/${choice.mode}` : `/${choice.mode}/v${choice.version}`
 }
 
 function baselineExternal(child: KeyChildMetaOut): string {

@@ -1,7 +1,7 @@
 <template>
   <FormDialog
     v-model="open"
-    title="Copy to Mode"
+    title="Copy to Existing Mode"
     confirm-text="Copy"
     :valid="valid"
     @confirm="confirm"

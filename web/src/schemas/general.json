@@ -75,7 +75,10 @@
                         "additionalProperties": false,
                         "required": ["hostname", "crate", "slot"],
                         "properties": {
-                          "hostname": { "type": "string", "description": "The board's hostname or IP address." },
+                          "hostname": {
+                            "type": "string",
+                            "description": "The board's hostname or IP address."
+                          },
                           "port": {
                             "type": "integer",
                             "description": "TCP port of the HERD application on this board. Defaults to 3000 if omitted."
@@ -84,7 +87,10 @@
                             "type": "string",
                             "description": "ID of the crate hosting this board — must match a key under system.crates."
                           },
-                          "slot": { "type": "integer", "description": "The board's logical slot number in its crate." }
+                          "slot": {
+                            "type": "integer",
+                            "description": "The board's logical slot number in its crate."
+                          }
                         }
                       }
                     ]
@@ -105,8 +111,14 @@
                         "additionalProperties": false,
                         "required": ["crate", "slot", "outputs"],
                         "properties": {
-                          "crate": { "type": "string", "description": "ID of the crate hosting this board." },
-                          "slot": { "type": "integer", "description": "The board's logical slot number in its crate." },
+                          "crate": {
+                            "type": "string",
+                            "description": "ID of the crate hosting this board."
+                          },
+                          "slot": {
+                            "type": "integer",
+                            "description": "The board's logical slot number in its crate."
+                          },
                           "outputs": {
                             "type": "object",
                             "description": "Maps each of the board's main data-processing FPGAs to the CSP IDs of its output channels.",
@@ -380,14 +392,26 @@
             "mode": { "$ref": "#/definitions/mode" }
           },
           "anyOf": [
-            { "required": ["mode"], "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"." },
-            { "required": ["mask"], "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"." }
+            {
+              "required": ["mode"],
+              "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"."
+            },
+            {
+              "required": ["mask"],
+              "errorMessage": "A link_settings entry must define \"mode\" or \"mask\"."
+            }
           ],
           "if": { "required": ["default"] },
           "else": {
             "anyOf": [
-              { "required": ["from"], "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"." },
-              { "required": ["to"], "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"." }
+              {
+                "required": ["from"],
+                "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"."
+              },
+              {
+                "required": ["to"],
+                "errorMessage": "A non-default link_settings entry must select links via \"from\" and/or \"to\"."
+              }
             ]
           }
         }

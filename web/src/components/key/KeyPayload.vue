@@ -42,6 +42,7 @@
       @copy-to="copyTo"
       @export-payload="exportPayload"
       @import-payload="importPayload"
+      @show-problems="showFirstProblem"
     ></KeyToolbar>
 
     <div ref="editorElem" class="flex-grow-1" style="min-height: 0"></div>
@@ -57,7 +58,12 @@ import { useKeyReadOnly } from '@/composables/useReadOnly'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
 import { usePendingEditors } from '@/composables/usePendingEditors'
-import { useMonacoTheme, createPayloadModel, formatMarkers } from '@/composables/useMonaco'
+import {
+  useMonacoTheme,
+  createPayloadModel,
+  formatMarkers,
+  waitForMarkers,
+} from '@/composables/useMonaco'
 import { languageFor } from '@/category'
 import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
@@ -76,6 +82,7 @@ const {
   depth,
   searchQuery,
   searchRegex,
+  revealFirstProblem,
 } = defineProps<{
   subsystem: string
   name: string
@@ -89,6 +96,7 @@ const {
   /** Prefills Monaco's find widget when arriving from a search. */
   searchQuery?: string
   searchRegex?: boolean
+  revealFirstProblem?: boolean
 }>()
 
 const emit = defineEmits<{ queue: [] }>()
@@ -161,10 +169,13 @@ onMounted(() => {
     const model = editor?.getModel()
     if (model && uris.some((uri) => uri.toString() === model.uri.toString())) refreshMarkers()
   })
-  loadPayload().then(() => {
-    if (searchQuery) revealInFind(searchQuery)
-  })
+  void loadAndReveal()
 })
+
+function markersSettled(): Promise<void> {
+  const model = editor?.getModel()
+  return model ? waitForMarkers(model) : Promise.resolve()
+}
 
 // Selects the first match so Monaco's find action seeds its search box from it.
 function revealInFind(query: string) {
@@ -193,7 +204,21 @@ async function loadPayload() {
   resetToBaseline()
 }
 
-watch(() => [subsystem, name, mode, version, pending], loadPayload)
+async function revealProblemIfRequested() {
+  if (!revealFirstProblem) return
+  await markersSettled()
+  showFirstProblem()
+}
+
+async function loadAndReveal() {
+  await loadPayload()
+  if (searchQuery) revealInFind(searchQuery)
+  await revealProblemIfRequested()
+}
+
+watch(() => [subsystem, name, mode, version, pending], loadAndReveal)
+
+watch(() => revealFirstProblem, revealProblemIfRequested)
 
 watch(readOnly, (value) => editor?.updateOptions({ readOnly: value }))
 
@@ -276,6 +301,11 @@ function exportPayload() {
   a.download = `${subsystem}_${name}_${mode}_v${version}${ext ? `.${ext}` : ''}`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function showFirstProblem() {
+  editor?.focus()
+  editor?.getAction('editor.action.marker.next')?.run()
 }
 
 function importPayload() {

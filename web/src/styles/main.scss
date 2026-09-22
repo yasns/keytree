@@ -23,6 +23,20 @@
   font-family: ui-monospace, monospace;
 }
 
+.key-label-truncate {
+  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.key-label-truncate .key-label-head {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.key-label-truncate .key-label-tail {
+  flex-shrink: 0;
+}
+
 .diff-highlight-left {
   background-color: rgba(var(--v-theme-error), 0.4);
 }
@@ -36,4 +50,17 @@
 }
 .row-external:hover .v-list-item__overlay {
   opacity: 0;
+}
+
+mark {
+  background: rgba(var(--v-theme-warning), 0.4);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.hover-underline {
+  text-decoration: underline;
+}
+.hover-underline:hover {
+  text-decoration: none;
 }
