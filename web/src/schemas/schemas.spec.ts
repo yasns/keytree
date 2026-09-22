@@ -5,7 +5,10 @@ import general from './general.json'
 import validYaml from './fixtures/valid.yaml?raw'
 import invalidYaml from './fixtures/invalid.yaml?raw'
 
+// display-only keywords consumed by monaco-yaml, unrecognized by ajv
 const ajv = new Ajv({ allErrors: true, allowUnionTypes: true })
+  .addKeyword('errorMessage')
+  .addKeyword('patternErrorMessage')
 const validate = ajv.compile(general)
 
 describe('general.json', () => {
