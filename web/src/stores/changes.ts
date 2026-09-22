@@ -10,6 +10,7 @@ type StagedArchivalOut = components['schemas']['StagedArchivalOut']
 type StagedDecommissionOut = components['schemas']['StagedDecommissionOut']
 type ForkIn = components['schemas']['ForkIn']
 type CopyIn = components['schemas']['CopyIn']
+type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 export type Conflict = components['schemas']['ConflictOut']
 
 /** Commit rejected: someone else committed these modes since staging. */
@@ -45,19 +46,21 @@ export const useChangesStore = defineStore('changes', () => {
   }
 
   const confirmOpen = ref(false)
-  let resolveConfirmOpen: ((leave: boolean) => void) | null = null
+  // Queued rather than single-slot: concurrent callers (e.g. several requests reauthenticating
+  // at once) must all be resolved by the one dialog answer, not clobber each other.
+  let pendingConfirms: Array<(leave: boolean) => void> = []
 
   /** Default `depth`: any depth, i.e. anything dirty at all. */
   function confirmDiscardBeyond(depth: number = -Infinity): Promise<boolean> {
     if (!dirtyBeyond(depth)) return Promise.resolve(true)
     confirmOpen.value = true
     return new Promise((resolve) => {
-      resolveConfirmOpen = (leave) => {
+      pendingConfirms.push((leave) => {
         if (leave) {
           for (const [key, d] of dirtyDepths) if (d > depth) dirtyDepths.delete(key)
         }
         resolve(leave)
-      }
+      })
     })
   }
 
@@ -65,8 +68,9 @@ export const useChangesStore = defineStore('changes', () => {
 
   function resolveConfirm(leave: boolean) {
     confirmOpen.value = false
-    resolveConfirmOpen?.(leave)
-    resolveConfirmOpen = null
+    const resolvers = pendingConfirms
+    pendingConfirms = []
+    for (const resolve of resolvers) resolve(leave)
   }
 
   const edits = computed(() => changeset.value?.edits ?? [])
@@ -118,6 +122,35 @@ export const useChangesStore = defineStore('changes', () => {
     return pending
       ? stagedForMode(subsystem, name, mode)
       : stagedFor(subsystem, name, mode, version)
+  }
+
+  /** Overlays `staged`'s proposed_children onto a committed child row; `staged` undefined leaves it as-is. */
+  function overlayStagedChild(
+    staged: StagedEditOut | undefined,
+    child: KeyChildMetaOut,
+  ): KeyChildMetaOut {
+    const proposed = staged?.proposed_children?.[child.alias]
+    if (child.category === 'external') {
+      if (proposed === undefined || proposed?.key_id === child.id) return child
+      const sibling = stagedForVertex(child.subsystem_name, child.vertex_name)
+      return { ...child, payload: sibling?.proposed_payload ?? null }
+    }
+    if (!staged?.proposed_children) return child
+    // absent from the map: cleared while staging
+    if (proposed === undefined) return { ...child, id: null, mode_name: null, version: null }
+    if (proposed === null) {
+      // null: this changeset produces the target itself
+      const sibling = stagedForVertex(child.subsystem_name, child.vertex_name)
+      return sibling
+        ? { ...child, id: null, mode_name: sibling.mode_name, version: sibling.expected_version }
+        : { ...child, id: null, mode_name: null, version: null }
+    }
+    return {
+      ...child,
+      id: proposed.key_id,
+      mode_name: proposed.mode_name,
+      version: proposed.version,
+    }
   }
 
   function stagedArchival(modeId: number): StagedArchivalOut | undefined {
@@ -194,6 +227,7 @@ export const useChangesStore = defineStore('changes', () => {
     stagedForVertex,
     stagedForMode,
     stagedForColumn,
+    overlayStagedChild,
     stagedArchival,
     archived,
     toggleArchival,

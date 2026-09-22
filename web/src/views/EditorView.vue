@@ -197,10 +197,10 @@ async function syncToRoute() {
   const detail = nav.vertexDetail
   if (!detail || detail.name !== name) return
 
+  await nav.fetchTree(detail.subsystem_id)
   if (nav.selectedSubsystemId !== detail.subsystem_id) {
     nav.selectedSubsystemId = detail.subsystem_id
   }
-  await nav.fetchTree(detail.subsystem_id)
 
   const row = nav.findRowByVertexId(detail.id)
 

@@ -16,7 +16,7 @@
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0" :ref="bindScroller">
       <v-list v-if="children" activatable slim>
         <v-list-item
-          v-for="child in children"
+          v-for="child in effectiveChildren"
           :key="child.alias"
           :active="child.alias === selectedAlias"
           :ripple="child.category !== 'external'"
@@ -112,6 +112,12 @@ function targetLabel(child: KeyChildMetaOut): string {
   return `${child.subsystem_name}/${child.vertex_name}/${child.mode_name}/v${child.version}`
 }
 
+const effectiveChildren = computed(() =>
+  children.value?.map((child) =>
+    changes.overlayStagedChild(props.pending ? staged.value : undefined, child),
+  ),
+)
+
 function bindScroller(el: Element | ComponentPublicInstance | null) {
   props.scrollerRef?.(el instanceof Element ? el : null)
 }
@@ -132,7 +138,7 @@ async function load() {
   children.value = undefined
   const token = ++loadToken
   // Pending version has no key of its own: read rows from the committed source.
-  const source = staged.value?.based_on
+  const source = props.pending ? staged.value?.based_on : undefined
   const sourceMode = source?.mode_name ?? props.mode
   const sourceVersion = source?.version ?? props.version
   try {
@@ -167,7 +173,7 @@ watch(
       props.diffContext?.depth,
       props.diffContext?.side,
       payload.value,
-      children.value,
+      effectiveChildren.value,
       staged.value,
       props.pending,
     ] as const,
@@ -182,7 +188,7 @@ watch(
       pending: !!props.pending,
       payload: payload.value,
       staged: staged.value,
-      children: children.value,
+      children: effectiveChildren.value,
     })
   },
 )

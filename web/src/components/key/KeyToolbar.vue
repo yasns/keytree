@@ -2,7 +2,7 @@
   <v-toolbar density="compact" class="px-4">
     <template v-slot:prepend>
       <DisabledTooltip :reason="discardDisabledReason">
-        <v-btn @click="discardDialog = true" variant="tonal" :disabled="!!discardDisabledReason"
+        <v-btn @click="discardDialog = true" variant="text" :disabled="!!discardDisabledReason"
           >Discard</v-btn
         >
       </DisabledTooltip>
@@ -11,10 +11,9 @@
     <template v-slot:append>
       <DisabledTooltip :reason="saveDisabledReason">
         <v-btn
-          :prepend-icon="canQueue ? 'mdi-arrow-left' : 'mdi-content-save'"
+          :prepend-icon="canQueue ? 'mdi-cloud-arrow-left' : 'mdi-cloud-check-variant'"
           @click="saveDialog = true"
-          variant="flat"
-          color="primary"
+          variant="text"
           class="me-1"
           :disabled="!!saveDisabledReason"
         >
@@ -30,7 +29,8 @@
               validationErrors.length ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'
             "
             :color="validationErrors.length ? 'error' : 'success'"
-            variant="text"
+            variant="tonal"
+            class="me-1"
             density="comfortable"
             @click="emit('show-problems')"
             v-bind="props"

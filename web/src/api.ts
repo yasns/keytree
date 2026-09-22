@@ -1,17 +1,24 @@
 import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './api-types'
+import { useChangesStore } from './stores/changes'
 
-// Stop at the same-origin redirect to avoid CORS issues
+// Reloads the page, discarding any unstaged edits - so confirm first if there are any
+async function reauthenticate(): Promise<Response> {
+  if (!(await useChangesStore().confirmDiscardBeyond())) {
+    throw new Error('Reauthentication cancelled: unsaved edits kept')
+  }
+  const returnTo = encodeURIComponent(window.location.href)
+  window.location.href = `/api/auth/token_request?redirect_uri=${returnTo}`
+  return new Promise<Response>(() => {}) // page is navigating away; never resolves
+}
+
 const reauth: Middleware = {
   onResponse({ response }) {
-    if (response.type === 'opaqueredirect') {
-      const returnTo = encodeURIComponent(window.location.href)
-      window.location.href = `/api/auth/token_request?redirect_uri=${returnTo}`
-      return new Promise<Response>(() => {})
-    }
+    if (response.type === 'opaqueredirect') return reauthenticate()
   },
 }
 
+// Stop at the same-origin redirect to avoid CORS issues
 export const api = createClient<paths>({ baseUrl: '/', redirect: 'manual' })
 api.use(reauth)
 
