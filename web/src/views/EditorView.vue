@@ -30,6 +30,7 @@
           :name="nav.vertexDetail.name"
           :mode="selectedMode.name"
           :version="selectedVersion"
+          :format="nav.vertexDetail.format"
           :category="nav.vertexDetail.category"
           :pending="isPending"
           :search-query="(route.query.q as string) || undefined"
@@ -130,6 +131,7 @@ const leafLeft = computed<LeafSide | undefined>(() => {
       version: selectedVersion.value,
       pending: isPending.value,
     },
+    format: detail.format,
     category: detail.category,
   }
 })
@@ -143,7 +145,7 @@ const leafRight = computed<LeafSide | undefined>(() => {
     target,
     (mode) => changes.stagedForMode(detail.subsystem_name, detail.name, mode)?.expected_version,
   )
-  return root && { root, category: detail.category }
+  return root && { root, format: detail.format, category: detail.category }
 })
 
 // Redirect to 404 when the routed mode is invalid for that vertex

@@ -60,7 +60,7 @@ import KeyMetadata from '../key/KeyMetadata.vue'
 type KeyOut = components['schemas']['KeyOut']
 type StagedEditOut = components['schemas']['StagedEditOut']
 
-export type LeafSide = { root: BundleRoot; category?: string | null }
+export type LeafSide = { root: BundleRoot; format?: string | null; category?: string | null }
 
 const props = defineProps<{
   left?: LeafSide
@@ -148,8 +148,8 @@ async function load() {
   const modifiedValue = textOf(props.right, rightStaged.value?.proposed_payload ?? '', rightKey)
   originalModel?.dispose()
   modifiedModel?.dispose()
-  originalModel = createPayloadModel(originalValue, props.left?.category)
-  modifiedModel = createPayloadModel(modifiedValue, props.right?.category)
+  originalModel = createPayloadModel(originalValue, props.left?.format, props.left?.category)
+  modifiedModel = createPayloadModel(modifiedValue, props.right?.format, props.right?.category)
   diffEditor.setModel({ original: originalModel, modified: modifiedModel })
 }
 

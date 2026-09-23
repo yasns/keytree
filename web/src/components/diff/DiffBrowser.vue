@@ -183,7 +183,7 @@ const sides = computed<Side[]>(() => {
 function leafAt(path: KeyChildMetaOut[], depth: number): LeafSide | undefined {
   if (path.length !== depth) return undefined
   const leaf = leafLocatorFor(path.at(-1))
-  return leaf && { root: leaf.locator, category: leaf.category }
+  return leaf && { root: leaf.locator, format: leaf.format, category: leaf.category }
 }
 
 const leftLeaf = computed(() => leafAt(leftPath.value, aliases.value.length))

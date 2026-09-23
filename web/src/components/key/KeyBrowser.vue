@@ -71,6 +71,7 @@
             :mode="leafEntry.mode"
             :version="leafEntry.version"
             :pending="leafEntry.pending"
+            :format="leafEntry.format"
             :category="leafEntry.category"
             :depth="nav.bundlePath.length"
             :can-queue="canQueueAt(nav.bundlePath.length - 1)"
@@ -102,7 +103,7 @@ export function parseBundlePath(at: string | undefined): string[] {
 export function leafLocatorFor(entry: KeyChildMetaOut | undefined) {
   if (!entry || entry.category === null || entry.category === 'external') return undefined
   const locator = childLocator(entry)
-  return locator && { locator, category: entry.category }
+  return locator && { locator, format: entry.format, category: entry.category }
 }
 </script>
 
@@ -152,7 +153,7 @@ const columns = computed(() =>
 
 const leafEntry = computed(() => {
   const leaf = leafLocatorFor(nav.bundlePath.at(-1))
-  return leaf && { ...leaf.locator, category: leaf.category }
+  return leaf && { ...leaf.locator, format: leaf.format, category: leaf.category }
 })
 
 function pushPath() {

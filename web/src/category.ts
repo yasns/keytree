@@ -2,16 +2,16 @@ import type { components } from '@/api-types'
 
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
 type TreeOut = components['schemas']['TreeOut']
-type CategoryMeta = { icon: string; format?: string }
+type CategoryMeta = { icon: string }
 
 const CATEGORY: Record<string, CategoryMeta> = {
-  algo: { icon: 'mdi-function-variant', format: 'yaml' },
-  infra: { icon: 'mdi-server-network', format: 'yaml' },
-  hardware: { icon: 'mdi-memory', format: 'yaml' },
-  l1_menu: { icon: 'mdi-menu', format: 'yaml' },
-  run_settings: { icon: 'mdi-tune-variant', format: 'yaml' },
-  tcds: { icon: 'mdi-clock-outline', format: 'plaintext' },
-  external: { icon: 'mdi-key' }, // no format, because external keys are not editable
+  algo: { icon: 'mdi-function-variant' },
+  infra: { icon: 'mdi-server-network' },
+  hardware: { icon: 'mdi-memory' },
+  l1_menu: { icon: 'mdi-menu' },
+  run_settings: { icon: 'mdi-tune-variant' },
+  tcds: { icon: 'mdi-clock-outline' },
+  external: { icon: 'mdi-key' },
 }
 
 export function iconFor(vertex: TreeOut | KeyChildMetaOut, isAlias: boolean): string {
@@ -20,8 +20,9 @@ export function iconFor(vertex: TreeOut | KeyChildMetaOut, isAlias: boolean): st
   return CATEGORY[vertex.category]?.icon ?? 'mdi-script-text-key'
 }
 
-export function languageFor(category: string | null | undefined): string {
-  return (category && CATEGORY[category]?.format) || 'yaml'
+// Unset format is not a yaml guess: it opens as plain text, with no schema attached.
+export function languageFor(format: string | null | undefined): string {
+  return format || 'plaintext'
 }
 
 type RankedVertex = { isAlias: boolean; category: string | null; alias: string }

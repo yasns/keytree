@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import Ajv from 'ajv'
 import { parse } from 'yaml'
-import general from './general.json'
+import shepherd from './shepherd.json'
 import validYaml from './fixtures/valid.yaml?raw'
 import invalidYaml from './fixtures/invalid.yaml?raw'
 
@@ -9,9 +9,9 @@ import invalidYaml from './fixtures/invalid.yaml?raw'
 const ajv = new Ajv({ allErrors: true, allowUnionTypes: true })
   .addKeyword('errorMessage')
   .addKeyword('patternErrorMessage')
-const validate = ajv.compile(general)
+const validate = ajv.compile(shepherd)
 
-describe('general.json', () => {
+describe('shepherd.json', () => {
   it('accepts a real two-crate config', () => {
     const valid = validate(parse(validYaml))
     expect(validate.errors).toBeNull()

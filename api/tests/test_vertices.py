@@ -18,7 +18,7 @@ def _key(id: int, mode_id: int, version: int) -> Key:
 
 
 def test_build_vertex_detail_versions_and_archived_modes():
-    vertex = Vertex(id=42, subsystem_id=3, name="rs_mp7", category="run_settings")
+    vertex = Vertex(id=42, subsystem_id=3, name="rs_mp7", category="run_settings", format="yaml")
 
     # ids deliberately reversed relative to name order, to prove sorting is by name
     active = Mode(
@@ -47,6 +47,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
 
     assert out.id == 42
     assert out.category == "run_settings"
+    assert out.format == "yaml"
     assert out.subsystem_id == 3
     assert out.subsystem_name == "ugt"
     # sorted alphabetically by name, not by id or input order

@@ -18,8 +18,12 @@ configureMonacoYaml(monaco, { enableSchemaRequest: false, schemas })
 let uid = 0
 
 /** Schema selection is by model URI, not language, so payload editors need a real model. */
-export function createPayloadModel(value: string, category: string | null | undefined) {
-  const language = languageFor(category)
+export function createPayloadModel(
+  value: string,
+  format: string | null | undefined,
+  category: string | null | undefined,
+) {
+  const language = languageFor(format)
   const ext = language === 'yaml' ? 'yaml' : 'txt'
   return monaco.editor.createModel(
     value,
