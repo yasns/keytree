@@ -42,6 +42,8 @@ class VertexOut(BaseModel):
     name: str
     category: str | None
     """None for bundles."""
+    format: str | None
+    """None for bundles; also null on external leaves until one gets a real format."""
     subsystem_id: int
     subsystem_name: str
     modes: list[ModeOut]
@@ -69,6 +71,7 @@ def _build_vertex_detail(
         id=vertex.id,
         name=vertex.name,
         category=vertex.category,
+        format=vertex.format,
         subsystem_id=vertex.subsystem_id,
         subsystem_name=subsystem_name,
         modes=[

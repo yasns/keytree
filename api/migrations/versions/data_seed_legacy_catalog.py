@@ -36,6 +36,7 @@ class VertexSpec(_VertexSpecRequired, total=False):
 class SubsystemSpec(TypedDict):
     display_name: str
     category: str
+    format: str | None
     vertices: list[VertexSpec]
 
 
@@ -46,6 +47,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "l1_hlt": {
         "display_name": "L1 + HLT",
         "category": "top_level",
+        "format": None,
         "vertices": [
             VertexSpec(name="conf", category="external", leaves=["hlt_key", "hlt_sw_arch"]),
         ],
@@ -53,6 +55,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "cms_run": {
         "display_name": "CMS",
         "category": "top_level",
+        "format": None,
         "vertices": [
             VertexSpec(
                 name="conf",
@@ -81,6 +84,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "l1_trg": {
         "display_name": "L1 Trigger",
         "category": "top_level",
+        "format": None,
         "vertices": [
             VertexSpec(name="conf", children=["tcds"]),
             VertexSpec(name="rs"),
@@ -90,6 +94,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "tcds": {
         "display_name": "TCDS",
         "category": "top_level",
+        "format": "plaintext",
         "vertices": [
             VertexSpec(name="conf", category="tcds", leaves=["pi", "ici"]),
         ],
@@ -97,6 +102,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "ugt": {
         "display_name": "uGT",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo", "l1_menu"]),
             VertexSpec(
@@ -125,6 +131,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "ugmt": {
         "display_name": "uGMT",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(
@@ -144,6 +151,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "calol1": {
         "display_name": "CaloL1",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(
@@ -159,6 +167,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "calol2": {
         "display_name": "CaloL2",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(
@@ -182,6 +191,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "bmtf": {
         "display_name": "BMTF",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(name="rs", category="run_settings", leaves=["amc13", "mp7"]),
@@ -193,6 +203,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "omtf": {
         "display_name": "OMTF",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(name="rs", category="run_settings"),
@@ -204,6 +215,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "emtf": {
         "display_name": "EMTF",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(name="rs", category="run_settings"),
@@ -215,6 +227,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "twinmux": {
         "display_name": "TwinMux",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(name="rs", category="run_settings"),
@@ -238,6 +251,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "spare_ugt": {
         "display_name": "Spare uGT",
         "category": "subsystem",
+        "format": "yaml",
         "vertices": [
             VertexSpec(name="conf", category="hardware", leaves=["hw"]),
         ],
@@ -245,6 +259,7 @@ CATALOG: dict[str, SubsystemSpec] = {
     "cppf": {
         "display_name": "CPPF",
         "category": "subsystem",
+        "format": "xml",
         "vertices": [
             VertexSpec(name="conf", children=["hw", "infra", "algo"]),
             VertexSpec(name="rs", category="run_settings"),
@@ -317,12 +332,14 @@ def _vertex_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
         subsystem_id = subsystem_ids[sub_name]
         for vertex in spec["vertices"]:
             leaves = vertex.get("leaves", [])
+            # Category (and thus format) is reserved for leaves.
+            category = None if leaves else vertex.get("category")
             rows.append(
                 {
                     "subsystem_id": subsystem_id,
                     "name": vertex["name"],
-                    # Category is reserved for leaves.
-                    "category": None if leaves else vertex.get("category"),
+                    "category": category,
+                    "format": spec.get("format") if category is not None else None,
                 }
             )
             rows.extend(
@@ -330,6 +347,7 @@ def _vertex_rows(subsystem_ids: dict[str, int]) -> list[dict[str, object]]:
                     "subsystem_id": subsystem_id,
                     "name": _leaf_name(vertex["name"], leaf),
                     "category": vertex.get("category"),
+                    "format": spec.get("format"),
                 }
                 for leaf in leaves
             )

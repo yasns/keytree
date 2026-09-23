@@ -65,6 +65,8 @@ class KeyChildMetaOut(BaseModel):
     subsystem_name: str
     category: str | None
     """None for bundles."""
+    format: str | None
+    """None for bundles; also null on external leaves until one gets a real format."""
     payload: str | None
     """Only populated for external children."""
     mode_name: str | None
@@ -306,12 +308,12 @@ async def get_key(
     )
 
 
-_ChildRow = tuple[str, Key | None, int, str, str, str | None, str | None]
+_ChildRow = tuple[str, Key | None, int, str, str, str | None, str | None, str | None]
 
 
 def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
     """Unset child stays as a row with a null key, not skipped."""
-    alias, key, vertex_id, vertex_name, subsystem_name, category, mode_name = row
+    alias, key, vertex_id, vertex_name, subsystem_name, category, format_, mode_name = row
     return KeyChildMetaOut(
         id=key.id if key else None,
         alias=alias,
@@ -320,6 +322,7 @@ def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
         vertex_name=vertex_name,
         subsystem_name=subsystem_name,
         category=category,
+        format=format_,
         payload=key.payload if key and category == "external" else None,
         mode_name=mode_name,
         version=key.version if key else None,
@@ -347,6 +350,7 @@ async def get_key_children(
             Vertex.name,
             Subsystem.name,
             Vertex.category,
+            Vertex.format,
             Mode.name,
         )
         .select_from(VertexEdge)

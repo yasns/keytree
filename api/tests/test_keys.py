@@ -53,10 +53,11 @@ def _key() -> Key:
 
 
 def test_build_child_meta_fills_key_fields():
-    meta = _build_child_meta(("l1_menu", _key(), 42, "l1_menu", "ugt", "menu", "default"))
+    meta = _build_child_meta(("l1_menu", _key(), 42, "l1_menu", "ugt", "menu", "yaml", "default"))
 
     assert meta.id == 9
     assert meta.label == "ugt/l1_menu/default/v2"
+    assert meta.format == "yaml"
     assert meta.mode_name == "default"
     assert meta.version == 2
     assert meta.created_by == "jdoe"
@@ -65,13 +66,15 @@ def test_build_child_meta_fills_key_fields():
 
 
 def test_build_child_meta_carries_external_payload():
-    meta = _build_child_meta(("clock", _key(), 7, "clock_source", "cms_run", "external", "default"))
+    meta = _build_child_meta(
+        ("clock", _key(), 7, "clock_source", "cms_run", "external", None, "default")
+    )
 
     assert meta.payload == "menu contents"
 
 
 def test_build_child_meta_lists_empty_alias_with_null_key():
-    meta = _build_child_meta(("l1_menu", None, 42, "l1_menu", "ugt", "menu", None))
+    meta = _build_child_meta(("l1_menu", None, 42, "l1_menu", "ugt", "menu", "yaml", None))
 
     assert meta.alias == "l1_menu"
     # structural fields come off the edge: row still renders/refills

@@ -110,10 +110,14 @@ def upgrade() -> None:
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=True),
+        sa.Column("format", sa.String(length=32), nullable=True),
         sa.CheckConstraint(
             "category IN "
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name=op.f("ck_vertex_category_enum"),
+        ),
+        sa.CheckConstraint(
+            "category IS NOT NULL OR format IS NULL", name=op.f("ck_vertex_format_leaf_only")
         ),
         sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_vertex_name_slug")),
         sa.ForeignKeyConstraint(
@@ -219,7 +223,7 @@ def upgrade() -> None:
         sa.Column("mode_id", sa.Integer(), nullable=False),
         sa.Column("base_key_id", sa.Integer(), nullable=True),
         sa.Column("copied_from_key_id", sa.Integer(), nullable=True),
-        sa.Column("expected_version", sa.Integer(), nullable=True),
+        sa.Column("expected_version", sa.Integer(), nullable=False),
         sa.Column("proposed_payload", sa.Text(), nullable=True),
         sa.Column("proposed_children", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("comment", sa.Text(), nullable=False),

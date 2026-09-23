@@ -22,24 +22,34 @@
         </v-btn>
       </DisabledTooltip>
 
-      <v-tooltip v-if="validationErrors">
-        <template v-slot:activator="{ props }">
-          <v-btn
-            :icon="
-              validationErrors.length ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline'
-            "
-            :color="validationErrors.length ? 'error' : 'success'"
+      <v-tooltip v-if="props.payloadFileType || validationErrors">
+        <template v-slot:activator="{ props: tooltipProps }">
+          <v-chip
+            v-if="props.payloadFileType"
+            size="small"
+            density="compact"
+            label
             variant="tonal"
-            class="me-1"
-            density="comfortable"
-            @click="emit('show-problems')"
-            v-bind="props"
-          ></v-btn>
+            class="me-2"
+            :color="validationErrors?.length ? 'error' : undefined"
+            :prepend-icon="
+              validationErrors
+                ? validationErrors.length
+                  ? 'mdi-alert-circle-outline'
+                  : 'mdi-check-circle-outline'
+                : undefined
+            "
+            :disabled="authReadOnly || props.readOnly"
+            @click="validationErrors?.length && emit('show-problems')"
+            v-bind="tooltipProps"
+          >
+            {{ props.payloadFileType }}
+          </v-chip>
         </template>
-        <div v-if="validationErrors.length">
+        <div v-if="validationErrors?.length">
           <div v-for="(message, i) in validationErrors" :key="i">{{ message }}</div>
         </div>
-        <span v-else>No validation problems</span>
+        <span v-else-if="validationErrors">No validation problems</span>
       </v-tooltip>
 
       <v-menu>

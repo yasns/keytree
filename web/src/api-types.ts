@@ -649,6 +649,8 @@ export interface components {
             subsystem_name: string;
             /** Category */
             category: string | null;
+            /** Format */
+            format: string | null;
             /** Payload */
             payload: string | null;
             /** Mode Name */
@@ -886,6 +888,8 @@ export interface components {
             subsystem_id: number;
             /** Category */
             category: string | null;
+            /** Format */
+            format: string | null;
             /**
              * Children
              * @default []
@@ -913,6 +917,8 @@ export interface components {
             name: string;
             /** Category */
             category: string | null;
+            /** Format */
+            format: string | null;
             /** Subsystem Id */
             subsystem_id: number;
             /** Subsystem Name */

@@ -31,6 +31,8 @@ class TreeOut(BaseModel):
     """True owner of a vertex."""
     category: str | None
     """None for bundles."""
+    format: str | None
+    """None for bundles; also null on external leaves until one gets a real format."""
     children: list["TreeOut"] = []
 
     model_config = {"from_attributes": True}
@@ -58,6 +60,7 @@ def _build_tree(
             name=vertex.name,
             subsystem_id=vertex.subsystem_id,
             category=vertex.category,
+            format=vertex.format,
         )
         if vertex.subsystem_id == subsystem_id and vertex.id not in ancestors:
             out.children = [

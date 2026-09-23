@@ -76,6 +76,7 @@ const {
   name,
   mode,
   version,
+  format,
   category,
   canQueue,
   pending,
@@ -88,6 +89,7 @@ const {
   name: string
   mode: string
   version: number
+  format?: string | null
   category?: string | null
   canQueue?: boolean
   pending?: boolean
@@ -123,11 +125,11 @@ const dirty = ref(false)
 useDirtySource(dirty, Infinity)
 let editor: monaco.editor.IStandaloneCodeEditor | undefined
 let baseValue = ''
-let modelCategory: string | null | undefined
+let modelFormat: string | null | undefined
 let loadToken = 0
 let markerListener: monaco.IDisposable | undefined
 
-const isYaml = computed(() => languageFor(category) === 'yaml')
+const isYaml = computed(() => languageFor(format) === 'yaml')
 const markers = ref<monaco.editor.IMarker[]>([])
 const validationErrors = computed(() => (isYaml.value ? formatMarkers(markers.value) : undefined))
 
@@ -155,9 +157,9 @@ function resetToBaseline() {
 onMounted(() => {
   if (!editorElem.value) return
   const initialTheme = useMonacoTheme()
-  modelCategory = category
+  modelFormat = format
   editor = monaco.editor.create(editorElem.value, {
-    model: createPayloadModel('', category),
+    model: createPayloadModel('', format, category),
     automaticLayout: true,
     theme: initialTheme,
     readOnly: readOnly.value,
@@ -194,10 +196,10 @@ async function loadPayload() {
   const fetched = pending ? undefined : await nav.fetchKeyPayload(subsystem, name, mode, version)
   if (token !== loadToken || !editor) return
   key.value = fetched
-  if (category !== modelCategory) {
-    modelCategory = category
+  if (format !== modelFormat) {
+    modelFormat = format
     const oldModel = editor.getModel()
-    editor.setModel(createPayloadModel('', category))
+    editor.setModel(createPayloadModel('', format, category))
     oldModel?.dispose()
     markers.value = []
   }
@@ -287,8 +289,12 @@ async function copyTo(targetMode: string, comment: string) {
   await navigateToStaged(subsystem, name, targetMode, `Copied to mode "${targetMode}"`)
 }
 
-const payloadExtensions: Record<string, string[]> = { yaml: ['yaml', 'yml'], xml: ['xml'] }
-const currentExts = computed(() => payloadExtensions[languageFor(category)])
+const payloadExtensions: Record<string, string[]> = {
+  yaml: ['yaml', 'yml'],
+  xml: ['xml'],
+  plaintext: ['txt'],
+}
+const currentExts = computed(() => payloadExtensions[languageFor(format)])
 const payloadFileType = computed(() => currentExts.value?.[0]?.toUpperCase())
 
 function exportPayload() {

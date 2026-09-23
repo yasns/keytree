@@ -47,6 +47,8 @@ class Vertex(Base):
 
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    format: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     __table_args__: tuple[SchemaItem, ...] = (
         UniqueConstraint("subsystem_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
@@ -55,6 +57,7 @@ class Vertex(Base):
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
             name="category_enum",
         ),
+        CheckConstraint("category IS NOT NULL OR format IS NULL", name="format_leaf_only"),
     )
 
 
