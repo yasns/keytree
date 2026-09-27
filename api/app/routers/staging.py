@@ -126,6 +126,12 @@ _ArchivalRow = tuple[StagedArchival, str, str, str]
 _DecommissionRow = tuple[StagedDecommission, str, str, str, int, str]
 
 
+def _concrete_children(proposed_children: object) -> set[int]:
+    """Child key ids actually pinned; a `None` value means this changeset supplies that child."""
+    children = cast("dict[str, int | None]", proposed_children or {})
+    return {key_id for key_id in children.values() if key_id is not None}
+
+
 def _build_children(
     proposed_children: object, child_modes: dict[int, ProposedChildOut]
 ) -> dict[str, ProposedChildOut | None] | None:
@@ -251,10 +257,7 @@ async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:
 async def _child_modes(rows: list[_EditRow], session: SessionDep) -> dict[int, ProposedChildOut]:
     """Covers proposed children plus fork/copy/base key refs, in one query."""
     key_ids = {
-        key_id
-        for edit, *_ in rows
-        for key_id in cast("dict[str, int | None]", edit.proposed_children or {}).values()
-        if key_id is not None
+        key_id for edit, *_ in rows for key_id in _concrete_children(edit.proposed_children)
     } | {edit.copied_from_key_id for edit, *_ in rows if edit.copied_from_key_id is not None}
     key_ids |= {edit.base_key_id for edit, *_ in rows if edit.base_key_id is not None}
     if not key_ids:
@@ -291,25 +294,68 @@ async def _decommission_rows(changeset_id: int, session: SessionDep) -> list[_De
     return list(rows.tuples())
 
 
-async def decommissioned_labels(
+def effective_flag(staged: bool | None, committed: bool) -> bool:
+    """Own-changeset staged toggle overriding committed state, when there is one."""
+    return staged if staged is not None else committed
+
+
+async def retired_key_labels(
     key_ids: set[int], changeset_id: int, session: SessionDep
 ) -> list[str]:
-    """Labels effectively decommissioned, own-changeset staged toggle overriding committed state."""
+    """Labels retired by either cause, own-changeset staged toggles overriding committed state."""
     if not key_ids:
         return []
     rows = await session.execute(
-        select(Key.label, Key.decommissioned_at, StagedDecommission.decommissioned)
+        select(
+            Key.label,
+            Key.decommissioned_at,
+            StagedDecommission.decommissioned,
+            Mode.archived_at,
+            StagedArchival.archived,
+        )
+        .select_from(Key)
+        .join(Mode, Mode.id == Key.mode_id)
         .outerjoin(
             StagedDecommission,
             (StagedDecommission.changeset_id == changeset_id)
             & (StagedDecommission.key_id == Key.id),
         )
+        .outerjoin(
+            StagedArchival,
+            (StagedArchival.changeset_id == changeset_id) & (StagedArchival.mode_id == Key.mode_id),
+        )
         .where(Key.id.in_(key_ids))
     )
     labels = []
-    for label, decommissioned_at, staged in rows.tuples():
-        if staged if staged is not None else decommissioned_at is not None:
-            labels.append(label)
+    for label, decommissioned_at, staged_dec, archived_at, staged_arch in rows.tuples():
+        if effective_flag(staged_dec, decommissioned_at is not None):
+            labels.append(f"{label} (decommissioned)")
+        elif effective_flag(staged_arch, archived_at is not None):
+            labels.append(f"{label} (mode archived)")
+    return labels
+
+
+async def blocking_edit_labels(
+    rows: list[_EditRow], key_ids: set[int], mode_ids: set[int], session: SessionDep
+) -> list[str]:
+    """Staged edits in this changeset that are based on, or reference, the given keys or modes."""
+    if not key_ids and not mode_ids:
+        return []
+    children = {edit.id: _concrete_children(edit.proposed_children) for edit, *_ in rows}
+
+    child_modes: dict[int, int] = {}
+    if mode_ids and (referenced := set[int]().union(*children.values())):
+        modes = await session.execute(select(Key.id, Key.mode_id).where(Key.id.in_(referenced)))
+        child_modes = {key_id: mode_id for key_id, mode_id in modes.tuples()}
+
+    labels = []
+    for edit, subsystem_name, vertex_name, mode_name, *_ in rows:
+        refs = children[edit.id] | ({edit.base_key_id} if edit.base_key_id is not None else set())
+        hits_mode = edit.mode_id in mode_ids or any(
+            child_modes.get(key_id) in mode_ids for key_id in children[edit.id]
+        )
+        if refs & key_ids or hits_mode:
+            labels.append(f"{subsystem_name}/{vertex_name}/{mode_name} v{edit.expected_version}")
     return labels
 
 
@@ -330,13 +376,16 @@ async def archived_labels(mode_ids: set[int], changeset_id: int, session: Sessio
     )
     labels = []
     for subsystem_name, vertex_name, mode_name, archived_at, staged in rows.tuples():
-        if staged if staged is not None else archived_at is not None:
+        if effective_flag(staged, archived_at is not None):
             labels.append(f"{subsystem_name}/{vertex_name}/{mode_name}")
     return labels
 
 
-async def changeset_out(changeset: Changeset, session: SessionDep) -> ChangesetOut:
-    rows = await _edit_rows(changeset.id, session)
+async def changeset_out(
+    changeset: Changeset, session: SessionDep, rows: list[_EditRow] | None = None
+) -> ChangesetOut:
+    if rows is None:
+        rows = await _edit_rows(changeset.id, session)
     archival_rows = await _archival_rows(changeset.id, session)
     decommission_rows = await _decommission_rows(changeset.id, session)
     return _build_changeset(
@@ -443,11 +492,11 @@ async def stage_edits(
 
     check_ids = {base.base_key_id for base in bases if base.base_key_id is not None}
     for edit_in in edits:
-        check_ids |= {v for v in (edit_in.proposed_children or {}).values() if v is not None}
-    if decommissioned := await decommissioned_labels(check_ids, changeset.id, session):
+        check_ids |= _concrete_children(edit_in.proposed_children)
+    if retired := await retired_key_labels(check_ids, changeset.id, session):
         raise HTTPException(
             status_code=400,
-            detail=f"cannot use decommissioned key(s): {', '.join(sorted(decommissioned))}",
+            detail=f"cannot use retired key(s): {', '.join(sorted(retired))}",
         )
 
     if archived := await archived_labels({base.mode_id for base in bases}, changeset.id, session):
@@ -491,6 +540,23 @@ async def stage_edits(
     return await changeset_out(changeset, session)
 
 
+async def _guard_referenced(
+    rows: list[_EditRow],
+    ends_retired: bool,
+    key_ids: set[int],
+    mode_ids: set[int],
+    subject: str,
+    session: SessionDep,
+) -> None:
+    if not ends_retired:
+        return
+    if blocking := await blocking_edit_labels(rows, key_ids, mode_ids, session):
+        raise HTTPException(
+            status_code=400,
+            detail=f"cannot {subject} referenced by staged edit(s): {', '.join(sorted(blocking))}",
+        )
+
+
 @router.post("/archive")
 async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDep) -> ChangesetOut:
     """Stages a mode's archive/unarchive, flipped from current state. A second toggle cancels it."""
@@ -514,7 +580,12 @@ async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDe
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
+    rows = await _edit_rows(changeset.id, session)
     existing = await session.get(StagedArchival, (changeset.id, body.mode_id))
+    # Cancelling reverts to committed state, so either branch can be the one that ends up archived.
+    ends_archived = (mode.archived_at is not None) == (existing is not None)
+    await _guard_referenced(rows, ends_archived, set(), {body.mode_id}, "archive a mode", session)
+
     if existing is not None:
         await session.delete(existing)
     else:
@@ -527,7 +598,7 @@ async def toggle_archival(body: ArchivalIn, request: Request, session: SessionDe
         )
 
     await session.commit()
-    return await changeset_out(changeset, session)
+    return await changeset_out(changeset, session, rows)
 
 
 @router.post("/decommission")
@@ -556,7 +627,12 @@ async def toggle_decommission(
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
 
+    rows = await _edit_rows(changeset.id, session)
     existing = await session.get(StagedDecommission, (changeset.id, body.key_id))
+    # Cancelling reverts to committed state, so either branch can be the one that ends up retired.
+    ends_retired = (key.decommissioned_at is not None) == (existing is not None)
+    await _guard_referenced(rows, ends_retired, {body.key_id}, set(), "decommission a key", session)
+
     if existing is not None:
         await session.delete(existing)
     else:
@@ -569,7 +645,7 @@ async def toggle_decommission(
         )
 
     await session.commit()
-    return await changeset_out(changeset, session)
+    return await changeset_out(changeset, session, rows)
 
 
 async def _login_and_source(
@@ -585,6 +661,25 @@ async def _login_and_source(
     return cern_login, source
 
 
+async def _guard_retired_refs(
+    body: StagedEditIn, source: Key, changeset_id: int, session: SessionDep
+) -> None:
+    """Fork/copy guard: a decommissioned source may not seed content, nor retired keys be pinned."""
+    # An archived source stays allowed: forking is the only migration path off a frozen mode.
+    staged = await session.get(StagedDecommission, (changeset_id, source.id))
+    staged_flag = staged.decommissioned if staged is not None else None
+    if effective_flag(staged_flag, source.decommissioned_at is not None):
+        raise HTTPException(
+            status_code=400, detail=f"cannot use decommissioned source key: {source.label}"
+        )
+    if retired := await retired_key_labels(
+        _concrete_children(body.proposed_children), changeset_id, session
+    ):
+        raise HTTPException(
+            status_code=400, detail=f"cannot use retired key(s): {', '.join(sorted(retired))}"
+        )
+
+
 @router.post("/fork")
 async def fork_mode(body: ForkIn, request: Request, session: SessionDep) -> ChangesetOut:
     """Branches a key's content into a brand new mode on the same vertex, staged as its v1."""
@@ -594,6 +689,8 @@ async def fork_mode(body: ForkIn, request: Request, session: SessionDep) -> Chan
     assert vertex is not None
 
     changeset = await _get_or_create_open_changeset(cern_login, session)
+
+    await _guard_retired_refs(body, source, changeset.id, session)
 
     mode = Mode(
         vertex_id=source.vertex_id,
@@ -641,6 +738,8 @@ async def copy_to_mode(body: CopyIn, request: Request, session: SessionDep) -> C
 
     if await archived_labels({target.id}, changeset.id, session):
         raise HTTPException(status_code=400, detail="target mode is archived")
+
+    await _guard_retired_refs(body, source, changeset.id, session)
 
     _ = await session.execute(
         delete(StagedEdit).where(

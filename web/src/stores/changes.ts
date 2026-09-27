@@ -173,6 +173,21 @@ export const useChangesStore = defineStore('changes', () => {
     return stagedDecommission(key.id)?.decommissioned ?? key.decommissioned_at !== null
   }
 
+  /** By locator rather than key id, for candidates known only as mode + version. */
+  function decommissionedVersion(
+    locator: { subsystem: string; vertex: string; mode: string; version: number },
+    committedVersions: number[],
+  ): boolean {
+    const staged = decommissions.value.find(
+      (d) =>
+        d.subsystem_name === locator.subsystem &&
+        d.vertex_name === locator.vertex &&
+        d.mode_name === locator.mode &&
+        d.version === locator.version,
+    )
+    return staged?.decommissioned ?? committedVersions.includes(locator.version)
+  }
+
   async function toggleDecommission(keyId: number) {
     changeset.value = unwrap(
       await api.POST('/api/staging/decommission', { body: { key_id: keyId } }),
@@ -229,6 +244,7 @@ export const useChangesStore = defineStore('changes', () => {
     toggleArchival,
     stagedDecommission,
     decommissioned,
+    decommissionedVersion,
     toggleDecommission,
     stage,
     fork,

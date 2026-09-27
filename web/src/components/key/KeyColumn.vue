@@ -104,7 +104,7 @@
 
                 <div v-if="row.upgrade" class="text-label-medium text-info">
                   <v-icon
-                    icon="mdi-alert-circle-outline"
+                    icon="mdi-information-outline"
                     size="x-small"
                     style="vertical-align: baseline"
                   ></v-icon>
@@ -124,7 +124,7 @@
 
                 <div v-if="row.archived" class="text-label-medium text-error">
                   <v-icon
-                    icon="mdi-archive-outline"
+                    icon="mdi-alert-outline"
                     size="x-small"
                     style="vertical-align: baseline"
                   ></v-icon>
@@ -133,7 +133,7 @@
 
                 <div v-if="row.decommissioned" class="text-label-medium text-error">
                   <v-icon
-                    icon="mdi-key-remove"
+                    icon="mdi-alert-outline"
                     size="x-small"
                     style="vertical-align: baseline"
                   ></v-icon>
@@ -257,14 +257,36 @@ function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   return { version, staged: committed !== undefined && version > committed }
 }
 
+function childVersionLocator(child: KeyChildMetaOut, mode: ModeOut, version: number) {
+  return { subsystem: child.subsystem_name, vertex: child.vertex_name, mode: mode.name, version }
+}
+
+function retiredReason(
+  child: KeyChildMetaOut,
+  mode: ModeOut,
+  version: number | undefined,
+): 'archived' | 'decommissioned' | undefined {
+  if (changes.archived(mode)) return 'archived'
+  if (version === undefined) return undefined
+  return changes.decommissionedVersion(
+    childVersionLocator(child, mode, version),
+    mode.decommissioned_versions,
+  )
+    ? 'decommissioned'
+    : undefined
+}
+
 function modeItems(child: KeyChildMetaOut): SelectOption[] {
+  const current = modeValue(childChoice.get(child.alias))
   return withDivider(
-    modeOptions(child).map((m) => {
+    modeOptions(child).flatMap((m) => {
       const version = tipOf(child, m.name)?.version ?? m.versions[0]
-      return {
-        title: `${child.subsystem_name}/${child.vertex_name}/${m.name}/v${version}`,
-        value: `${m.name}/${version}`,
-      }
+      const value = `${m.name}/${version}`
+      const reason = retiredReason(child, m, version)
+      // Retired candidates are not offered, but an inherited one stays listed or the select blanks.
+      if (reason && value !== current) return []
+      const label = `${child.subsystem_name}/${child.vertex_name}/${m.name}/v${version}`
+      return [{ title: reason ? `${label} (${reason})` : label, value }]
     }),
   )
 }
@@ -276,12 +298,15 @@ function archivedMode(child: KeyChildMetaOut): boolean {
   return !!option && changes.archived(option)
 }
 
-// Off the mode's committed decommissioned_versions, mirroring archivedMode's fresh option lookup.
 function decommissionedChild(child: KeyChildMetaOut): boolean {
   const choice = childChoice.get(child.alias)
   if (!choice?.mode || choice.version == null) return false
   const mode = modeOptions(child).find((m) => m.name === choice.mode)
-  return !!mode?.decommissioned_versions.includes(choice.version)
+  if (!mode) return false
+  return changes.decommissionedVersion(
+    childVersionLocator(child, mode, choice.version),
+    mode.decommissioned_versions,
+  )
 }
 
 function modeValue(choice: ChildChoice | undefined): string | undefined {
