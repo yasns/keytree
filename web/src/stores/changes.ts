@@ -203,12 +203,8 @@ export const useChangesStore = defineStore('changes', () => {
     await load()
   }
 
-  async function commit(overwriteConflicts = false) {
-    unwrap(
-      await api.POST('/api/commit/', {
-        body: { overwrite_conflicts: overwriteConflicts },
-      }),
-    )
+  async function commit() {
+    unwrap(await api.POST('/api/commit/'))
     changeset.value = null
   }
 

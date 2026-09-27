@@ -64,12 +64,14 @@
 import { type ComponentPublicInstance, computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
+import { useSnackbarStore } from '@/stores/snackbar'
 import { iconFor } from '@/category'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
 import {
   useDiff,
   runsForLabel,
   sideHighlightClass,
+  pendingSourceRef,
   type DiffRun,
   type ColumnDiffData,
 } from '@/composables/useDiff'
@@ -98,6 +100,7 @@ const panel = defineModel<number | undefined>('panel')
 
 const nav = useNavStore()
 const changes = useChangesStore()
+const snackbar = useSnackbarStore()
 
 const payload = ref<KeyOut>()
 const children = ref<KeyChildMetaOut[]>()
@@ -137,10 +140,12 @@ async function load() {
   payload.value = undefined
   children.value = undefined
   const token = ++loadToken
-  // Pending version has no key of its own: read rows from the committed source.
-  const source = props.pending ? staged.value?.based_on : undefined
-  const sourceMode = source?.mode_name ?? props.mode
-  const sourceVersion = source?.version ?? props.version
+  const { mode: sourceMode, version: sourceVersion } = pendingSourceRef(
+    props.pending,
+    staged.value,
+    props.mode,
+    props.version,
+  )
   try {
     const [p, c] = await Promise.all([
       nav.fetchKeyPayload(props.subsystem, props.name, sourceMode, sourceVersion),
@@ -149,9 +154,9 @@ async function load() {
     if (token !== loadToken) return
     payload.value = p
     children.value = c
-  } catch {
-    // e.g. a freshly forked mode with nothing committed yet: nothing to load
+  } catch (e) {
     if (token !== loadToken) return
+    snackbar.notifyError(e)
     children.value = []
   }
 }

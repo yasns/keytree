@@ -58,12 +58,17 @@
                 @select="(child) => onSelect(slot.index + 1, child)"
                 @close="() => onClose(slot.index + 1)"
               ></DiffColumn>
-              <div v-else class="not-present pa-4 text-center text-medium-emphasis">
-                {{
-                  slot.reason === 'leaf'
-                    ? 'Not a bundle at this version'
-                    : 'Not present at this version'
-                }}
+
+              <div v-else>
+                <v-alert
+                  class="h-100 rounded-0"
+                  variant="tonal"
+                  :text="
+                    slot.reason === 'leaf'
+                      ? 'Not a bundle at this version'
+                      : 'Not present at this version'
+                  "
+                ></v-alert>
               </div>
             </div>
           </div>
@@ -226,12 +231,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.not-present {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-</style>

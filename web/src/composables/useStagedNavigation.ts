@@ -31,6 +31,22 @@ export function useStagedNavigation() {
     void router.replace({ ...keyRoute(subsystem, name, mode, version), query: route.query })
   }
 
+  /** Where a save lands: on its own pending route when no ancestor can carry it, else recorded in the open bundle path. */
+  function routeStaged(
+    subsystem: string,
+    name: string,
+    mode: string,
+    edit: StagedEditOut | undefined,
+    depth: number,
+    canQueue?: boolean,
+  ) {
+    if (!canQueue) {
+      if (depth === 0) showStaged(subsystem, name, mode)
+      return
+    }
+    if (edit) nav.markPathStaged(depth - 1, edit.expected_version)
+  }
+
   /** What a save actually staged; `left` marks a no-op re-stage that fell back off the pending route. */
   function afterStage(
     subsystem: string,
@@ -42,8 +58,9 @@ export function useStagedNavigation() {
     const edit = changes.stagedForMode(subsystem, name, mode)
     const left = pending && !edit
     if (left) backToVersion(subsystem, name, mode, version)
+    else snackbar.notify(`Saved "${mode}"`, 'success')
     return { edit, left }
   }
 
-  return { navigateToStaged, showStaged, backToVersion, afterStage }
+  return { navigateToStaged, routeStaged, afterStage }
 }

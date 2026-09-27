@@ -12,7 +12,6 @@ from tsgauth.fastapi import JWTBearerClaims
 from app.authz import require_writable
 from app.db.base import SessionDep
 from app.db.models import (
-    AppUser,
     Changeset,
     Key,
     Mode,
@@ -233,36 +232,6 @@ def join_mode_names(
         .join(Vertex, Vertex.id == Mode.vertex_id)
         .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
     )
-
-
-class PendingEditorOut(BaseModel):
-    cern_login: str
-    display_name: str
-    email: str | None
-
-
-@router.get("/{mode_id}/pending-editors")
-async def pending_editors(
-    mode_id: int, request: Request, session: SessionDep
-) -> list[PendingEditorOut]:
-    """Other users with an open changeset touching this mode (unrelated to the caller's own)."""
-    me = request.state.claims["cern_upn"]
-    rows = await session.scalars(
-        select(AppUser)
-        .join(Changeset, Changeset.created_by == AppUser.cern_login)
-        .where(
-            Changeset.committed_at.is_(None),
-            Changeset.created_by != me,
-            Changeset.id.in_(select(StagedEdit.changeset_id).where(StagedEdit.mode_id == mode_id))
-            | Changeset.id.in_(
-                select(StagedArchival.changeset_id).where(StagedArchival.mode_id == mode_id)
-            ),
-        )
-    )
-    return [
-        PendingEditorOut(cern_login=u.cern_login, display_name=u.display_name, email=u.email)
-        for u in rows
-    ]
 
 
 async def _edit_rows(changeset_id: int, session: SessionDep) -> list[_EditRow]:

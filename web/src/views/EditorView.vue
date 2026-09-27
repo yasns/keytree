@@ -33,6 +33,7 @@
           :format="nav.vertexDetail.format"
           :category="nav.vertexDetail.category"
           :pending="isPending"
+          :depth="0"
           :search-query="(route.query.q as string) || undefined"
           :search-regex="route.query.regex === '1'"
           :reveal-first-problem="route.query.problem === '1'"
@@ -214,12 +215,7 @@ async function syncToRoute() {
     )
   }
 
-  if (row) {
-    nav.openedRow = [
-      ...new Set([...nav.openedRow, ...row.ancestors, ...(row.children ? [row.path] : [])]),
-    ]
-    nav.activatedRow = [row.path]
-  }
+  if (row) nav.activatedRow = [row.path]
 
   // No mode in the URL: send the user home with mode picker for this vertex
   if (!mode) {

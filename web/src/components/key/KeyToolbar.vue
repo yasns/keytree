@@ -1,7 +1,30 @@
 <template>
   <v-toolbar density="compact" class="px-4">
     <template v-slot:prepend>
-      <DisabledTooltip :reason="discardDisabledReason">
+      <v-tooltip v-if="props.payloadFileType" location="bottom">
+        <template v-slot:activator="{ props: tooltipProps }">
+          <v-chip
+            size="small"
+            density="compact"
+            label
+            variant="tonal"
+            class="me-1"
+            :color="validation.color"
+            :style="validation.errors.length ? undefined : 'cursor: default'"
+            :prepend-icon="validation.icon"
+            @click="validation.errors.length && emit('show-problems')"
+            v-bind="tooltipProps"
+          >
+            {{ props.payloadFileType }}
+          </v-chip>
+        </template>
+        <div v-if="validation.errors.length">
+          <div v-for="(message, i) in validation.errors" :key="i">{{ message }}</div>
+        </div>
+        <span v-else>{{ validation.text }}</span>
+      </v-tooltip>
+
+      <DisabledTooltip :reason="discardDisabledReason" location="bottom">
         <v-btn @click="discardDialog = true" variant="text" :disabled="!!discardDisabledReason"
           >Discard</v-btn
         >
@@ -9,11 +32,12 @@
     </template>
 
     <template v-slot:append>
-      <DisabledTooltip :reason="saveDisabledReason">
+      <DisabledTooltip :reason="saveDisabledReason" location="bottom">
         <v-btn
-          :prepend-icon="canQueue ? 'mdi-cloud-arrow-left' : 'mdi-cloud-check-variant'"
+          :prepend-icon="canQueue ? 'mdi-tray-arrow-up' : 'mdi-content-save'"
           @click="saveDialog = true"
-          variant="text"
+          variant="flat"
+          color="primary"
           class="me-1"
           :disabled="!!saveDisabledReason"
         >
@@ -21,36 +45,6 @@
           <span v-if="props.canQueue">&nbsp;& Queue</span>
         </v-btn>
       </DisabledTooltip>
-
-      <v-tooltip v-if="props.payloadFileType || validationErrors">
-        <template v-slot:activator="{ props: tooltipProps }">
-          <v-chip
-            v-if="props.payloadFileType"
-            size="small"
-            density="compact"
-            label
-            variant="tonal"
-            class="me-2"
-            :color="validationErrors?.length ? 'error' : undefined"
-            :prepend-icon="
-              validationErrors
-                ? validationErrors.length
-                  ? 'mdi-alert-circle-outline'
-                  : 'mdi-check-circle-outline'
-                : undefined
-            "
-            :disabled="authReadOnly || props.readOnly"
-            @click="validationErrors?.length && emit('show-problems')"
-            v-bind="tooltipProps"
-          >
-            {{ props.payloadFileType }}
-          </v-chip>
-        </template>
-        <div v-if="validationErrors?.length">
-          <div v-for="(message, i) in validationErrors" :key="i">{{ message }}</div>
-        </div>
-        <span v-else-if="validationErrors">No validation problems</span>
-      </v-tooltip>
 
       <v-menu>
         <template v-slot:activator="{ props }">
@@ -63,7 +57,6 @@
         </template>
         <v-list density="compact">
           <template v-if="subsystem && name && mode">
-            <v-list-subheader>Compare</v-list-subheader>
             <v-list-item
               title="Compare with..."
               prepend-icon="mdi-compare-horizontal"
@@ -75,23 +68,18 @@
           <template v-for="group in menuGroups" :key="group.label">
             <v-divider v-if="group.divider"></v-divider>
             <v-list-subheader>{{ group.label }}</v-list-subheader>
-            <v-tooltip
+            <DisabledTooltip
               v-for="item in group.items"
               :key="item.title"
-              :disabled="!itemDisabled(item)"
-              :text="itemReason(item)"
+              :reason="itemDisabled(item) ? itemReason(item) : undefined"
             >
-              <template v-slot:activator="{ props }">
-                <div v-bind="props">
-                  <v-list-item
-                    :title="item.title"
-                    :disabled="itemDisabled(item)"
-                    @click="item.onClick"
-                    :prepend-icon="item.icon"
-                  ></v-list-item>
-                </div>
-              </template>
-            </v-tooltip>
+              <v-list-item
+                :title="item.title"
+                :disabled="itemDisabled(item)"
+                @click="item.onClick"
+                :prepend-icon="item.icon"
+              ></v-list-item>
+            </DisabledTooltip>
           </template>
         </v-list>
       </v-menu>
@@ -127,9 +115,9 @@
 
   <SaveDialog
     v-model="copyLatestDialog"
-    title="Copy to Latest Version"
-    confirm-text="Copy"
-    :initial-comment="`Copy of ${subsystem}/${name}/${mode}/v${version}`"
+    title="Restore as Latest Version"
+    confirm-text="Restore"
+    :initial-comment="`Restore of ${subsystem}/${name}/${mode}/v${version}`"
     :warning="pendingWarning"
     @save="(comment) => emit('copy-to', mode ?? '', comment)"
   ></SaveDialog>
@@ -202,6 +190,19 @@ const emit = defineEmits<{
 const changes = useChangesStore()
 const snackbar = useSnackbarStore()
 const router = useRouter()
+
+// Absent errors mean validation never ran (non-YAML formats), which must not read as a clean result.
+const validation = computed(() => {
+  const errors = props.validationErrors
+  if (!errors) return { icon: undefined, color: undefined, errors: [], text: 'Not validated' }
+  if (errors.length) return { icon: 'mdi-alert-circle-outline', color: 'error', errors, text: '' }
+  return {
+    icon: 'mdi-check-circle-outline',
+    color: undefined,
+    errors: [],
+    text: 'No validation problems',
+  }
+})
 
 async function toggleDecommission(keyId: number) {
   await changes.toggleDecommission(keyId)
@@ -290,7 +291,7 @@ const menuGroups = computed(() => {
       onClick: () => (copyDialog.value = true),
     },
     {
-      title: 'Copy to Latest Version...',
+      title: 'Restore as Latest Version...',
       icon: 'mdi-update',
       onClick: () => (copyLatestDialog.value = true),
       disabled: !isOldVersion.value,

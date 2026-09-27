@@ -50,11 +50,6 @@ router = APIRouter(
 )
 
 
-class CommitIn(BaseModel):
-    overwrite_conflicts: bool = False
-    """Commit conflicting edits on top of the newer versions."""
-
-
 class ConflictOut(BaseModel):
     """A staged edit whose target version was taken while it sat in the changeset."""
 
@@ -410,7 +405,7 @@ async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOu
     responses={409: {"model": list[ConflictOut], "description": "Target versions taken since"}},
 )
 async def commit_changeset(
-    body: CommitIn, request: Request, session: SessionDep, background: BackgroundTasks
+    request: Request, session: SessionDep, background: BackgroundTasks
 ) -> None:
     """Materialises every staged edit in the caller's open changeset as a key, then closes it."""
     claims = request.state.claims
@@ -442,7 +437,7 @@ async def commit_changeset(
     wanted = {row.subsystem_name for row in rows} | archival_subsystems | decommission_subsystems
     await require_writable(wanted, claims, session)
 
-    if not body.overwrite_conflicts and (conflicts := _conflicts(rows)):
+    if conflicts := _conflicts(rows):
         raise HTTPException(status_code=409, detail=[c.model_dump() for c in conflicts])
 
     none_aliases, concrete_ids = _proposed_child_refs(rows)

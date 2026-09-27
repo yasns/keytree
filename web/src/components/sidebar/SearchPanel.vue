@@ -1,45 +1,50 @@
 <template>
   <div class="d-flex flex-column h-100">
-    <div class="border-b-sm pb-4">
-      <div class="pa-4"><span class="text-title-small">Search</span></div>
+    <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
+      <div class="text-title-medium">Search</div>
 
-      <v-chip-group
-        class="py-0 px-4"
-        :model-value="regex ? 'regex' : undefined"
-        @update:model-value="(v) => (regex = v === 'regex')"
-      >
-        <v-chip
-          value="regex"
-          prepend-icon="mdi-regex"
-          filter
-          size="small"
-          variant="outlined"
-          color="primary"
-        >
-          Use Regex
-        </v-chip>
-      </v-chip-group>
+      <div>
+        <div class="d-flex ga-1">
+          <v-text-field
+            v-model="q"
+            density="comfortable"
+            label="Search..."
+            :placeholder="
+              mode === 'label' ? 'e.g. ugt/conf/pp/v92' : 'e.g. building, crate, 0x1234...'
+            "
+            hide-details
+            clearable
+          ></v-text-field>
 
-      <div class="d-flex px-4 ga-1">
-        <v-text-field
-          v-model="q"
-          label="Search"
-          :placeholder="
-            mode === 'label' ? 'e.g. ugt/conf/pp/v92' : 'e.g. building, crate, 0x1234...'
-          "
-          hide-details
-          clearable
-        ></v-text-field>
+          <v-select
+            v-model="mode"
+            density="comfortable"
+            :items="modeItems"
+            item-title="title"
+            item-value="value"
+            label="In"
+            hide-details
+            style="max-width: 120px"
+          ></v-select>
+        </div>
 
-        <v-select
-          v-model="mode"
-          :items="modeItems"
-          item-title="title"
-          item-value="value"
-          label="In"
-          hide-details
-          style="max-width: 120px"
-        ></v-select>
+        <div class="d-flex justify-end">
+          <v-chip-group
+            :model-value="regex ? 'regex' : undefined"
+            @update:model-value="(v) => (regex = v === 'regex')"
+          >
+            <v-chip
+              value="regex"
+              prepend-icon="mdi-regex"
+              filter
+              size="small"
+              variant="outlined"
+              class="mr-0"
+            >
+              Use Regex
+            </v-chip>
+          </v-chip-group>
+        </div>
       </div>
     </div>
 

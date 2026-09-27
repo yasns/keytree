@@ -131,6 +131,17 @@ export type KeyRef = {
   version: number
 }
 
+/** A pending version has no key of its own: resolve to its staged edit's committed source, or its own ref otherwise. */
+export function pendingSourceRef(
+  pending: boolean | undefined,
+  staged: { based_on?: { mode_name: string; version: number } | null } | undefined,
+  mode: string,
+  version: number,
+): { mode: string; version: number } {
+  const source = pending ? staged?.based_on : undefined
+  return { mode: source?.mode_name ?? mode, version: source?.version ?? version }
+}
+
 /** A key's children, as alias -> child key id (entries with no child yet are dropped). */
 export function childrenToIdMap(children: KeyChildMetaOut[]): Record<string, number> {
   return Object.fromEntries(
