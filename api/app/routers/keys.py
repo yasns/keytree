@@ -4,7 +4,7 @@ from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg.errors import InvalidRegularExpression, QueryCanceled
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator
 from sqlalchemy import func, select, text, tuple_
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import aliased
@@ -74,6 +74,22 @@ class KeyChildMetaOut(BaseModel):
     created_by: str | None
     created_at: datetime | None
     comment: str | None
+
+
+class AggregateOut(BaseModel):
+    alias: str | None
+    """None on the root."""
+    label: str | None
+    """None when the alias is an emptied slot."""
+    format: str | None
+    """None for bundles; otherwise the syntax of payload."""
+    payload: str | None
+    """None for bundles and emptied slots."""
+    children: list["AggregateOut"] = []
+
+
+KeyVersion = Annotated[int, BeforeValidator(lambda v: v.removeprefix("v"))]
+"""Takes `v3` as well as `3`."""
 
 
 _KeyLocator = tuple[str, str, str, int]
@@ -265,7 +281,7 @@ async def _retired_descendants(key_id: int, session: SessionDep) -> list[Retired
 
 @router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}")
 async def get_key(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: int, session: SessionDep
+    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
 ) -> KeyOut:
     """Fetches a single key by (subsystem, vertex, mode, version)."""
     key = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
@@ -332,14 +348,10 @@ def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
     )
 
 
-@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children")
-async def get_key_children(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: int, session: SessionDep
-) -> list[KeyChildMetaOut]:
-    """One level of a bundle: one row per alias, whether emptied or not, crossing subsystem
-    boundaries freely."""
-    parent = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
-
+async def _child_level(
+    parent_key_id: int, parent_vertex_id: int, session: SessionDep
+) -> list[_ChildRow]:
+    """One row per alias declared on the parent vertex, whether emptied or not."""
     child = aliased(Key)
 
     rows = await session.execute(
@@ -358,12 +370,59 @@ async def get_key_children(
         .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
         .outerjoin(
             KeyChild,
-            (KeyChild.parent_key_id == parent.id) & (KeyChild.alias == VertexEdge.alias),
+            (KeyChild.parent_key_id == parent_key_id) & (KeyChild.alias == VertexEdge.alias),
         )
         .outerjoin(child, child.id == KeyChild.child_key_id)
         .outerjoin(Mode, Mode.id == child.mode_id)
-        .where(VertexEdge.parent_vertex_id == parent.vertex_id)
+        .where(VertexEdge.parent_vertex_id == parent_vertex_id)
         .order_by(VertexEdge.alias)
     )
 
-    return [_build_child_meta(cast("_ChildRow", row)) for row in rows.tuples()]
+    return [cast("_ChildRow", row) for row in rows.tuples()]
+
+
+@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children")
+async def get_key_children(
+    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
+) -> list[KeyChildMetaOut]:
+    """One level of a bundle: one row per alias, whether emptied or not."""
+    parent = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
+    rows = await _child_level(parent.id, parent.vertex_id, session)
+    return [_build_child_meta(row) for row in rows]
+
+
+async def _build_aggregate(
+    alias: str | None, key: Key, format_: str | None, ancestors: frozenset[int], session: SessionDep
+) -> AggregateOut:
+    node = AggregateOut(alias=alias, label=key.label, format=format_, payload=key.payload)
+    if key.id in ancestors:
+        return node
+    seen = ancestors | {key.id}
+    # Descends every node regardless of category, since category doesn't preclude child edges.
+    # ponytail: one query per node; batch per depth level if this gets slow
+    for (
+        child_alias,
+        child,
+        _vertex_id,
+        _vertex_name,
+        _subsystem_name,
+        _category,
+        child_format,
+        _mode_name,
+    ) in await _child_level(key.id, key.vertex_id, session):
+        node.children.append(
+            AggregateOut(alias=child_alias, label=None, format=child_format, payload=None)
+            if child is None
+            else await _build_aggregate(child_alias, child, child_format, seen, session)
+        )
+    return node
+
+
+@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}/aggregate")
+async def aggregate_key(
+    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
+) -> AggregateOut:
+    """Every payload under a key, nested by alias, crossing subsystem boundaries freely."""
+    root = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
+    format_ = await session.scalar(select(Vertex.format).where(Vertex.id == root.vertex_id))
+    return await _build_aggregate(None, root, format_, frozenset(), session)

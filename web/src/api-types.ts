@@ -374,6 +374,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aggregate Key
+         * @description Every payload under a key, nested by alias, crossing subsystem boundaries freely.
+         */
+        get: operations["aggregate_key_api_keys__subsystem_name___vertex_name___mode_name___version__aggregate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/subsystems/": {
         parameters: {
             query?: never;
@@ -498,6 +518,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AggregateOut */
+        AggregateOut: {
+            /** Alias */
+            alias: string | null;
+            /** Label */
+            label: string | null;
+            /** Format */
+            format: string | null;
+            /** Payload */
+            payload: string | null;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["AggregateOut"][];
+        };
         /** ArchivalIn */
         ArchivalIn: {
             /** Mode Id */
@@ -1512,6 +1548,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KeyChildMetaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aggregate_key_api_keys__subsystem_name___vertex_name___mode_name___version__aggregate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subsystem_name: string;
+                vertex_name: string;
+                mode_name: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AggregateOut"];
                 };
             };
             /** @description Validation Error */
