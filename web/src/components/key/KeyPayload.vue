@@ -241,7 +241,7 @@ function validationStatus(): 'skipped' | 'passed' | 'failed' {
 function baseEdit(comment: string) {
   return {
     subsystem_name: subsystem,
-    vertex_name: name,
+    namespace_name: name,
     mode_name: mode,
     base_version: version,
     proposed_payload: editor!.getValue(),

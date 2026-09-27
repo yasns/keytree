@@ -105,7 +105,7 @@ def upgrade() -> None:
     op.execute("GRANT SELECT ON role_subsystem TO keytree_app")
 
     _ = op.create_table(
-        "vertex",
+        "namespace",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("subsystem_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
@@ -114,24 +114,24 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "category IN "
             + "('algo', 'infra', 'run_settings', 'hardware', 'tcds', 'l1_menu', 'external')",
-            name=op.f("ck_vertex_category_enum"),
+            name=op.f("ck_namespace_category_enum"),
         ),
         sa.CheckConstraint(
-            "category IS NOT NULL OR format IS NULL", name=op.f("ck_vertex_format_leaf_only")
+            "category IS NOT NULL OR format IS NULL", name=op.f("ck_namespace_format_leaf_only")
         ),
-        sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_vertex_name_slug")),
+        sa.CheckConstraint("name ~ '^[a-z0-9_]+$'", name=op.f("ck_namespace_name_slug")),
         sa.ForeignKeyConstraint(
-            ["subsystem_id"], ["subsystem.id"], name=op.f("fk_vertex_subsystem_id_subsystem")
+            ["subsystem_id"], ["subsystem.id"], name=op.f("fk_namespace_subsystem_id_subsystem")
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_vertex")),
-        sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_vertex_subsystem_id_name")),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_namespace")),
+        sa.UniqueConstraint("subsystem_id", "name", name=op.f("uq_namespace_subsystem_id_name")),
     )
-    op.execute("GRANT SELECT ON vertex TO keytree_app")
+    op.execute("GRANT SELECT ON namespace TO keytree_app")
 
     _ = op.create_table(
         "mode",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("vertex_id", sa.Integer(), nullable=False),
+        sa.Column("namespace_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=64), nullable=False),
         sa.Column("description", sa.String(length=255), nullable=False),
         sa.Column("forked_from_key_id", sa.Integer(), nullable=True),
@@ -158,17 +158,17 @@ def upgrade() -> None:
             name=op.f("fk_mode_archived_by_app_user"),
         ),
         sa.ForeignKeyConstraint(
-            ["forked_from_key_id", "vertex_id"],
-            ["key.id", "key.vertex_id"],
-            name=op.f("fk_mode_forked_from_key_id_vertex_id_key"),
+            ["forked_from_key_id", "namespace_id"],
+            ["key.id", "key.namespace_id"],
+            name=op.f("fk_mode_forked_from_key_id_namespace_id_key"),
             use_alter=True,
         ),
         sa.ForeignKeyConstraint(
-            ["vertex_id"], ["vertex.id"], name=op.f("fk_mode_vertex_id_vertex")
+            ["namespace_id"], ["namespace.id"], name=op.f("fk_mode_namespace_id_namespace")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_mode")),
-        sa.UniqueConstraint("id", "vertex_id", name=op.f("uq_mode_id_vertex_id")),
-        sa.UniqueConstraint("vertex_id", "name", name=op.f("uq_mode_vertex_id_name")),
+        sa.UniqueConstraint("id", "namespace_id", name=op.f("uq_mode_id_namespace_id")),
+        sa.UniqueConstraint("namespace_id", "name", name=op.f("uq_mode_namespace_id_name")),
     )
     op.execute("GRANT SELECT, INSERT, DELETE ON mode TO keytree_app")
     op.execute("GRANT UPDATE (archived_by, archived_at) ON mode TO keytree_app")
@@ -193,28 +193,32 @@ def upgrade() -> None:
     op.execute("GRANT SELECT, INSERT, DELETE ON staged_archival TO keytree_app")
 
     _ = op.create_table(
-        "vertex_edge",
-        sa.Column("parent_vertex_id", sa.Integer(), nullable=False),
-        sa.Column("child_vertex_id", sa.Integer(), nullable=False),
+        "namespace_edge",
+        sa.Column("parent_namespace_id", sa.Integer(), nullable=False),
+        sa.Column("child_namespace_id", sa.Integer(), nullable=False),
         sa.Column("alias", sa.String(length=64), nullable=False),
-        sa.CheckConstraint("alias ~ '^[a-z0-9_]+$'", name=op.f("ck_vertex_edge_alias_slug")),
+        sa.CheckConstraint("alias ~ '^[a-z0-9_]+$'", name=op.f("ck_namespace_edge_alias_slug")),
         sa.CheckConstraint(
-            "parent_vertex_id <> child_vertex_id", name=op.f("ck_vertex_edge_no_self_loop")
+            "parent_namespace_id <> child_namespace_id", name=op.f("ck_namespace_edge_no_self_loop")
         ),
         sa.ForeignKeyConstraint(
-            ["child_vertex_id"], ["vertex.id"], name=op.f("fk_vertex_edge_child_vertex_id_vertex")
+            ["child_namespace_id"],
+            ["namespace.id"],
+            name=op.f("fk_namespace_edge_child_namespace_id_namespace"),
         ),
         sa.ForeignKeyConstraint(
-            ["parent_vertex_id"], ["vertex.id"], name=op.f("fk_vertex_edge_parent_vertex_id_vertex")
+            ["parent_namespace_id"],
+            ["namespace.id"],
+            name=op.f("fk_namespace_edge_parent_namespace_id_namespace"),
         ),
         sa.PrimaryKeyConstraint(
-            "parent_vertex_id", "child_vertex_id", "alias", name=op.f("pk_vertex_edge")
+            "parent_namespace_id", "child_namespace_id", "alias", name=op.f("pk_namespace_edge")
         ),
         sa.UniqueConstraint(
-            "parent_vertex_id", "alias", name=op.f("uq_vertex_edge_parent_vertex_id_alias")
+            "parent_namespace_id", "alias", name=op.f("uq_namespace_edge_parent_namespace_id_alias")
         ),
     )
-    op.execute("GRANT SELECT ON vertex_edge TO keytree_app")
+    op.execute("GRANT SELECT ON namespace_edge TO keytree_app")
 
     _ = op.create_table(
         "staged_edit",
@@ -268,7 +272,7 @@ def upgrade() -> None:
         "key",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("mode_id", sa.Integer(), nullable=False),
-        sa.Column("vertex_id", sa.Integer(), nullable=False),
+        sa.Column("namespace_id", sa.Integer(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("label", sa.String(length=255), nullable=False),
         sa.Column("payload", sa.Text(), nullable=True),
@@ -305,16 +309,16 @@ def upgrade() -> None:
             name=op.f("fk_key_decommissioned_by_app_user"),
         ),
         sa.ForeignKeyConstraint(
-            ["mode_id", "vertex_id"],
-            ["mode.id", "mode.vertex_id"],
-            name=op.f("fk_key_mode_id_vertex_id_mode"),
+            ["mode_id", "namespace_id"],
+            ["mode.id", "mode.namespace_id"],
+            name=op.f("fk_key_mode_id_namespace_id_mode"),
         ),
         sa.ForeignKeyConstraint(
             ["staged_edit_id"], ["staged_edit.id"], name=op.f("fk_key_staged_edit_id_staged_edit")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_key")),
         sa.UniqueConstraint("id", "mode_id", name=op.f("uq_key_id_mode_id")),
-        sa.UniqueConstraint("id", "vertex_id", name=op.f("uq_key_id_vertex_id")),
+        sa.UniqueConstraint("id", "namespace_id", name=op.f("uq_key_id_namespace_id")),
         sa.UniqueConstraint("label", name=op.f("uq_key_label")),
         sa.UniqueConstraint("mode_id", "version", name=op.f("uq_key_mode_id_version")),
         sa.UniqueConstraint("staged_edit_id", name=op.f("uq_key_staged_edit_id")),
@@ -328,22 +332,26 @@ def upgrade() -> None:
         sa.Column("parent_key_id", sa.Integer(), nullable=False),
         sa.Column("alias", sa.String(length=64), nullable=False),
         sa.Column("child_key_id", sa.Integer(), nullable=False),
-        sa.Column("parent_vertex_id", sa.Integer(), nullable=False),
-        sa.Column("child_vertex_id", sa.Integer(), nullable=False),
+        sa.Column("parent_namespace_id", sa.Integer(), nullable=False),
+        sa.Column("child_namespace_id", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["child_key_id", "child_vertex_id"],
-            ["key.id", "key.vertex_id"],
-            name=op.f("fk_key_child_child_key_id_child_vertex_id_key"),
+            ["child_key_id", "child_namespace_id"],
+            ["key.id", "key.namespace_id"],
+            name=op.f("fk_key_child_child_key_id_child_namespace_id_key"),
         ),
         sa.ForeignKeyConstraint(
-            ["parent_key_id", "parent_vertex_id"],
-            ["key.id", "key.vertex_id"],
-            name=op.f("fk_key_child_parent_key_id_parent_vertex_id_key"),
+            ["parent_key_id", "parent_namespace_id"],
+            ["key.id", "key.namespace_id"],
+            name=op.f("fk_key_child_parent_key_id_parent_namespace_id_key"),
         ),
         sa.ForeignKeyConstraint(
-            ["parent_vertex_id", "child_vertex_id", "alias"],
-            ["vertex_edge.parent_vertex_id", "vertex_edge.child_vertex_id", "vertex_edge.alias"],
-            name=op.f("fk_key_child_parent_vertex_id_child_vertex_id_alias_vertex_edge"),
+            ["parent_namespace_id", "child_namespace_id", "alias"],
+            [
+                "namespace_edge.parent_namespace_id",
+                "namespace_edge.child_namespace_id",
+                "namespace_edge.alias",
+            ],
+            name=op.f("fk_key_child_parent_namespace_id_child_namespace_id_alias_namespace_edge"),
         ),
         sa.PrimaryKeyConstraint("parent_key_id", "alias", name=op.f("pk_key_child")),
     )
@@ -375,10 +383,10 @@ def downgrade() -> None:
     op.drop_table("key_child")
     op.drop_table("key")
     op.drop_table("staged_edit")
-    op.drop_table("vertex_edge")
+    op.drop_table("namespace_edge")
     op.drop_table("staged_archival")
     op.drop_table("mode")
-    op.drop_table("vertex")
+    op.drop_table("namespace")
     op.drop_table("role_subsystem")
     op.drop_index(
         "uq_changeset_created_by_open",

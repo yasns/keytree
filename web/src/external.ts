@@ -125,12 +125,15 @@ async function fetchL1HltModes(): Promise<string[]> {
     .then((modes) => modes.filter((m) => !changes.archived(m)).map((m) => m.name))
 }
 
-// Subsystem+vertex keys whose option list must be fetched rather than read from EXTERNAL_OPTIONS
+// Subsystem+namespace keys whose option list must be fetched rather than read from EXTERNAL_OPTIONS
 const DYNAMIC_EXTERNAL_OPTIONS: Record<string, () => Promise<string[]>> = {
   'cms_run/l1_hlt_mode': fetchL1HltModes,
 }
 
-export function resolveExternalOptions(subsystem: string, vertexName: string): Promise<string[]> {
-  const key = `${subsystem}/${vertexName}`
+export function resolveExternalOptions(
+  subsystem: string,
+  namespaceName: string,
+): Promise<string[]> {
+  const key = `${subsystem}/${namespaceName}`
   return (DYNAMIC_EXTERNAL_OPTIONS[key] ?? (() => Promise.resolve(externalOptions(key))))()
 }

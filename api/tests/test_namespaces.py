@@ -1,14 +1,14 @@
 from datetime import UTC, datetime
 
-from app.db.models import Key, Mode, Vertex
-from app.routers.vertices import _build_vertex_detail
+from app.db.models import Key, Mode, Namespace
+from app.routers.namespaces import _build_namespace_detail
 
 
 def _key(id: int, mode_id: int, version: int) -> Key:
     return Key(
         id=id,
         mode_id=mode_id,
-        vertex_id=42,
+        namespace_id=42,
         version=version,
         label=f"ugt/rs_mp7/default/v{version}",
         staged_edit_id=id,
@@ -17,13 +17,15 @@ def _key(id: int, mode_id: int, version: int) -> Key:
     )
 
 
-def test_build_vertex_detail_versions_and_archived_modes():
-    vertex = Vertex(id=42, subsystem_id=3, name="rs_mp7", category="run_settings", format="yaml")
+def test_build_namespace_detail_versions_and_archived_modes():
+    namespace = Namespace(
+        id=42, subsystem_id=3, name="rs_mp7", category="run_settings", format="yaml"
+    )
 
     # ids deliberately reversed relative to name order, to prove sorting is by name
     active = Mode(
         id=119,
-        vertex_id=42,
+        namespace_id=42,
         name="default",
         description="Starter mode seed.",
         created_by="keytree_app",
@@ -31,7 +33,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
     )
     archived = Mode(
         id=118,
-        vertex_id=42,
+        namespace_id=42,
         name="retired_line",
         description="Old line.",
         created_by="keytree_app",
@@ -43,7 +45,7 @@ def test_build_vertex_detail_versions_and_archived_modes():
     keys = [_key(1, mode_id=119, version=1), _key(2, mode_id=119, version=2)]
 
     display_names = {"keytree_app": "Keytree App", "alice": "Alice"}
-    out = _build_vertex_detail(vertex, "ugt", [archived, active], keys, display_names)
+    out = _build_namespace_detail(namespace, "ugt", [archived, active], keys, display_names)
 
     assert out.id == 42
     assert out.category == "run_settings"

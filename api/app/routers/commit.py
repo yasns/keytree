@@ -15,14 +15,14 @@ from app.db.models import (
     Key,
     KeyChild,
     Mode,
+    Namespace,
+    NamespaceEdge,
     Role,
     RoleSubsystem,
     StagedArchival,
     StagedDecommission,
     StagedEdit,
     Subsystem,
-    Vertex,
-    VertexEdge,
 )
 from app.mail import send_all
 from app.notify import (
@@ -55,7 +55,7 @@ class ConflictOut(BaseModel):
     """A staged edit whose target version was taken while it sat in the changeset."""
 
     subsystem_name: str
-    vertex_name: str
+    namespace_name: str
     mode_name: str
     base_version: int | None
     expected_version: int
@@ -65,10 +65,10 @@ class ConflictOut(BaseModel):
 class _CommitRow(NamedTuple):
     edit: StagedEdit
     subsystem_name: str
-    vertex_name: str
+    namespace_name: str
     mode_name: str
     mode_archived_at: datetime | None
-    vertex_id: int
+    namespace_id: int
     base_version: int | None
     tip_version: int
     category: str | None
@@ -85,7 +85,7 @@ def _conflicts(rows: list[_CommitRow]) -> list[ConflictOut]:
     return [
         ConflictOut(
             subsystem_name=row.subsystem_name,
-            vertex_name=row.vertex_name,
+            namespace_name=row.namespace_name,
             mode_name=row.mode_name,
             base_version=row.base_version,
             expected_version=row.edit.expected_version,
@@ -104,9 +104,9 @@ def _build_keys(rows: list[_CommitRow], changeset: Changeset) -> list[Key]:
         keys.append(
             Key(
                 mode_id=row.edit.mode_id,
-                vertex_id=row.vertex_id,
+                namespace_id=row.namespace_id,
                 version=version,
-                label=f"{row.subsystem_name}/{row.vertex_name}/{row.mode_name}/v{version}",
+                label=f"{row.subsystem_name}/{row.namespace_name}/{row.mode_name}/v{version}",
                 payload=row.edit.proposed_payload,
                 staged_edit_id=row.edit.id,
                 created_by=changeset.created_by,
@@ -120,12 +120,12 @@ def _build_keys(rows: list[_CommitRow], changeset: Changeset) -> list[Key]:
 def _build_key_children(
     rows: list[_CommitRow],
     keys: list[Key],
-    child_vertex_of: dict[tuple[int, str], int],
-    vertex_of_key: dict[int, int],
+    child_namespace_of: dict[tuple[int, str], int],
+    namespace_of_key: dict[int, int],
 ) -> list[KeyChild]:
     """None means the key this changeset produces; alias absent from map means cleared."""
     by_mode = {key.mode_id: key for key in keys}
-    by_vertex = {key.vertex_id: key for key in keys}
+    by_namespace = {key.namespace_id: key for key in keys}
     children: list[KeyChild] = []
     for row in rows:
         if row.edit.proposed_children is None:
@@ -133,17 +133,19 @@ def _build_key_children(
         parent_key = by_mode[row.edit.mode_id]
         for alias, key_id in cast("dict[str, int | None]", row.edit.proposed_children).items():
             if key_id is None:
-                child_vertex_id = child_vertex_of.get((row.vertex_id, alias))
-                child_key = by_vertex.get(child_vertex_id) if child_vertex_id is not None else None
+                child_namespace_id = child_namespace_of.get((row.namespace_id, alias))
+                child_key = (
+                    by_namespace.get(child_namespace_id) if child_namespace_id is not None else None
+                )
                 if child_key is None:
                     raise HTTPException(
                         status_code=400,
                         detail=f"no key to fill '{alias}' on {parent_key.label}",
                     )
-                child_key_id, resolved_child_vertex_id = child_key.id, child_vertex_id
+                child_key_id, resolved_child_namespace_id = child_key.id, child_namespace_id
             else:
-                resolved_child_vertex_id = vertex_of_key.get(key_id)
-                if resolved_child_vertex_id is None:
+                resolved_child_namespace_id = namespace_of_key.get(key_id)
+                if resolved_child_namespace_id is None:
                     raise HTTPException(
                         status_code=400,
                         detail=f"no key {key_id} for '{alias}' on {parent_key.label}",
@@ -154,8 +156,8 @@ def _build_key_children(
                     parent_key_id=parent_key.id,
                     alias=alias,
                     child_key_id=child_key_id,
-                    parent_vertex_id=row.vertex_id,
-                    child_vertex_id=resolved_child_vertex_id,
+                    parent_namespace_id=row.namespace_id,
+                    child_namespace_id=resolved_child_namespace_id,
                 )
             )
     return children
@@ -182,41 +184,41 @@ def _decommission_keys(
 async def _archival_data(
     archivals: list[StagedArchival], session: SessionDep
 ) -> tuple[dict[int, Mode], dict[int, tuple[str, str, str]]]:
-    """Mode entities by mode_id, and mode_id -> (subsystem_name, vertex_name, mode_name)."""
+    """Mode entities by mode_id, and mode_id -> (subsystem_name, namespace_name, mode_name)."""
     if not archivals:
         return {}, {}
     rows = await session.execute(
-        select(Mode, Subsystem.name, Vertex.name)
-        .join(Vertex, Vertex.id == Mode.vertex_id)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+        select(Mode, Subsystem.name, Namespace.name)
+        .join(Namespace, Namespace.id == Mode.namespace_id)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
         .where(Mode.id.in_({a.mode_id for a in archivals}))
     )
     modes: dict[int, Mode] = {}
     context: dict[int, tuple[str, str, str]] = {}
-    for mode, subsystem_name, vertex_name in rows:
+    for mode, subsystem_name, namespace_name in rows:
         modes[mode.id] = mode
-        context[mode.id] = (subsystem_name, vertex_name, mode.name)
+        context[mode.id] = (subsystem_name, namespace_name, mode.name)
     return modes, context
 
 
 async def _decommission_data(
     decommissions: list[StagedDecommission], session: SessionDep
 ) -> tuple[dict[int, Key], dict[int, tuple[str, str, str, str]]]:
-    """Key entities by key_id, and key_id -> (subsystem_name, vertex_name, mode_name, label)."""
+    """Key entities by key_id, and key_id -> (subsystem_name, namespace_name, mode_name, label)."""
     if not decommissions:
         return {}, {}
     rows = await session.execute(
-        select(Key, Subsystem.name, Vertex.name, Mode.name)
+        select(Key, Subsystem.name, Namespace.name, Mode.name)
         .join(Mode, Mode.id == Key.mode_id)
-        .join(Vertex, Vertex.id == Mode.vertex_id)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+        .join(Namespace, Namespace.id == Mode.namespace_id)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
         .where(Key.id.in_({d.key_id for d in decommissions}))
     )
     keys: dict[int, Key] = {}
     context: dict[int, tuple[str, str, str, str]] = {}
-    for key, subsystem_name, vertex_name, mode_name in rows:
+    for key, subsystem_name, namespace_name, mode_name in rows:
         keys[key.id] = key
-        context[key.id] = (subsystem_name, vertex_name, mode_name, key.label)
+        context[key.id] = (subsystem_name, namespace_name, mode_name, key.label)
     return keys, context
 
 
@@ -259,7 +261,7 @@ async def _notification_entries(
         entries.setdefault(row.subsystem_name, []).append(
             edit_entry(
                 row.subsystem_name,
-                row.vertex_name,
+                row.namespace_name,
                 row.mode_name,
                 row.base_version,
                 key.version,
@@ -270,13 +272,13 @@ async def _notification_entries(
         )
 
     for archival in archivals:
-        sub, vertex, mode = archival_ctx[archival.mode_id]
-        entries.setdefault(sub, []).append(archival_entry(sub, vertex, mode, archival.archived))
+        sub, namespace, mode = archival_ctx[archival.mode_id]
+        entries.setdefault(sub, []).append(archival_entry(sub, namespace, mode, archival.archived))
 
     for decommission in decommissions:
-        sub, vertex, mode, label = decommission_ctx[decommission.key_id]
+        sub, namespace, mode, label = decommission_ctx[decommission.key_id]
         entries.setdefault(sub, []).append(
-            decommission_entry(sub, vertex, mode, label, decommission.decommissioned)
+            decommission_entry(sub, namespace, mode, label, decommission.decommissioned)
         )
 
     return entries
@@ -319,13 +321,13 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
             select(
                 StagedEdit,
                 Subsystem.name,
-                Vertex.name,
+                Namespace.name,
                 Mode.name,
                 Mode.archived_at,
-                Vertex.id,
+                Namespace.id,
                 Key.version,
                 func.coalesce(tip_versions.c.tip_version, 0),
-                Vertex.category,
+                Namespace.category,
                 StagedArchival.archived,
             ),
             StagedEdit.mode_id,
@@ -348,7 +350,7 @@ async def _guard_retired(rows: list[_CommitRow], changeset_id: int, session: Ses
     base_key_ids = {row.edit.base_key_id for row in rows if row.edit.base_key_id is not None}
     retired_keys = await retired_key_labels(base_key_ids | concrete_ids, changeset_id, session)
     retired_modes = [
-        f"{row.subsystem_name}/{row.vertex_name}/{row.mode_name}"
+        f"{row.subsystem_name}/{row.namespace_name}/{row.mode_name}"
         for row in rows
         if effective_flag(row.staged_archived, row.mode_archived_at is not None)
     ]
@@ -363,14 +365,15 @@ async def _guard_retired(rows: list[_CommitRow], changeset_id: int, session: Ses
 
 
 def _proposed_child_refs(rows: list[_CommitRow]) -> tuple[set[tuple[int, str]], set[int]]:
-    """(vertex_id, alias) pairs needing a VertexEdge lookup, and key ids needing a vertex_id."""
+    """(namespace_id, alias) pairs needing a NamespaceEdge lookup, and key ids needing a
+    namespace_id."""
     none_aliases: set[tuple[int, str]] = set()
     concrete_ids: set[int] = set()
     for row in rows:
         children = cast("dict[str, int | None]", row.edit.proposed_children or {})
         for alias, key_id in children.items():
             if key_id is None:
-                none_aliases.add((row.vertex_id, alias))
+                none_aliases.add((row.namespace_id, alias))
             else:
                 concrete_ids.add(key_id)
     return none_aliases, concrete_ids
@@ -479,23 +482,27 @@ async def commit_changeset(
     session.add_all(keys)
     await session.flush()
 
-    child_vertex_of: dict[tuple[int, str], int] = {}
+    child_namespace_of: dict[tuple[int, str], int] = {}
     if none_aliases:
         edge_rows = await session.execute(
-            select(VertexEdge.parent_vertex_id, VertexEdge.alias, VertexEdge.child_vertex_id).where(
-                tuple_(VertexEdge.parent_vertex_id, VertexEdge.alias).in_(none_aliases)
+            select(
+                NamespaceEdge.parent_namespace_id,
+                NamespaceEdge.alias,
+                NamespaceEdge.child_namespace_id,
+            ).where(
+                tuple_(NamespaceEdge.parent_namespace_id, NamespaceEdge.alias).in_(none_aliases)
             )
         )
-        child_vertex_of = {(p, a): c for p, a, c in edge_rows.tuples()}
+        child_namespace_of = {(p, a): c for p, a, c in edge_rows.tuples()}
 
-    vertex_of_key: dict[int, int] = {}
+    namespace_of_key: dict[int, int] = {}
     if concrete_ids:
         id_rows = await session.execute(
-            select(Key.id, Key.vertex_id).where(Key.id.in_(concrete_ids))
+            select(Key.id, Key.namespace_id).where(Key.id.in_(concrete_ids))
         )
-        vertex_of_key = dict(id_rows.tuples().all())
+        namespace_of_key = dict(id_rows.tuples().all())
 
-    session.add_all(_build_key_children(rows, keys, child_vertex_of, vertex_of_key))
+    session.add_all(_build_key_children(rows, keys, child_namespace_of, namespace_of_key))
 
     if archivals:
         _archive_modes(archivals, archival_modes, cern_login)

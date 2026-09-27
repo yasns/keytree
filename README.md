@@ -68,13 +68,13 @@ cd web && npm run gen:api-types
 
 There are two independent migration branches:
 1. `schema` defines the data structure and the grants. 
-2. `data` seeds catalog rows (subsystems, vertices, ...) as they're added.
+2. `data` seeds catalog rows (subsystems, namespaces, ...) as they're added.
 
 Note that `data` depends on `schema`, so data should never apply before the tables it needs. Here are some examples:
 
 ```bash
-uv run alembic revision -m "add vertex table"       --head=schema@head  # schema definition
-uv run alembic revision -m "seed cms subsystems"    --head=data@head   # catalog rows
+uv run alembic revision -m "add namespace table" --head=schema@head # schema definition
+uv run alembic revision -m "seed cms subsystems" --head=data@head   # catalog rows
 uv run alembic upgrade heads                                        # apply both
 uv run alembic heads                                                # where the branches end
 uv run alembic downgrade schema@-1                                  # one branch only
@@ -88,7 +88,7 @@ Every revision that creates a table grants its own privileges. A table whose rev
 
 `keytree_app` is a `NOLOGIN` privilege bundle (role). Column-level grants should be assigned to it, to enable read/write access for the API, for example:
 ```sql
-GRANT SELECT ON vertex TO keytree_app;                -- read-only
+GRANT SELECT ON namespace TO keytree_app;                -- read-only
 GRANT UPDATE (display_name) ON mode TO keytree_app;  -- if its mutable
 ```
 

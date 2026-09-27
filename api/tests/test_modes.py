@@ -6,7 +6,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.db.models import AppUser, Mode, StagedArchival, Subsystem, Vertex
+from app.db.models import AppUser, Mode, Namespace, StagedArchival, Subsystem
 from app.routers.commit import commit_changeset
 from app.routers.staging import ArchivalIn, discard_changeset, toggle_archival
 
@@ -25,13 +25,15 @@ async def _seeded_mode(
 ) -> int:
     async with session_factory() as session:
         session.add(AppUser(cern_login=cern_login, display_name=cern_login))
-        vertex_id = await session.scalar(
-            select(Vertex.id)
-            .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
-            .where(Subsystem.name == "cms_run", Vertex.name == "clock_source")
+        namespace_id = await session.scalar(
+            select(Namespace.id)
+            .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
+            .where(Subsystem.name == "cms_run", Namespace.name == "clock_source")
         )
-        assert vertex_id is not None
-        mode = Mode(vertex_id=vertex_id, name=mode_name, description="d", created_by=cern_login)
+        assert namespace_id is not None
+        mode = Mode(
+            namespace_id=namespace_id, name=mode_name, description="d", created_by=cern_login
+        )
         session.add(mode)
         await session.commit()
         return mode.id

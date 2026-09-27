@@ -87,15 +87,15 @@ export const useChangesStore = defineStore('changes', () => {
     changeset.value = unwrap(await api.GET('/api/staging/'))
   }
 
-  /** Any staged edit on a vertex, whichever mode. */
-  function stagedForVertex(subsystem: string, name: string): StagedEditOut | undefined {
-    return edits.value.find((e) => e.subsystem_name === subsystem && e.vertex_name === name)
+  /** Any staged edit on a namespace, whichever mode. */
+  function stagedForNamespace(subsystem: string, name: string): StagedEditOut | undefined {
+    return edits.value.find((e) => e.subsystem_name === subsystem && e.namespace_name === name)
   }
 
   /** At most one edit per mode, whatever version it's based on. */
   function stagedForMode(subsystem: string, name: string, mode: string): StagedEditOut | undefined {
     return edits.value.find(
-      (e) => e.subsystem_name === subsystem && e.vertex_name === name && e.mode_name === mode,
+      (e) => e.subsystem_name === subsystem && e.namespace_name === name && e.mode_name === mode,
     )
   }
 
@@ -132,7 +132,7 @@ export const useChangesStore = defineStore('changes', () => {
     const proposed = staged?.proposed_children?.[child.alias]
     if (child.category === 'external') {
       if (proposed === undefined || proposed?.key_id === child.id) return child
-      const sibling = stagedForVertex(child.subsystem_name, child.vertex_name)
+      const sibling = stagedForNamespace(child.subsystem_name, child.namespace_name)
       return { ...child, payload: sibling?.proposed_payload ?? null }
     }
     if (!staged?.proposed_children) return child
@@ -140,7 +140,7 @@ export const useChangesStore = defineStore('changes', () => {
     if (proposed === undefined) return { ...child, id: null, mode_name: null, version: null }
     if (proposed === null) {
       // null: this changeset produces the target itself
-      const sibling = stagedForVertex(child.subsystem_name, child.vertex_name)
+      const sibling = stagedForNamespace(child.subsystem_name, child.namespace_name)
       return sibling
         ? { ...child, id: null, mode_name: sibling.mode_name, version: sibling.expected_version }
         : { ...child, id: null, mode_name: null, version: null }
@@ -175,13 +175,13 @@ export const useChangesStore = defineStore('changes', () => {
 
   /** By locator rather than key id, for candidates known only as mode + version. */
   function decommissionedVersion(
-    locator: { subsystem: string; vertex: string; mode: string; version: number },
+    locator: { subsystem: string; namespace: string; mode: string; version: number },
     committedVersions: number[],
   ): boolean {
     const staged = decommissions.value.find(
       (d) =>
         d.subsystem_name === locator.subsystem &&
-        d.vertex_name === locator.vertex &&
+        d.namespace_name === locator.namespace &&
         d.mode_name === locator.mode &&
         d.version === locator.version,
     )
@@ -235,7 +235,7 @@ export const useChangesStore = defineStore('changes', () => {
     pendingCount,
     load,
     stagedFor,
-    stagedForVertex,
+    stagedForNamespace,
     stagedForMode,
     stagedForColumn,
     overlayStagedChild,

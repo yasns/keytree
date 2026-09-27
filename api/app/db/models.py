@@ -36,8 +36,8 @@ class Subsystem(Base):
     )
 
 
-class Vertex(Base):
-    __tablename__: str = "vertex"
+class Namespace(Base):
+    __tablename__: str = "namespace"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -61,18 +61,18 @@ class Vertex(Base):
     )
 
 
-class VertexEdge(Base):
-    __tablename__: str = "vertex_edge"
+class NamespaceEdge(Base):
+    __tablename__: str = "namespace_edge"
 
-    parent_vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), primary_key=True)
+    parent_namespace_id: Mapped[int] = mapped_column(ForeignKey("namespace.id"), primary_key=True)
 
-    child_vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), primary_key=True)
+    child_namespace_id: Mapped[int] = mapped_column(ForeignKey("namespace.id"), primary_key=True)
 
     alias: Mapped[str] = mapped_column(String(64), primary_key=True)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        UniqueConstraint("parent_vertex_id", "alias"),
-        CheckConstraint("parent_vertex_id <> child_vertex_id", name="no_self_loop"),
+        UniqueConstraint("parent_namespace_id", "alias"),
+        CheckConstraint("parent_namespace_id <> child_namespace_id", name="no_self_loop"),
         CheckConstraint("alias ~ '^[a-z0-9_]+$'", name="alias_slug"),
     )
 
@@ -82,7 +82,7 @@ class Mode(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    vertex_id: Mapped[int] = mapped_column(ForeignKey("vertex.id"), nullable=False)
+    namespace_id: Mapped[int] = mapped_column(ForeignKey("namespace.id"), nullable=False)
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
 
@@ -104,10 +104,10 @@ class Mode(Base):
 
     __table_args__: tuple[SchemaItem, ...] = (
         ForeignKeyConstraint(
-            ["forked_from_key_id", "vertex_id"], ["key.id", "key.vertex_id"], use_alter=True
+            ["forked_from_key_id", "namespace_id"], ["key.id", "key.namespace_id"], use_alter=True
         ),
-        UniqueConstraint("id", "vertex_id"),
-        UniqueConstraint("vertex_id", "name"),
+        UniqueConstraint("id", "namespace_id"),
+        UniqueConstraint("namespace_id", "name"),
         CheckConstraint("name ~ '^[a-z0-9_]+$'", name="name_slug"),
         CheckConstraint(
             "(archived_at IS NULL) = (archived_by IS NULL)",
@@ -123,7 +123,7 @@ class Key(Base):
 
     mode_id: Mapped[int] = mapped_column(nullable=False)
 
-    vertex_id: Mapped[int] = mapped_column(nullable=False)
+    namespace_id: Mapped[int] = mapped_column(nullable=False)
 
     version: Mapped[int] = mapped_column(nullable=False)
 
@@ -154,10 +154,10 @@ class Key(Base):
     )
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["mode_id", "vertex_id"], ["mode.id", "mode.vertex_id"]),
+        ForeignKeyConstraint(["mode_id", "namespace_id"], ["mode.id", "mode.namespace_id"]),
         UniqueConstraint("mode_id", "version"),
         UniqueConstraint("id", "mode_id"),
-        UniqueConstraint("id", "vertex_id"),
+        UniqueConstraint("id", "namespace_id"),
         CheckConstraint(
             "label ~ '^[a-z0-9_]+/[a-z0-9_]+/[a-z0-9_]+/v[0-9]+$'", name="label_format"
         ),
@@ -181,16 +181,24 @@ class KeyChild(Base):
 
     child_key_id: Mapped[int] = mapped_column(nullable=False)
 
-    parent_vertex_id: Mapped[int] = mapped_column(nullable=False)
+    parent_namespace_id: Mapped[int] = mapped_column(nullable=False)
 
-    child_vertex_id: Mapped[int] = mapped_column(nullable=False)
+    child_namespace_id: Mapped[int] = mapped_column(nullable=False)
 
     __table_args__: tuple[SchemaItem, ...] = (
-        ForeignKeyConstraint(["parent_key_id", "parent_vertex_id"], ["key.id", "key.vertex_id"]),
-        ForeignKeyConstraint(["child_key_id", "child_vertex_id"], ["key.id", "key.vertex_id"]),
         ForeignKeyConstraint(
-            ["parent_vertex_id", "child_vertex_id", "alias"],
-            ["vertex_edge.parent_vertex_id", "vertex_edge.child_vertex_id", "vertex_edge.alias"],
+            ["parent_key_id", "parent_namespace_id"], ["key.id", "key.namespace_id"]
+        ),
+        ForeignKeyConstraint(
+            ["child_key_id", "child_namespace_id"], ["key.id", "key.namespace_id"]
+        ),
+        ForeignKeyConstraint(
+            ["parent_namespace_id", "child_namespace_id", "alias"],
+            [
+                "namespace_edge.parent_namespace_id",
+                "namespace_edge.child_namespace_id",
+                "namespace_edge.alias",
+            ],
         ),
     )
 

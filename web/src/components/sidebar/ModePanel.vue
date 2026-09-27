@@ -126,7 +126,7 @@
       </v-chip-group>
     </div>
   </div>
-  <div v-else-if="nav.pendingVertexId !== null" class="d-flex flex-column h-100">
+  <div v-else-if="nav.pendingNamespaceId !== null" class="d-flex flex-column h-100">
     <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
       <div class="d-flex align-center justify-space-between ga-1">
         <v-skeleton-loader type="text" width="180"></v-skeleton-loader>
@@ -148,7 +148,7 @@
           <span class="font-weight-medium">Subsystem:</span>
           <span>{{ detail && nav.subsystemDisplayName(detail.subsystem_name) }}</span>
 
-          <span class="font-weight-medium">Path:</span>
+          <span class="font-weight-medium">Namespace:</span>
           <span>{{ detail?.name }}</span>
         </div>
 
@@ -186,7 +186,7 @@ import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
 
 type ModeOut = components['schemas']['ModeOut']
-type VertexOut = components['schemas']['VertexOut']
+type NamespaceOut = components['schemas']['NamespaceOut']
 
 const nav = useNavStore()
 const router = useRouter()
@@ -196,13 +196,13 @@ const toggleArchival = useToggleArchival()
 
 const filter = ref<'active' | 'archived' | 'all'>('active')
 const search = ref('')
-const detail = ref<VertexOut | undefined>(undefined)
+const detail = ref<NamespaceOut | undefined>(undefined)
 const infoMode = ref<ModeOut | undefined>(undefined)
 
 watch(
-  () => nav.pendingVertexId,
+  () => nav.pendingNamespaceId,
   async (id) => {
-    detail.value = id !== null ? await nav.fetchVertexDetail(id) : undefined
+    detail.value = id !== null ? await nav.fetchNamespaceDetail(id) : undefined
   },
   { immediate: true },
 )
@@ -211,8 +211,8 @@ watch(
 watch(
   () => nav.keysToken,
   async () => {
-    if (nav.pendingVertexId !== null)
-      detail.value = await nav.fetchVertexDetail(nav.pendingVertexId)
+    if (nav.pendingNamespaceId !== null)
+      detail.value = await nav.fetchNamespaceDetail(nav.pendingNamespaceId)
   },
 )
 

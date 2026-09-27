@@ -11,7 +11,16 @@ from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import AppUser, Key, KeyChild, Mode, StagedEdit, Subsystem, Vertex, VertexEdge
+from app.db.models import (
+    AppUser,
+    Key,
+    KeyChild,
+    Mode,
+    Namespace,
+    NamespaceEdge,
+    StagedEdit,
+    Subsystem,
+)
 
 router = APIRouter(
     prefix="/keys",
@@ -60,8 +69,8 @@ class KeyChildMetaOut(BaseModel):
     id: int | None
     alias: str
     label: str | None
-    vertex_id: int
-    vertex_name: str
+    namespace_id: int
+    namespace_name: str
     subsystem_name: str
     category: str | None
     """None for bundles."""
@@ -93,7 +102,7 @@ KeyVersion = Annotated[int, BeforeValidator(lambda v: v.removeprefix("v"))]
 
 
 _KeyLocator = tuple[str, str, str, int]
-"""(subsystem_name, vertex_name, mode_name, version)."""
+"""(subsystem_name, namespace_name, mode_name, version)."""
 
 
 async def keys_by_locator(
@@ -103,12 +112,12 @@ async def keys_by_locator(
     if not locators:
         return {}
     rows = await session.execute(
-        select(Subsystem.name, Vertex.name, Mode.name, Key)
+        select(Subsystem.name, Namespace.name, Mode.name, Key)
         .select_from(Key)
         .join(Mode, Mode.id == Key.mode_id)
-        .join(Vertex, Vertex.id == Mode.vertex_id)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
-        .where(tuple_(Subsystem.name, Vertex.name, Mode.name, Key.version).in_(locators))
+        .join(Namespace, Namespace.id == Mode.namespace_id)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
+        .where(tuple_(Subsystem.name, Namespace.name, Mode.name, Key.version).in_(locators))
     )
     return {(s, n, m, key.version): key for s, n, m, key in rows.tuples()}
 
@@ -145,9 +154,9 @@ async def key_ancestry(
 
 
 async def key_or_404(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: int, session: SessionDep
+    subsystem_name: str, namespace_name: str, mode_name: str, version: int, session: SessionDep
 ) -> Key:
-    [key] = await keys_or_404([(subsystem_name, vertex_name, mode_name, version)], session)
+    [key] = await keys_or_404([(subsystem_name, namespace_name, mode_name, version)], session)
     return key
 
 
@@ -185,7 +194,7 @@ def _build_key_detail(
 class KeyMatchOut(BaseModel):
     label: str
     subsystem_name: str
-    vertex_name: str
+    namespace_name: str
     mode_name: str
     version: int
 
@@ -222,14 +231,14 @@ async def search_keys(
         )
         filters.append(Key.version == tip_version)
 
-    filters.append(Vertex.category.is_distinct_from("external"))
+    filters.append(Namespace.category.is_distinct_from("external"))
 
     stmt = (
-        select(Key.label, Subsystem.name, Vertex.name, Mode.name, Key.version)
+        select(Key.label, Subsystem.name, Namespace.name, Mode.name, Key.version)
         .select_from(Key)
         .join(Mode, Mode.id == Key.mode_id)
-        .join(Vertex, Vertex.id == Mode.vertex_id)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+        .join(Namespace, Namespace.id == Mode.namespace_id)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
         .where(*filters)
         .order_by(Key.label)
         .limit(limit)
@@ -247,7 +256,7 @@ async def search_keys(
         return []
 
     return [
-        KeyMatchOut(label=label, subsystem_name=s, vertex_name=n, mode_name=m, version=v)
+        KeyMatchOut(label=label, subsystem_name=s, namespace_name=n, mode_name=m, version=v)
         for label, s, n, m, v in rows.tuples()
     ]
 
@@ -279,12 +288,16 @@ async def _retired_descendants(key_id: int, session: SessionDep) -> list[Retired
     ]
 
 
-@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}")
+@router.get("/{subsystem_name}/{namespace_name}/{mode_name}/{version}")
 async def get_key(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
+    subsystem_name: str,
+    namespace_name: str,
+    mode_name: str,
+    version: KeyVersion,
+    session: SessionDep,
 ) -> KeyOut:
-    """Fetches a single key by (subsystem, vertex, mode, version)."""
-    key = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
+    """Fetches a single key by (subsystem, namespace, mode, version)."""
+    key = await key_or_404(subsystem_name, namespace_name, mode_name, version, session)
 
     ancestor = aliased(Key)
     ancestor_mode = aliased(Mode)
@@ -329,13 +342,13 @@ _ChildRow = tuple[str, Key | None, int, str, str, str | None, str | None, str | 
 
 def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
     """Unset child stays as a row with a null key, not skipped."""
-    alias, key, vertex_id, vertex_name, subsystem_name, category, format_, mode_name = row
+    alias, key, namespace_id, namespace_name, subsystem_name, category, format_, mode_name = row
     return KeyChildMetaOut(
         id=key.id if key else None,
         alias=alias,
         label=key.label if key else None,
-        vertex_id=vertex_id,
-        vertex_name=vertex_name,
+        namespace_id=namespace_id,
+        namespace_name=namespace_name,
         subsystem_name=subsystem_name,
         category=category,
         format=format_,
@@ -349,45 +362,49 @@ def _build_child_meta(row: _ChildRow) -> KeyChildMetaOut:
 
 
 async def _child_level(
-    parent_key_id: int, parent_vertex_id: int, session: SessionDep
+    parent_key_id: int, parent_namespace_id: int, session: SessionDep
 ) -> list[_ChildRow]:
-    """One row per alias declared on the parent vertex, whether emptied or not."""
+    """One row per alias declared on the parent namespace, whether emptied or not."""
     child = aliased(Key)
 
     rows = await session.execute(
         select(
-            VertexEdge.alias,
+            NamespaceEdge.alias,
             child,
-            Vertex.id,
-            Vertex.name,
+            Namespace.id,
+            Namespace.name,
             Subsystem.name,
-            Vertex.category,
-            Vertex.format,
+            Namespace.category,
+            Namespace.format,
             Mode.name,
         )
-        .select_from(VertexEdge)
-        .join(Vertex, Vertex.id == VertexEdge.child_vertex_id)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+        .select_from(NamespaceEdge)
+        .join(Namespace, Namespace.id == NamespaceEdge.child_namespace_id)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
         .outerjoin(
             KeyChild,
-            (KeyChild.parent_key_id == parent_key_id) & (KeyChild.alias == VertexEdge.alias),
+            (KeyChild.parent_key_id == parent_key_id) & (KeyChild.alias == NamespaceEdge.alias),
         )
         .outerjoin(child, child.id == KeyChild.child_key_id)
         .outerjoin(Mode, Mode.id == child.mode_id)
-        .where(VertexEdge.parent_vertex_id == parent_vertex_id)
-        .order_by(VertexEdge.alias)
+        .where(NamespaceEdge.parent_namespace_id == parent_namespace_id)
+        .order_by(NamespaceEdge.alias)
     )
 
     return [cast("_ChildRow", row) for row in rows.tuples()]
 
 
-@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children")
+@router.get("/{subsystem_name}/{namespace_name}/{mode_name}/{version}/children")
 async def get_key_children(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
+    subsystem_name: str,
+    namespace_name: str,
+    mode_name: str,
+    version: KeyVersion,
+    session: SessionDep,
 ) -> list[KeyChildMetaOut]:
     """One level of a bundle: one row per alias, whether emptied or not."""
-    parent = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
-    rows = await _child_level(parent.id, parent.vertex_id, session)
+    parent = await key_or_404(subsystem_name, namespace_name, mode_name, version, session)
+    rows = await _child_level(parent.id, parent.namespace_id, session)
     return [_build_child_meta(row) for row in rows]
 
 
@@ -403,13 +420,13 @@ async def _build_aggregate(
     for (
         child_alias,
         child,
-        _vertex_id,
-        _vertex_name,
+        _namespace_id,
+        _namespace_name,
         _subsystem_name,
         _category,
         child_format,
         _mode_name,
-    ) in await _child_level(key.id, key.vertex_id, session):
+    ) in await _child_level(key.id, key.namespace_id, session):
         node.children.append(
             AggregateOut(alias=child_alias, label=None, format=child_format, payload=None)
             if child is None
@@ -418,11 +435,17 @@ async def _build_aggregate(
     return node
 
 
-@router.get("/{subsystem_name}/{vertex_name}/{mode_name}/{version}/aggregate")
+@router.get("/{subsystem_name}/{namespace_name}/{mode_name}/{version}/aggregate")
 async def aggregate_key(
-    subsystem_name: str, vertex_name: str, mode_name: str, version: KeyVersion, session: SessionDep
+    subsystem_name: str,
+    namespace_name: str,
+    mode_name: str,
+    version: KeyVersion,
+    session: SessionDep,
 ) -> AggregateOut:
     """Every payload under a key, nested by alias, crossing subsystem boundaries freely."""
-    root = await key_or_404(subsystem_name, vertex_name, mode_name, version, session)
-    format_ = await session.scalar(select(Vertex.format).where(Vertex.id == root.vertex_id))
+    root = await key_or_404(subsystem_name, namespace_name, mode_name, version, session)
+    format_ = await session.scalar(
+        select(Namespace.format).where(Namespace.id == root.namespace_id)
+    )
     return await _build_aggregate(None, root, format_, frozenset(), session)

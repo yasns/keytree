@@ -1,4 +1,4 @@
-"""seed one starter mode per vertex
+"""seed one starter mode per namespace
 
 Revision ID: data_seed_default_modes
 Revises: data_seed_legacy_roles
@@ -28,21 +28,21 @@ def upgrade() -> None:
         key=["cern_login"],
     )
 
-    vertex = table("vertex", column("id"))
-    vertex_ids = op.get_bind().scalars(select(vertex.c.id)).all()
+    namespace = table("namespace", column("id"))
+    namespace_ids = op.get_bind().scalars(select(namespace.c.id)).all()
 
     seed(
         "mode",
         [
             {
-                "vertex_id": vertex_id,
+                "namespace_id": namespace_id,
                 "name": "default",
                 "description": "Bootstrap default mode",
                 "created_by": "keytree_app",
             }
-            for vertex_id in vertex_ids
+            for namespace_id in namespace_ids
         ],
-        key=["vertex_id", "name"],
+        key=["namespace_id", "name"],
     )
 
 
