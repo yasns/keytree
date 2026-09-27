@@ -1,4 +1,4 @@
-"""seed an empty v1 key for every vertex's default mode
+"""seed an empty v1 key for every namespace's default mode
 
 Revision ID: data_seed_v1_keys
 Revises: data_seed_default_modes
@@ -33,7 +33,7 @@ def upgrade() -> None:
         """)
     )
 
-    # bundle vertex's proposed_children is a placeholder, backfilled below once child keys exist
+    # bundle namespace's proposed_children is a placeholder, backfilled below once child keys exist
     _ = bind.execute(
         text("""
             INSERT INTO staged_edit
@@ -43,7 +43,7 @@ def upgrade() -> None:
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
                    CASE WHEN n.category IS NULL THEN '{}'::jsonb ELSE NULL END,
                    'Bootstrap v1 seed', 'skipped'
-            FROM mode m JOIN vertex n ON n.id = m.vertex_id
+            FROM mode m JOIN namespace n ON n.id = m.namespace_id
             WHERE m.name = 'default'
         """),
         {"changeset_id": changeset_id},
@@ -52,30 +52,30 @@ def upgrade() -> None:
     _ = bind.execute(
         text("""
             INSERT INTO key
-                (mode_id, vertex_id, version, label, payload, staged_edit_id, created_by, comment,
-                 validation_status)
+                (mode_id, namespace_id, version, label, payload, staged_edit_id, created_by,
+                comment, validation_status)
             SELECT m.id, n.id, 1,
                    s.name || '/' || n.name || '/' || m.name || '/v1',
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
                    se.id, 'keytree_app', 'Bootstrap v1 seed', se.validation_status
             FROM staged_edit se
             JOIN mode m ON m.id = se.mode_id
-            JOIN vertex n ON n.id = m.vertex_id
+            JOIN namespace n ON n.id = m.namespace_id
             JOIN subsystem s ON s.id = n.subsystem_id
             WHERE se.changeset_id = :changeset_id
         """),
         {"changeset_id": changeset_id},
     )
 
-    # (vertex_id, version=1) is unambiguous: one default mode, one version, per vertex
+    # (namespace_id, version=1) is unambiguous: one default mode, one version, per namespace
     _ = bind.execute(
         text("""
             INSERT INTO key_child
-                (parent_key_id, alias, child_key_id, parent_vertex_id, child_vertex_id)
-            SELECT pk.id, ne.alias, ck.id, ne.parent_vertex_id, ne.child_vertex_id
-            FROM vertex_edge ne
-            JOIN key pk ON pk.vertex_id = ne.parent_vertex_id AND pk.version = 1
-            JOIN key ck ON ck.vertex_id = ne.child_vertex_id AND ck.version = 1
+                (parent_key_id, alias, child_key_id, parent_namespace_id, child_namespace_id)
+            SELECT pk.id, ne.alias, ck.id, ne.parent_namespace_id, ne.child_namespace_id
+            FROM namespace_edge ne
+            JOIN key pk ON pk.namespace_id = ne.parent_namespace_id AND pk.version = 1
+            JOIN key ck ON ck.namespace_id = ne.child_namespace_id AND ck.version = 1
         """)
     )
 

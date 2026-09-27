@@ -67,7 +67,7 @@ export function splitRunsAt(runs: DiffRun[], index: number): [DiffRun[], DiffRun
   return [head, tail]
 }
 
-/** Index of the 2nd "/" in a `subsystem/vertex/mode/vN` label, so the tail keeps the slash plus mode+version. */
+/** Index of the 2nd "/" in a `subsystem/namespace/mode/vN` label, so the tail keeps the slash plus mode+version. */
 export function labelTailStart(label: string): number {
   const first = label.indexOf('/')
   if (first < 0) return 0
@@ -126,7 +126,7 @@ export function bundleDiffCounts(
 
 export type KeyRef = {
   subsystem_name: string
-  vertex_name: string
+  namespace_name: string
   mode_name: string
   version: number
 }
@@ -153,7 +153,7 @@ export function childrenToIdMap(children: KeyChildMetaOut[]): Record<string, num
 export function memoizeByRef<R>(fetch: (ref: KeyRef) => Promise<R>): (ref: KeyRef) => Promise<R> {
   const cache = new Map<string, Promise<R>>()
   return (ref) => {
-    const key = `${ref.subsystem_name}/${ref.vertex_name}/${ref.mode_name}/${ref.version}`
+    const key = `${ref.subsystem_name}/${ref.namespace_name}/${ref.mode_name}/${ref.version}`
     let result = cache.get(key)
     if (!result) {
       result = fetch(ref)
@@ -198,7 +198,7 @@ export function diffAgainstAncestor(
   return diffAgainstRef(
     {
       subsystem_name: edit.subsystem_name,
-      vertex_name: edit.vertex_name,
+      namespace_name: edit.namespace_name,
       mode_name: ancestor.mode_name,
       version: ancestor.version,
     },

@@ -184,7 +184,7 @@ export interface paths {
         put?: never;
         /**
          * Fork Mode
-         * @description Branches a key's content into a brand new mode on the same vertex, staged as its v1.
+         * @description Branches a key's content into a brand new mode on the same namespace, staged as its v1.
          */
         post: operations["fork_mode_api_staging_fork_post"];
         delete?: never;
@@ -333,7 +333,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}": {
+    "/api/keys/{subsystem_name}/{namespace_name}/{mode_name}/{version}": {
         parameters: {
             query?: never;
             header?: never;
@@ -342,9 +342,9 @@ export interface paths {
         };
         /**
          * Get Key
-         * @description Fetches a single key by (subsystem, vertex, mode, version).
+         * @description Fetches a single key by (subsystem, namespace, mode, version).
          */
-        get: operations["get_key_api_keys__subsystem_name___vertex_name___mode_name___version__get"];
+        get: operations["get_key_api_keys__subsystem_name___namespace_name___mode_name___version__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -353,7 +353,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children": {
+    "/api/keys/{subsystem_name}/{namespace_name}/{mode_name}/{version}/children": {
         parameters: {
             query?: never;
             header?: never;
@@ -362,10 +362,9 @@ export interface paths {
         };
         /**
          * Get Key Children
-         * @description One level of a bundle: one row per alias, whether emptied or not, crossing subsystem
-         *     boundaries freely.
+         * @description One level of a bundle: one row per alias, whether emptied or not.
          */
-        get: operations["get_key_children_api_keys__subsystem_name___vertex_name___mode_name___version__children_get"];
+        get: operations["get_key_children_api_keys__subsystem_name___namespace_name___mode_name___version__children_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -374,7 +373,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}/aggregate": {
+    "/api/keys/{subsystem_name}/{namespace_name}/{mode_name}/{version}/aggregate": {
         parameters: {
             query?: never;
             header?: never;
@@ -385,7 +384,7 @@ export interface paths {
          * Aggregate Key
          * @description Every payload under a key, nested by alias, crossing subsystem boundaries freely.
          */
-        get: operations["aggregate_key_api_keys__subsystem_name___vertex_name___mode_name___version__aggregate_get"];
+        get: operations["aggregate_key_api_keys__subsystem_name___namespace_name___mode_name___version__aggregate_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -423,7 +422,7 @@ export interface paths {
         };
         /**
          * Get Subsystem Tree
-         * @description Returns a subsystem's vertex hierarchy as a forest. Does not cross subsystem boundaries.
+         * @description Returns a subsystem's namespace hierarchy as a forest. Does not cross subsystem boundaries.
          */
         get: operations["get_subsystem_tree_api_subsystems__subsystem_id__tree_get"];
         put?: never;
@@ -474,7 +473,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/vertices/by-path/{subsystem_name}/{vertex_name}": {
+    "/api/namespaces/by-path/{subsystem_name}/{namespace_name}": {
         parameters: {
             query?: never;
             header?: never;
@@ -482,10 +481,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Vertex By Path
-         * @description Fetches a vertex by (subsystem, name).
+         * Get Namespace By Path
+         * @description Fetches a namespace by (subsystem, name).
          */
-        get: operations["get_vertex_by_path_api_vertices_by_path__subsystem_name___vertex_name__get"];
+        get: operations["get_namespace_by_path_api_namespaces_by_path__subsystem_name___namespace_name__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -494,7 +493,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/vertices/{vertex_id}": {
+    "/api/namespaces/{namespace_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -502,10 +501,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Vertex
-         * @description Fetches a single vertex by numeric id.
+         * Get Namespace
+         * @description Fetches a single namespace by numeric id.
          */
-        get: operations["get_vertex_api_vertices__vertex_id__get"];
+        get: operations["get_namespace_api_namespaces__namespace_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -564,8 +563,8 @@ export interface components {
         ConflictOut: {
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Base Version */
@@ -579,8 +578,8 @@ export interface components {
         CopyIn: {
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Base Version */
@@ -611,8 +610,8 @@ export interface components {
         ForkIn: {
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Base Version */
@@ -649,10 +648,10 @@ export interface components {
             alias: string;
             /** Label */
             label: string | null;
-            /** Vertex Id */
-            vertex_id: number;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Id */
+            namespace_id: number;
+            /** Namespace Name */
+            namespace_name: string;
             /** Subsystem Name */
             subsystem_name: string;
             /** Category */
@@ -678,8 +677,8 @@ export interface components {
             label: string;
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Version */
@@ -755,6 +754,23 @@ export interface components {
             /** Decommissioned Versions */
             decommissioned_versions: number[];
         };
+        /** NamespaceOut */
+        NamespaceOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Category */
+            category: string | null;
+            /** Format */
+            format: string | null;
+            /** Subsystem Id */
+            subsystem_id: number;
+            /** Subsystem Name */
+            subsystem_name: string;
+            /** Modes */
+            modes: components["schemas"]["ModeOut"][];
+        };
         /** ProposedChildOut */
         ProposedChildOut: {
             /** Key Id */
@@ -782,8 +798,8 @@ export interface components {
             mode_id: number;
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Archived */
@@ -795,8 +811,8 @@ export interface components {
             key_id: number;
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Version */
@@ -810,8 +826,8 @@ export interface components {
         StagedEditIn: {
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Base Version */
@@ -837,8 +853,8 @@ export interface components {
             id: number;
             /** Subsystem Name */
             subsystem_name: string;
-            /** Vertex Name */
-            vertex_name: string;
+            /** Namespace Name */
+            namespace_name: string;
             /** Mode Name */
             mode_name: string;
             /** Base Version */
@@ -907,23 +923,6 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
-        };
-        /** VertexOut */
-        VertexOut: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Category */
-            category: string | null;
-            /** Format */
-            format: string | null;
-            /** Subsystem Id */
-            subsystem_id: number;
-            /** Subsystem Name */
-            subsystem_name: string;
-            /** Modes */
-            modes: components["schemas"]["ModeOut"][];
         };
     };
     responses: never;
@@ -1493,13 +1492,13 @@ export interface operations {
             };
         };
     };
-    get_key_api_keys__subsystem_name___vertex_name___mode_name___version__get: {
+    get_key_api_keys__subsystem_name___namespace_name___mode_name___version__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 subsystem_name: string;
-                vertex_name: string;
+                namespace_name: string;
                 mode_name: string;
                 version: number;
             };
@@ -1527,13 +1526,13 @@ export interface operations {
             };
         };
     };
-    get_key_children_api_keys__subsystem_name___vertex_name___mode_name___version__children_get: {
+    get_key_children_api_keys__subsystem_name___namespace_name___mode_name___version__children_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 subsystem_name: string;
-                vertex_name: string;
+                namespace_name: string;
                 mode_name: string;
                 version: number;
             };
@@ -1561,13 +1560,13 @@ export interface operations {
             };
         };
     };
-    aggregate_key_api_keys__subsystem_name___vertex_name___mode_name___version__aggregate_get: {
+    aggregate_key_api_keys__subsystem_name___namespace_name___mode_name___version__aggregate_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 subsystem_name: string;
-                vertex_name: string;
+                namespace_name: string;
                 mode_name: string;
                 version: number;
             };
@@ -1688,13 +1687,13 @@ export interface operations {
             };
         };
     };
-    get_vertex_by_path_api_vertices_by_path__subsystem_name___vertex_name__get: {
+    get_namespace_by_path_api_namespaces_by_path__subsystem_name___namespace_name__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 subsystem_name: string;
-                vertex_name: string;
+                namespace_name: string;
             };
             cookie?: never;
         };
@@ -1706,7 +1705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VertexOut"];
+                    "application/json": components["schemas"]["NamespaceOut"];
                 };
             };
             /** @description Validation Error */
@@ -1720,12 +1719,12 @@ export interface operations {
             };
         };
     };
-    get_vertex_api_vertices__vertex_id__get: {
+    get_namespace_api_namespaces__namespace_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                vertex_id: number;
+                namespace_id: number;
             };
             cookie?: never;
         };
@@ -1737,7 +1736,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VertexOut"];
+                    "application/json": components["schemas"]["NamespaceOut"];
                 };
             };
             /** @description Validation Error */

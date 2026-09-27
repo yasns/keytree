@@ -100,7 +100,7 @@ const changes = useChangesStore()
 const nav = useNavStore()
 
 function conflictKey(conflict: Conflict) {
-  return `${conflict.subsystem_name}/${conflict.vertex_name}/${conflict.mode_name}`
+  return `${conflict.subsystem_name}/${conflict.namespace_name}/${conflict.mode_name}`
 }
 
 function conflictCacheKey(conflict: Conflict) {
@@ -108,7 +108,7 @@ function conflictCacheKey(conflict: Conflict) {
 }
 
 function stagedEdit(conflict: Conflict) {
-  return changes.stagedForMode(conflict.subsystem_name, conflict.vertex_name, conflict.mode_name)
+  return changes.stagedForMode(conflict.subsystem_name, conflict.namespace_name, conflict.mode_name)
 }
 
 function conflictSubtitle(conflict: Conflict): string {
@@ -120,10 +120,10 @@ function keyIcon(conflict: Conflict) {
 }
 
 const fetchPayload = memoizeByRef((ref: KeyRef) =>
-  nav.fetchKeyPayload(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+  nav.fetchKeyPayload(ref.subsystem_name, ref.namespace_name, ref.mode_name, ref.version),
 )
 const fetchChildren = memoizeByRef((ref: KeyRef) =>
-  nav.fetchKeyChildren(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+  nav.fetchKeyChildren(ref.subsystem_name, ref.namespace_name, ref.mode_name, ref.version),
 )
 
 const { get: theirDiffCounts } = useDiffCountCache(
@@ -135,7 +135,7 @@ const { get: theirDiffCounts } = useDiffCountCache(
 
     const baseRef: KeyRef = {
       subsystem_name: conflict.subsystem_name,
-      vertex_name: conflict.vertex_name,
+      namespace_name: conflict.namespace_name,
       mode_name: conflict.mode_name,
       version: conflict.base_version,
     }

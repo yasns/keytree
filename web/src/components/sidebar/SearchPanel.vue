@@ -146,16 +146,16 @@ function open(hit: KeyMatchOut) {
     mode.value === 'payload'
       ? { q: trimmedQuery.value, regex: regex.value ? '1' : undefined }
       : undefined
-  nav.pendingVertexId = null
+  nav.pendingNamespaceId = null
   nav.bundleRoot = {
     subsystem: hit.subsystem_name,
-    name: hit.vertex_name,
+    name: hit.namespace_name,
     mode: hit.mode_name,
     version: hit.version,
     pending: false,
   }
   router.push({
-    ...keyRoute(hit.subsystem_name, hit.vertex_name, hit.mode_name, hit.version),
+    ...keyRoute(hit.subsystem_name, hit.namespace_name, hit.mode_name, hit.version),
     query,
   })
 }

@@ -96,7 +96,7 @@
                   <template #selection
                     ><span class="key-label-truncate w-100"
                       ><span class="key-label-head"
-                        >{{ row.child.subsystem_name }}/{{ row.child.vertex_name }}</span
+                        >{{ row.child.subsystem_name }}/{{ row.child.namespace_name }}</span
                       ><span class="key-label-tail">{{ selectionTail(row.child) }}</span></span
                     ></template
                   >
@@ -214,7 +214,7 @@ const childChoice = reactive(new Map<string, ChildChoice>())
 type SelectOption = { title: string; value: string } | { type: 'divider' }
 
 function externalKey(child: KeyChildMetaOut): string {
-  return `${child.subsystem_name}/${child.vertex_name}`
+  return `${child.subsystem_name}/${child.namespace_name}`
 }
 
 function withDivider(rest: { title: string; value: string }[]): SelectOption[] {
@@ -232,13 +232,13 @@ function ensureExternalOptions(child: KeyChildMetaOut) {
   const key = externalKey(child)
   if (externalOptionsRequested.has(key)) return
   externalOptionsRequested.add(key)
-  resolveExternalOptions(child.subsystem_name, child.vertex_name)
+  resolveExternalOptions(child.subsystem_name, child.namespace_name)
     .then((options) => externalOptionsCache.set(key, options))
     .catch(() => externalOptionsRequested.delete(key))
 }
 
 function modeOptions(child: KeyChildMetaOut): ModeOut[] {
-  return nav.vertexDetailCache.get(child.vertex_id)?.modes ?? []
+  return nav.namespaceDetailCache.get(child.namespace_id)?.modes ?? []
 }
 
 function committedTip(child: KeyChildMetaOut, modeName: string): number | undefined {
@@ -251,14 +251,19 @@ type Upgrade = { version: number; staged: boolean }
 /** Includes a staged-but-uncommitted version; `staged` marks that case. */
 function tipOf(child: KeyChildMetaOut, modeName: string): Upgrade | undefined {
   const committed = committedTip(child, modeName)
-  const edit = changes.stagedForMode(child.subsystem_name, child.vertex_name, modeName)
+  const edit = changes.stagedForMode(child.subsystem_name, child.namespace_name, modeName)
   const version = edit ? edit.expected_version : committed
   if (version === undefined) return undefined
   return { version, staged: committed !== undefined && version > committed }
 }
 
 function childVersionLocator(child: KeyChildMetaOut, mode: ModeOut, version: number) {
-  return { subsystem: child.subsystem_name, vertex: child.vertex_name, mode: mode.name, version }
+  return {
+    subsystem: child.subsystem_name,
+    namespace: child.namespace_name,
+    mode: mode.name,
+    version,
+  }
 }
 
 function retiredReason(
@@ -285,7 +290,7 @@ function modeItems(child: KeyChildMetaOut): SelectOption[] {
       const reason = retiredReason(child, m, version)
       // Retired candidates are not offered, but an inherited one stays listed or the select blanks.
       if (reason && value !== current) return []
-      const label = `${child.subsystem_name}/${child.vertex_name}/${m.name}/v${version}`
+      const label = `${child.subsystem_name}/${child.namespace_name}/${m.name}/v${version}`
       return [{ title: reason ? `${label} (${reason})` : label, value }]
     }),
   )
@@ -373,7 +378,7 @@ async function selectKeyVersion(child: KeyChildMetaOut, modeName: string, tip: U
   }
   const key = await nav.fetchKeyPayload(
     child.subsystem_name,
-    child.vertex_name,
+    child.namespace_name,
     modeName,
     tip.version,
   )
@@ -486,7 +491,7 @@ function buildEdits(comment: string): {
       if (changed) {
         childEdits.push({
           subsystem_name: locator.subsystem,
-          vertex_name: locator.name,
+          namespace_name: locator.name,
           mode_name: locator.mode,
           base_version: locator.version,
           proposed_payload: value,
@@ -508,7 +513,7 @@ function buildEdits(comment: string): {
 function baseEdit(comment: string, proposedChildren: Record<string, number | null>) {
   return {
     subsystem_name: props.subsystem,
-    vertex_name: props.name,
+    namespace_name: props.name,
     mode_name: props.mode,
     base_version: props.version,
     proposed_children: proposedChildren,
@@ -598,9 +603,9 @@ async function load() {
   payload.value = p
   children.value = c
   for (const child of c) {
-    // fetchVertexDetail dedups by vertex id, so repeated aliases cost nothing
+    // fetchNamespaceDetail dedups by namespace id, so repeated aliases cost nothing
     if (child.category === 'external') ensureExternalOptions(child)
-    else void nav.fetchVertexDetail(child.vertex_id).catch(() => {})
+    else void nav.fetchNamespaceDetail(child.namespace_id).catch(() => {})
   }
   applyBaseline()
 }

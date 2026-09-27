@@ -7,12 +7,12 @@ from sqlalchemy.orm import aliased
 from tsgauth.fastapi import JWTBearerClaims
 
 from app.db.base import SessionDep
-from app.db.models import AppUser, Key, Mode, Subsystem, Vertex
+from app.db.models import AppUser, Key, Mode, Namespace, Subsystem
 
 router = APIRouter(
-    prefix="/vertices",
+    prefix="/namespaces",
     dependencies=[Depends(JWTBearerClaims())],
-    tags=["vertices"],
+    tags=["namespaces"],
 )
 
 
@@ -37,7 +37,7 @@ class ModeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class VertexOut(BaseModel):
+class NamespaceOut(BaseModel):
     id: int
     name: str
     category: str | None
@@ -51,13 +51,13 @@ class VertexOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _build_vertex_detail(
-    vertex: Vertex,
+def _build_namespace_detail(
+    namespace: Namespace,
     subsystem_name: str,
     modes: list[Mode],
     keys: list[Key],
     display_names: dict[str, str],
-) -> VertexOut:
+) -> NamespaceOut:
     versions_by_mode: dict[int, list[int]] = {}
     decommissioned_versions_by_mode: dict[int, list[int]] = {}
     for key in keys:
@@ -67,12 +67,12 @@ def _build_vertex_detail(
     for versions in versions_by_mode.values():
         versions.sort(reverse=True)
 
-    return VertexOut(
-        id=vertex.id,
-        name=vertex.name,
-        category=vertex.category,
-        format=vertex.format,
-        subsystem_id=vertex.subsystem_id,
+    return NamespaceOut(
+        id=namespace.id,
+        name=namespace.name,
+        category=namespace.category,
+        format=namespace.format,
+        subsystem_id=namespace.subsystem_id,
         subsystem_name=subsystem_name,
         modes=[
             ModeOut(
@@ -95,12 +95,14 @@ def _build_vertex_detail(
     )
 
 
-async def _vertex_detail_or_404(vertex: Vertex | None, session: SessionDep) -> VertexOut:
-    if vertex is None:
-        raise HTTPException(status_code=404, detail="vertex not found")
+async def _namespace_detail_or_404(
+    namespace: Namespace | None, session: SessionDep
+) -> NamespaceOut:
+    if namespace is None:
+        raise HTTPException(status_code=404, detail="namespace not found")
 
     subsystem_name = await session.scalar(
-        select(Subsystem.name).where(Subsystem.id == vertex.subsystem_id)
+        select(Subsystem.name).where(Subsystem.id == namespace.subsystem_id)
     )
     assert subsystem_name is not None
 
@@ -112,7 +114,7 @@ async def _vertex_detail_or_404(vertex: Vertex | None, session: SessionDep) -> V
             .select_from(Mode)
             .outerjoin(creator, creator.cern_login == Mode.created_by)
             .outerjoin(archiver, archiver.cern_login == Mode.archived_by)
-            .where(Mode.vertex_id == vertex.id)
+            .where(Mode.namespace_id == namespace.id)
         )
     ).all()
     modes = [row[0] for row in mode_rows]
@@ -122,24 +124,24 @@ async def _vertex_detail_or_404(vertex: Vertex | None, session: SessionDep) -> V
 
     keys = list(await session.scalars(select(Key).where(Key.mode_id.in_([m.id for m in modes]))))
 
-    return _build_vertex_detail(vertex, subsystem_name, modes, keys, display_names)
+    return _build_namespace_detail(namespace, subsystem_name, modes, keys, display_names)
 
 
-@router.get("/by-path/{subsystem_name}/{vertex_name}")
-async def get_vertex_by_path(
-    subsystem_name: str, vertex_name: str, session: SessionDep
-) -> VertexOut:
-    """Fetches a vertex by (subsystem, name)."""
-    vertex = await session.scalar(
-        select(Vertex)
-        .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
-        .where(Subsystem.name == subsystem_name, Vertex.name == vertex_name)
+@router.get("/by-path/{subsystem_name}/{namespace_name}")
+async def get_namespace_by_path(
+    subsystem_name: str, namespace_name: str, session: SessionDep
+) -> NamespaceOut:
+    """Fetches a namespace by (subsystem, name)."""
+    namespace = await session.scalar(
+        select(Namespace)
+        .join(Subsystem, Subsystem.id == Namespace.subsystem_id)
+        .where(Subsystem.name == subsystem_name, Namespace.name == namespace_name)
     )
-    return await _vertex_detail_or_404(vertex, session)
+    return await _namespace_detail_or_404(namespace, session)
 
 
-@router.get("/{vertex_id}")
-async def get_vertex(vertex_id: int, session: SessionDep) -> VertexOut:
-    """Fetches a single vertex by numeric id."""
-    vertex = await session.get(Vertex, vertex_id)
-    return await _vertex_detail_or_404(vertex, session)
+@router.get("/{namespace_id}")
+async def get_namespace(namespace_id: int, session: SessionDep) -> NamespaceOut:
+    """Fetches a single namespace by numeric id."""
+    namespace = await session.get(Namespace, namespace_id)
+    return await _namespace_detail_or_404(namespace, session)

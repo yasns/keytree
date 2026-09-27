@@ -97,7 +97,7 @@
           <span class="font-weight-medium">Subsystem:</span>
           <span>{{ nav.subsystemDisplayName(subsystem) }}</span>
 
-          <span class="font-weight-medium">Path:</span>
+          <span class="font-weight-medium">Namespace:</span>
           <span>{{ name }}</span>
 
           <span class="font-weight-medium">Mode:</span>

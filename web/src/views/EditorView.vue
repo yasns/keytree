@@ -2,7 +2,7 @@
   <div class="d-flex flex-column h-100">
     <div class="d-flex flex-column flex-grow-1" style="min-width: 0; min-height: 0">
       <div
-        v-if="detailReady && nav.vertexDetail?.category === null && diffTarget && bundleDiffRoot"
+        v-if="detailReady && nav.namespaceDetail?.category === null && diffTarget && bundleDiffRoot"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
@@ -10,10 +10,10 @@
         <DiffBrowser :diff-target="diffTarget"></DiffBrowser>
       </div>
 
-      <KeyBrowser v-else-if="detailReady && nav.vertexDetail?.category === null"></KeyBrowser>
+      <KeyBrowser v-else-if="detailReady && nav.namespaceDetail?.category === null"></KeyBrowser>
 
       <div
-        v-else-if="detailReady && nav.vertexDetail && leafLeft && diffTarget && leafRight"
+        v-else-if="detailReady && nav.namespaceDetail && leafLeft && diffTarget && leafRight"
         class="d-flex flex-column h-100"
         style="min-height: 0"
       >
@@ -22,16 +22,18 @@
       </div>
 
       <template
-        v-else-if="detailReady && nav.vertexDetail && selectedMode && selectedVersion !== undefined"
+        v-else-if="
+          detailReady && nav.namespaceDetail && selectedMode && selectedVersion !== undefined
+        "
       >
         <KeyPayload
-          :key="nav.vertexDetail.id"
-          :subsystem="nav.vertexDetail.subsystem_name"
-          :name="nav.vertexDetail.name"
+          :key="nav.namespaceDetail.id"
+          :subsystem="nav.namespaceDetail.subsystem_name"
+          :name="nav.namespaceDetail.name"
           :mode="selectedMode.name"
           :version="selectedVersion"
-          :format="nav.vertexDetail.format"
-          :category="nav.vertexDetail.category"
+          :format="nav.namespaceDetail.format"
+          :category="nav.namespaceDetail.category"
           :pending="isPending"
           :depth="0"
           :search-query="(route.query.q as string) || undefined"
@@ -75,13 +77,13 @@ const snackbar = useSnackbarStore()
 
 const detailReady = computed(
   () =>
-    nav.vertexDetail?.subsystem_name === subsystem &&
-    nav.vertexDetail?.name === name &&
-    nav.vertexDetail?.category !== 'external',
+    nav.namespaceDetail?.subsystem_name === subsystem &&
+    nav.namespaceDetail?.name === name &&
+    nav.namespaceDetail?.category !== 'external',
 )
 
 const selectedMode = computed(() =>
-  detailReady.value ? nav.vertexDetail!.modes.find((m) => m.name === mode) : undefined,
+  detailReady.value ? nav.namespaceDetail!.modes.find((m) => m.name === mode) : undefined,
 )
 const requestedVersion = computed(() => parseVersion(version))
 
@@ -121,7 +123,7 @@ const bundleDiffRoot = computed<BundleRoot | undefined>(() => {
 
 /** The routed leaf itself, as the "original" side of a comparison. */
 const leafLeft = computed<LeafSide | undefined>(() => {
-  const detail = nav.vertexDetail
+  const detail = nav.namespaceDetail
   if (!detailReady.value || !detail || !selectedMode.value || selectedVersion.value === undefined)
     return undefined
   return {
@@ -138,7 +140,7 @@ const leafLeft = computed<LeafSide | undefined>(() => {
 })
 
 const leafRight = computed<LeafSide | undefined>(() => {
-  const detail = nav.vertexDetail
+  const detail = nav.namespaceDetail
   const target = diffTarget.value
   if (!detailReady.value || !detail || !target) return undefined
   const root = resolveDiffRoot(
@@ -149,15 +151,15 @@ const leafRight = computed<LeafSide | undefined>(() => {
   return root && { root, format: detail.format, category: detail.category }
 })
 
-// Redirect to 404 when the routed mode is invalid for that vertex
+// Redirect to 404 when the routed mode is invalid for that namespace
 watch(
-  () => [nav.vertexDetail, mode] as const,
+  () => [nav.namespaceDetail, mode] as const,
   ([detail, mode]) => {
     if (!detail || detail.subsystem_name !== subsystem || detail.name !== name || !mode) return
     if (detail.category === 'external') return
     if (!detail.modes.some((m) => m.name === mode)) {
       if (changes.stagedForMode(subsystem, name, mode)) return
-      nav.vertexDetail = null
+      nav.namespaceDetail = null
       snackbar.notify(`"${mode}" is not a mode of ${name}`, 'error')
       router.replace('/404')
     }
@@ -190,14 +192,14 @@ watch(
 async function syncToRoute() {
   await nav.fetchSubsystems()
   try {
-    await nav.fetchVertexByPath(subsystem, name)
+    await nav.fetchNamespaceByPath(subsystem, name)
   } catch (err) {
-    nav.vertexDetail = null
+    nav.namespaceDetail = null
     snackbar.notifyError(err)
     router.replace('/404')
     return
   }
-  const detail = nav.vertexDetail
+  const detail = nav.namespaceDetail
   if (!detail || detail.name !== name) return
 
   await nav.fetchTree(detail.subsystem_id)
@@ -205,21 +207,21 @@ async function syncToRoute() {
     nav.selectedSubsystemId = detail.subsystem_id
   }
 
-  const row = nav.findRowByVertexId(detail.id)
+  const row = nav.findRowByNamespaceId(detail.id)
 
   if (detail.category === 'external') {
     const parent = row && nav.findRow((r) => r.path === row.ancestors.at(-1))
     snackbar.notify(`${detail.name} is selected inside its parent key`, 'info')
     return router.replace(
-      parent ? { name: 'editor', params: { subsystem, name: parent.vertex.name } } : '/',
+      parent ? { name: 'editor', params: { subsystem, name: parent.namespace.name } } : '/',
     )
   }
 
   if (row) nav.activatedRow = [row.path]
 
-  // No mode in the URL: send the user home with mode picker for this vertex
+  // No mode in the URL: send the user home with mode picker for this namespace
   if (!mode) {
-    nav.pendingVertexId = detail.id
+    nav.pendingNamespaceId = detail.id
     nav.activePanel = BrowsePanel
     router.replace('/')
   }
@@ -240,7 +242,7 @@ function sameBundleRoot(a: BundleRoot | null, b: BundleRoot): boolean {
 
 // Keep bundleRoot in sync with the route whenever mode/version are already present in it
 watch(
-  [() => nav.vertexDetail, selectedMode, selectedVersion],
+  [() => nav.namespaceDetail, selectedMode, selectedVersion],
   ([detail, mode, version]) => {
     if (!detail || detail.category !== null || !mode || version === undefined) return
     const root: BundleRoot = {

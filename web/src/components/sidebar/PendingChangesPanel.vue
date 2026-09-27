@@ -17,7 +17,7 @@
         <KeyChangeListItem
           v-for="edit in changes.visibleEdits"
           :key="edit.id"
-          :key-label="`${edit.subsystem_name}/${edit.vertex_name}/${edit.mode_name}`"
+          :key-label="`${edit.subsystem_name}/${edit.namespace_name}/${edit.mode_name}`"
           :from-version="edit.base_version"
           :to-version="edit.expected_version"
           :subtitle="edit.comment"
@@ -66,7 +66,7 @@
                 'key-label-truncate': true,
               }"
               ><span class="key-label-head"
-                >{{ archival.subsystem_name }}/{{ archival.vertex_name }}</span
+                >{{ archival.subsystem_name }}/{{ archival.namespace_name }}</span
               ><span class="key-label-tail">/{{ archival.mode_name }}</span></span
             >
           </v-list-item-title>
@@ -108,7 +108,7 @@
                 'key-label-truncate': true,
               }"
               ><span class="key-label-head"
-                >{{ decommission.subsystem_name }}/{{ decommission.vertex_name }}</span
+                >{{ decommission.subsystem_name }}/{{ decommission.namespace_name }}</span
               ><span class="key-label-tail"
                 >/{{ decommission.mode_name }}/v{{ decommission.version }}</span
               ></span
@@ -235,7 +235,7 @@ const conflicts = computed(() =>
     changes.visibleEdits.some(
       (e) =>
         e.subsystem_name === c.subsystem_name &&
-        e.vertex_name === c.vertex_name &&
+        e.namespace_name === c.namespace_name &&
         e.mode_name === c.mode_name,
     ),
   ),
@@ -243,10 +243,10 @@ const conflicts = computed(() =>
 const conflictsOpen = ref(false)
 
 const fetchPayload = memoizeByRef((ref: KeyRef) =>
-  nav.fetchKeyPayload(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+  nav.fetchKeyPayload(ref.subsystem_name, ref.namespace_name, ref.mode_name, ref.version),
 )
 const fetchChildren = memoizeByRef((ref: KeyRef) =>
-  nav.fetchKeyChildren(ref.subsystem_name, ref.vertex_name, ref.mode_name, ref.version),
+  nav.fetchKeyChildren(ref.subsystem_name, ref.namespace_name, ref.mode_name, ref.version),
 )
 
 const { get: diffCounts } = useDiffCountCache(
@@ -277,21 +277,28 @@ const hasInvalidEdits = computed(() =>
 
 async function goToEdit(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
-  pushDiffRoute(router, edit.subsystem_name, edit.vertex_name, edit.mode_name, edit.base_version, {
-    mode: edit.mode_name,
-    version: 'pending',
-  })
+  pushDiffRoute(
+    router,
+    edit.subsystem_name,
+    edit.namespace_name,
+    edit.mode_name,
+    edit.base_version,
+    {
+      mode: edit.mode_name,
+      version: 'pending',
+    },
+  )
 }
 
 async function goToPayload(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
-  router.push(keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'))
+  router.push(keyRoute(edit.subsystem_name, edit.namespace_name, edit.mode_name, 'pending'))
 }
 
 async function viewProblems(edit: StagedEditOut) {
   if (!(await changes.confirmDiscard())) return
   router.push({
-    ...keyRoute(edit.subsystem_name, edit.vertex_name, edit.mode_name, 'pending'),
+    ...keyRoute(edit.subsystem_name, edit.namespace_name, edit.mode_name, 'pending'),
     query: { problem: '1' },
   })
 }
@@ -303,7 +310,7 @@ async function goToConflict(conflict: Conflict, side: 'yours' | 'theirs') {
   pushDiffRoute(
     router,
     conflict.subsystem_name,
-    conflict.vertex_name,
+    conflict.namespace_name,
     conflict.mode_name,
     conflict.base_version,
     { mode: conflict.mode_name, version: target },
@@ -316,7 +323,7 @@ async function goToCompare(conflict: Conflict) {
   pushDiffRoute(
     router,
     conflict.subsystem_name,
-    conflict.vertex_name,
+    conflict.namespace_name,
     conflict.mode_name,
     conflict.tip_version,
     { mode: conflict.mode_name, version: 'pending' },
@@ -325,10 +332,10 @@ async function goToCompare(conflict: Conflict) {
 
 async function goToArchival(archival: StagedArchivalOut) {
   if (!(await changes.confirmDiscard())) return
-  const modes = await nav.fetchModesByPath(archival.subsystem_name, archival.vertex_name)
+  const modes = await nav.fetchModesByPath(archival.subsystem_name, archival.namespace_name)
   const tip = modes.find((m) => m.name === archival.mode_name)?.versions[0]
   if (tip !== undefined) {
-    router.push(keyRoute(archival.subsystem_name, archival.vertex_name, archival.mode_name, tip))
+    router.push(keyRoute(archival.subsystem_name, archival.namespace_name, archival.mode_name, tip))
   }
 }
 
@@ -337,7 +344,7 @@ async function goToDecommission(decommission: StagedDecommissionOut) {
   router.push(
     keyRoute(
       decommission.subsystem_name,
-      decommission.vertex_name,
+      decommission.namespace_name,
       decommission.mode_name,
       decommission.version,
     ),
@@ -385,14 +392,14 @@ async function discardToggle(toggle: Promise<void>, label: string) {
 function discardArchival(archival: StagedArchivalOut) {
   return discardToggle(
     changes.toggleArchival(archival.mode_id),
-    `archival change on "${archival.vertex_name}/${archival.mode_name}"`,
+    `archival change on "${archival.namespace_name}/${archival.mode_name}"`,
   )
 }
 
 function discardDecommission(decommission: StagedDecommissionOut) {
   return discardToggle(
     changes.toggleDecommission(decommission.key_id),
-    `decommission change on "${decommission.vertex_name}/${decommission.mode_name}"`,
+    `decommission change on "${decommission.namespace_name}/${decommission.mode_name}"`,
   )
 }
 
@@ -400,15 +407,15 @@ async function discardEdit(edit: StagedEditOut) {
   const key = routedKey()
   const onThisEdit =
     key?.subsystem === edit.subsystem_name &&
-    key.name === edit.vertex_name &&
+    key.name === edit.namespace_name &&
     key.mode === edit.mode_name
   const source = pendingSource(edit)
   await changes.discardEdit(edit.id)
 
   const returned =
-    onThisEdit && (await returnToSource(edit.subsystem_name, edit.vertex_name, source))
+    onThisEdit && (await returnToSource(edit.subsystem_name, edit.namespace_name, source))
   if (!returned)
-    snackbar.notify(`Discarded edit on "${edit.vertex_name}/${edit.mode_name}"`, 'info')
+    snackbar.notify(`Discarded edit on "${edit.namespace_name}/${edit.mode_name}"`, 'info')
   await nav.refreshKeys()
 }
 
@@ -453,7 +460,7 @@ async function commit() {
     snackbar.notify(`Committed ${pluralize(count, 'change')}. Job well done.`, 'success')
     await nav.refreshKeys()
     // follows the version it landed on, which trails the tip, not the base
-    const tip = key && nav.vertexDetail?.modes.find((m) => m.name === key.mode)?.versions[0]
+    const tip = key && nav.namespaceDetail?.modes.find((m) => m.name === key.mode)?.versions[0]
     if (key && staged && tip !== undefined && tip !== key.version) {
       await router.replace({
         ...keyRoute(key.subsystem, key.name, key.mode, tip),

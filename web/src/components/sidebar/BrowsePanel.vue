@@ -94,7 +94,7 @@ type Subsystem = components['schemas']['SubsystemOut']
 const nav = useNavStore()
 const { clearPending } = useClearPending()
 
-const locked = computed(() => nav.pendingVertexId !== null)
+const locked = computed(() => nav.pendingNamespaceId !== null)
 
 const fieldRef = ref<{ $el: HTMLElement } | null>(null)
 const menuMaxHeight = ref(320)
@@ -105,7 +105,7 @@ function updateMenuMaxHeight() {
 }
 
 function itemProps(item: Record<string, unknown>) {
-  return { disabled: (item as Row).vertex.category === 'external' }
+  return { disabled: (item as Row).namespace.category === 'external' }
 }
 
 // In category display order
@@ -157,13 +157,13 @@ const aliasGoToOpen = ref(false)
 const aliasGoToRow = ref<Row | undefined>(undefined)
 let aliasGoToPrevious: string[] = []
 const aliasGoToTitle = computed(() => {
-  const subsystemId = aliasGoToRow.value?.vertex.subsystem_id
+  const subsystemId = aliasGoToRow.value?.namespace.subsystem_id
   const target = subsystemId !== undefined ? nav.subsystemName(subsystemId) : undefined
   return target ? nav.subsystemDisplayName(target) : 'another subsystem'
 })
 
 function confirmAliasGoTo() {
-  if (aliasGoToRow.value) nav.goToAlias(aliasGoToRow.value.vertex)
+  if (aliasGoToRow.value) nav.goToAlias(aliasGoToRow.value.namespace)
   aliasGoToRow.value = undefined
 }
 
@@ -195,12 +195,12 @@ watch(
       aliasGoToOpen.value = true
       return
     }
-    nav.pendingVertexId = row.vertex.id
+    nav.pendingNamespaceId = row.namespace.id
   },
 )
 
 // In chip display order
-const vertexLabels: Record<string, string> = {
+const namespaceLabels: Record<string, string> = {
   conf: 'Configuration',
   rs: 'Run Settings',
   algo: 'Algo',
@@ -211,8 +211,8 @@ const vertexLabels: Record<string, string> = {
 }
 
 const chips = computed(() => {
-  const names = new Set([...walk(nav.rows)].filter((r) => !r.isAlias).map((r) => r.vertex.name))
-  return Object.entries(vertexLabels)
+  const names = new Set([...walk(nav.rows)].filter((r) => !r.isAlias).map((r) => r.namespace.name))
+  return Object.entries(namespaceLabels)
     .filter(([name]) => names.has(name))
     .map(([name, label]) => ({ name, label }))
 })

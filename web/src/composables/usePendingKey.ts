@@ -10,7 +10,7 @@ export function useClearPending() {
 
   async function clearPending() {
     if (!(await changes.confirmDiscard())) return
-    nav.pendingVertexId = null
+    nav.pendingNamespaceId = null
     nav.bundleRoot = null
     nav.bundlePath = []
     nav.activatedRow = []
