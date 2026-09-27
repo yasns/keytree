@@ -1,6 +1,6 @@
 import { type Component, computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { api, unwrap } from '@/api'
+import { api, unwrap, type ApiError } from '@/api'
 import { iconFor, sortByKind } from '@/category'
 import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
@@ -20,6 +20,15 @@ export type BundleRoot = {
   version: number
   // true when `version` is the mode's staged edit, not a committed key
   pending: boolean
+}
+
+async function catch404<T>(p: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await p
+  } catch (e) {
+    if ((e as ApiError).status === 404) return fallback
+    throw e
+  }
 }
 
 /** The key filling a child alias, or undefined when the alias is empty */
@@ -88,7 +97,6 @@ export const useNavStore = defineStore('nav', () => {
 
   const openedRow = ref<string[]>([])
   const activatedRow = ref<string[]>([])
-  const openedRowBeforeModeSelect = ref<string[] | null>(null)
 
   const activePanel = shallowRef<Component | null>(null)
   const subsystemMenuOpen = ref(false)
@@ -213,12 +221,15 @@ export const useNavStore = defineStore('nav', () => {
     mode: string,
     version: number,
   ): Promise<KeyOut | undefined> {
-    return unwrap(
-      await api.GET('/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}', {
-        params: {
-          path: { subsystem_name: subsystem, vertex_name: name, mode_name: mode, version },
-        },
-      }),
+    return catch404(
+      api
+        .GET('/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}', {
+          params: {
+            path: { subsystem_name: subsystem, vertex_name: name, mode_name: mode, version },
+          },
+        })
+        .then(unwrap),
+      undefined,
     )
   }
 
@@ -228,12 +239,15 @@ export const useNavStore = defineStore('nav', () => {
     mode: string,
     version: number,
   ): Promise<KeyChildMetaOut[]> {
-    const children = unwrap(
-      await api.GET('/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children', {
-        params: {
-          path: { subsystem_name: subsystem, vertex_name: name, mode_name: mode, version },
-        },
-      }),
+    const children = await catch404(
+      api
+        .GET('/api/keys/{subsystem_name}/{vertex_name}/{mode_name}/{version}/children', {
+          params: {
+            path: { subsystem_name: subsystem, vertex_name: name, mode_name: mode, version },
+          },
+        })
+        .then(unwrap),
+      [],
     )
     return sortByKind(children, (child) => ({
       alias: child.alias,
@@ -347,7 +361,6 @@ export const useNavStore = defineStore('nav', () => {
     selectedSubsystemId,
     openedRow,
     activatedRow,
-    openedRowBeforeModeSelect,
     activePanel,
     subsystemMenuOpen,
     vertexDetail,

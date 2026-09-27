@@ -20,6 +20,12 @@ export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
 
+const LIST_FORMAT = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' })
+
+export function formatList(items: string[]): string {
+  return LIST_FORMAT.format(items)
+}
+
 export type MatchSegment = { text: string; matched: boolean }
 
 /** Splits `text` into segments around the first case-insensitive match of `needle`. */

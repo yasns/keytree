@@ -2,7 +2,7 @@
   <div class="d-flex h-100">
     <template v-if="nav.bundleRoot">
       <div
-        v-show="!collapsed"
+        v-show="!editorExpanded"
         ref="scroller"
         class="d-flex h-100 flex-grow-1 overflow-x-auto"
         style="min-width: 0"
@@ -47,17 +47,17 @@
       </div>
 
       <template v-if="leafEntry">
-        <v-tooltip :text="collapsed ? 'Collapse editor' : 'Expand editor'" location="end">
+        <v-tooltip :text="editorExpanded ? 'Collapse editor' : 'Expand editor'" location="end">
           <template v-slot:activator="{ props: tooltipProps }">
             <div
               v-ripple
               v-bind="tooltipProps"
               class="collapse-strip h-100 d-flex align-center justify-center cursor-pointer elevation-5 elevation-overlay"
               style="flex: 0 0 auto; width: 2rem"
-              @click="collapsed = !collapsed"
+              @click="editorExpanded = !editorExpanded"
             >
               <v-icon
-                :icon="collapsed ? 'mdi-arrow-collapse-right' : 'mdi-arrow-expand-left'"
+                :icon="editorExpanded ? 'mdi-arrow-collapse-right' : 'mdi-arrow-expand-left'"
                 size="small"
               ></v-icon>
             </div>
@@ -119,7 +119,7 @@ const nav = useNavStore()
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const collapsed = ref(false)
+const editorExpanded = ref(false)
 
 /** A column can queue into its parent (root when i===0, else column i-1) iff the parent is editable. */
 function canQueueAt(i: number): boolean {

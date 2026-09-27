@@ -6,13 +6,10 @@
           Someone else committed these keys while your changes were staged. Click a row to view it
           against the base version, or compare yours and theirs directly:
         </p>
-        <div
-          v-if="conflicts.length"
-          class="conflict-grid text-body-medium text-medium-emphasis mb-1"
-        >
-          <span>Yours</span><span></span><span>Theirs</span>
-        </div>
         <v-list density="compact" class="conflict-grid">
+          <span class="px-4 text-body-medium text-medium-emphasis">Yours</span>
+          <span></span>
+          <span class="px-4 text-body-medium text-medium-emphasis">Theirs</span>
           <template v-for="conflict in conflicts" :key="conflictKey(conflict)">
             <KeyChangeListItem
               :key-label="conflictKey(conflict)"
@@ -28,15 +25,12 @@
             </KeyChangeListItem>
             <div class="d-flex align-center justify-center">
               <v-btn
-                icon="mdi-compare-horizontal"
-                variant="flat"
-                color="primary"
+                prepend-icon="mdi-compare-horizontal"
+                variant="tonal"
                 density="comfortable"
+                text="Compare"
                 @click="emit('compare', conflict)"
-              >
-                <v-icon icon="mdi-compare-horizontal"></v-icon>
-                <v-tooltip activator="parent" location="top">Compare theirs vs yours</v-tooltip>
-              </v-btn>
+              ></v-btn>
             </div>
             <KeyChangeListItem
               :key-label="conflictKey(conflict)"
@@ -53,19 +47,22 @@
           </template>
         </v-list>
         <p>
-          Overwrite to put your changes on top as new versions, or rebase to re-stage them onto the
-          new versions instead.
+          Rebase re-stages your changes onto the new versions. Rebase only if you want to reconcile
+          them by hand before committing.
         </p>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
         <v-btn variant="text" @click="open = false">Cancel</v-btn>
-        <v-btn variant="flat" color="error" :loading="committing" @click="emit('overwrite')">
-          Overwrite
-        </v-btn>
-        <v-btn variant="flat" color="primary" :loading="rebasing" @click="emit('rebase')"
-          >Rebase</v-btn
+        <v-btn variant="tonal" :loading="rebasing" @click="emit('rebase')">Rebase only</v-btn>
+        <v-btn
+          variant="flat"
+          color="primary"
+          :loading="rebasing || committing"
+          @click="emit('rebaseAndCommit')"
         >
+          Rebase &amp; Commit
+        </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -94,7 +91,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   rebase: []
-  overwrite: []
+  rebaseAndCommit: []
   diff: [Conflict, 'yours' | 'theirs']
   compare: [Conflict]
 }>()
@@ -174,10 +171,10 @@ function theirSubtitle(conflict: Conflict): string {
 <style scoped>
 .conflict-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0 16px;
 }
-.conflict-grid > :deep(*:not(:nth-last-child(-n + 3))) {
+.conflict-grid > :deep(*:not(:nth-last-child(-n + 3)):not(:nth-child(3n + 2))) {
   border-bottom: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 </style>

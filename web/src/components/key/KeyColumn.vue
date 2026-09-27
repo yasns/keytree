@@ -17,9 +17,6 @@
       <div v-if="payload?.retired_descendants.length" class="flex-shrink-0">
         <RetiredDescendantsAlert :refs="payload.retired_descendants"></RetiredDescendantsAlert>
       </div>
-      <div v-if="pendingEditors.length" class="flex-shrink-0">
-        <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
-      </div>
 
       <KeyToolbar
         :dirty="dirty"
@@ -163,7 +160,6 @@ import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useKeyReadOnly } from '@/composables/useReadOnly'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
-import { usePendingEditors } from '@/composables/usePendingEditors'
 import { iconFor } from '@/category'
 import { resolveExternalOptions } from '@/external'
 import { goodTip } from '@/mode'
@@ -172,7 +168,6 @@ import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
 import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
-import PendingEditorsAlert from './PendingEditorsAlert.vue'
 
 type KeyOut = components['schemas']['KeyOut']
 type KeyChildMetaOut = components['schemas']['KeyChildMetaOut']
@@ -195,14 +190,13 @@ const emit = defineEmits<{ select: [child: KeyChildMetaOut]; queue: []; close: [
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const { navigateToStaged, showStaged, afterStage } = useStagedNavigation()
+const { navigateToStaged, routeStaged, afterStage } = useStagedNavigation()
 
 const payload = ref<KeyOut>()
 const modes = useModesByPath(toRef(props, 'subsystem'), toRef(props, 'name'))
 const currentMode = useCurrentMode(modes, toRef(props, 'mode'))
 const archived = useIsArchived(currentMode)
 const { readOnly, readOnlyText } = useKeyReadOnly(() => props.subsystem, payload, archived)
-const pendingEditors = usePendingEditors(computed(() => currentMode.value?.id))
 
 const children = ref<KeyChildMetaOut[]>()
 
@@ -509,14 +503,9 @@ async function save(comment: string) {
     props.version,
     props.pending,
   )
-  if (left || props.pending) return
-  if (!props.canQueue) {
-    // no parent to queue into: this column owns the route
-    showStaged(props.subsystem, props.name, props.mode)
-    return
-  }
-  // point this column's bundle-path entry at what it just staged
-  if (edit) nav.markPathStaged(props.depth - 1, edit.expected_version)
+  if (left) return
+  if (props.pending) return
+  routeStaged(props.subsystem, props.name, props.mode, edit, props.depth, props.canQueue)
 }
 
 async function saveAndQueue(comment: string) {

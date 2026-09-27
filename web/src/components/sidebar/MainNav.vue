@@ -39,32 +39,7 @@
       <v-divider></v-divider>
 
       <v-list density="compact" nav>
-        <v-tooltip :text="`Toggle ${isDark ? 'Light' : 'Dark'} Mode`" location="end">
-          <template v-slot:activator="{ props: props }">
-            <v-list-item @click="theme.cycle()" v-bind="props">
-              <template v-slot:prepend>
-                <v-icon :icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"></v-icon>
-              </template>
-            </v-list-item>
-          </template>
-        </v-tooltip>
-
-        <v-tooltip text="Report a Bug" location="end">
-          <template v-slot:activator="{ props: props }">
-            <v-list-item
-              href="https://its.cern.ch/jira/projects/CMSLITOLSW/"
-              target="_blank"
-              rel="noopener"
-              v-bind="props"
-            >
-              <template v-slot:prepend>
-                <v-icon icon="mdi-bug-outline"></v-icon>
-              </template>
-            </v-list-item>
-          </template>
-        </v-tooltip>
-
-        <v-menu>
+        <v-menu location="end">
           <template v-slot:activator="{ props: menuProps }">
             <v-tooltip text="Account" location="end">
               <template v-slot:activator="{ props: tooltipProps }">
@@ -94,6 +69,37 @@
               </div>
             </v-card-text>
           </v-card>
+        </v-menu>
+
+        <v-menu location="end">
+          <template v-slot:activator="{ props: menuProps }">
+            <v-tooltip text="Settings" location="end">
+              <template v-slot:activator="{ props: tooltipProps }">
+                <v-list-item v-bind="{ ...menuProps, ...tooltipProps }">
+                  <template v-slot:prepend>
+                    <v-icon icon="mdi-cog-outline"></v-icon>
+                  </template>
+                </v-list-item>
+              </template>
+            </v-tooltip>
+          </template>
+          <v-list density="compact">
+            <v-list-item @click="theme.cycle()" :title="`Toggle ${isDark ? 'Light' : 'Dark'} Mode`">
+              <template v-slot:prepend>
+                <v-icon :icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'"></v-icon>
+              </template>
+            </v-list-item>
+            <v-list-item
+              href="https://gitlab.cern.ch/mjasiuna/keytree/-/boards"
+              target="_blank"
+              rel="noopener"
+              title="Report a Bug"
+            >
+              <template v-slot:prepend>
+                <v-icon icon="mdi-bug-outline"></v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
         </v-menu>
       </v-list>
     </template>

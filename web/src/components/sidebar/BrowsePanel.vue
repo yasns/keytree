@@ -1,31 +1,30 @@
 <template>
-  <div class="d-flex flex-column h-100">
-    <div class="d-flex flex-column" style="flex: 2 1 0; min-height: 0">
-      <div class="border-b-sm pb-4">
-        <div class="pa-4"><span class="text-title-small">Browse</span></div>
+  <div class="h-100">
+    <div v-if="!locked" class="d-flex flex-column h-100">
+      <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
+        <div class="text-title-medium">Browse</div>
 
         <v-autocomplete
           ref="fieldRef"
-          class="px-4"
           :model-value="nav.selectedSubsystemId"
           :items="autocompleteItems"
           item-title="title"
           item-value="id"
           label="Subsystem"
+          density="comfortable"
           hide-details
-          :disabled="locked"
-          :menu-props="{ maxHeight: menuMaxHeight, attach: true }"
+          :menu-props="{ maxHeight: menuMaxHeight }"
           v-model:menu="nav.subsystemMenuOpen"
           @update:model-value="onSubsystemSelect"
         ></v-autocomplete>
 
-        <v-chip-group v-if="chips.length" column class="px-4 pb-0 mt-3">
+        <v-chip-group v-if="chips.length" column class="pb-0">
+          <span class="align-self-center mr-2 text-body-small">Go to:</span>
           <v-chip
             v-for="chip in chips"
             :key="chip.name"
             size="small"
             variant="outlined"
-            :disabled="locked"
             @click="nav.goToName(chip.name)"
           >
             {{ chip.label }}
@@ -64,17 +63,6 @@
               size="small"
             ></v-icon>
           </template>
-
-          <template v-slot:append="{ item }">
-            <v-btn
-              v-if="locked && item.path === pendingPath"
-              icon="mdi-close"
-              size="small"
-              variant="text"
-              density="comfortable"
-              @click.stop="clearPending"
-            ></v-btn>
-          </template>
         </v-treeview>
       </div>
     </div>
@@ -82,13 +70,13 @@
     <ModePanel></ModePanel>
 
     <ConfirmDialog
-      v-model="aliasJumpOpen"
-      :title="`Jump to ${aliasJumpTitle}?`"
-      :text="`This key is edited in ${aliasJumpTitle}. Jump there?`"
-      confirm-text="Jump"
+      v-model="aliasGoToOpen"
+      :title="`Go to ${aliasGoToTitle}?`"
+      :text="`This key is edited in ${aliasGoToTitle}. Go there?`"
+      confirm-text="Go"
       confirm-color="primary"
-      @confirm="confirmAliasJump"
-      @cancel="cancelAliasJump"
+      @confirm="confirmAliasGoTo"
+      @cancel="cancelAliasGoTo"
     ></ConfirmDialog>
   </div>
 </template>
@@ -107,7 +95,6 @@ const nav = useNavStore()
 const { clearPending } = useClearPending()
 
 const locked = computed(() => nav.pendingVertexId !== null)
-const pendingPath = computed(() => nav.activatedRow[0])
 
 const fieldRef = ref<{ $el: HTMLElement } | null>(null)
 const menuMaxHeight = ref(320)
@@ -118,11 +105,7 @@ function updateMenuMaxHeight() {
 }
 
 function itemProps(item: Record<string, unknown>) {
-  const row = item as Row
-  return {
-    disabled:
-      row.vertex.category === 'external' || (locked.value && row.path !== pendingPath.value),
-  }
+  return { disabled: (item as Row).vertex.category === 'external' }
 }
 
 // In category display order
@@ -170,23 +153,23 @@ function onSubsystemSelect(id: number | null) {
   nav.selectedSubsystemId = id
 }
 
-const aliasJumpOpen = ref(false)
-const aliasJumpRow = ref<Row | undefined>(undefined)
-let aliasJumpPrevious: string[] = []
-const aliasJumpTitle = computed(() => {
-  const subsystemId = aliasJumpRow.value?.vertex.subsystem_id
+const aliasGoToOpen = ref(false)
+const aliasGoToRow = ref<Row | undefined>(undefined)
+let aliasGoToPrevious: string[] = []
+const aliasGoToTitle = computed(() => {
+  const subsystemId = aliasGoToRow.value?.vertex.subsystem_id
   const target = subsystemId !== undefined ? nav.subsystemName(subsystemId) : undefined
   return target ? nav.subsystemDisplayName(target) : 'another subsystem'
 })
 
-function confirmAliasJump() {
-  if (aliasJumpRow.value) nav.goToAlias(aliasJumpRow.value.vertex)
-  aliasJumpRow.value = undefined
+function confirmAliasGoTo() {
+  if (aliasGoToRow.value) nav.goToAlias(aliasGoToRow.value.vertex)
+  aliasGoToRow.value = undefined
 }
 
-function cancelAliasJump() {
-  nav.activatedRow = aliasJumpPrevious
-  aliasJumpRow.value = undefined
+function cancelAliasGoTo() {
+  nav.activatedRow = aliasGoToPrevious
+  aliasGoToRow.value = undefined
 }
 
 watch(
@@ -207,13 +190,11 @@ watch(
     const row = nav.findRow((r) => r.path === keys[0])
     if (!row) return
     if (row.isAlias) {
-      aliasJumpRow.value = row
-      aliasJumpPrevious = oldKeys ?? []
-      aliasJumpOpen.value = true
+      aliasGoToRow.value = row
+      aliasGoToPrevious = oldKeys ?? []
+      aliasGoToOpen.value = true
       return
     }
-    nav.openedRowBeforeModeSelect = nav.openedRow
-    nav.openedRow = row.children ? [...row.ancestors, row.path] : [...row.ancestors]
     nav.pendingVertexId = row.vertex.id
   },
 )

@@ -1,48 +1,26 @@
 <template>
   <v-toolbar density="compact" class="px-4">
     <template v-slot:prepend>
-      <span class="key-label ml-1 key-label-truncate"
-        ><span class="key-label-head">{{ keyPrefix }}</span
-        ><span class="key-label-tail">{{ keyASuffix }}</span></span
-      >
-      <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editA"
-        >Edit</v-btn
-      >
+      <v-btn class="ml-1" variant="tonal" text="Edit A" @click="editA"></v-btn>
     </template>
 
     <template v-slot:default>
-      <v-btn size="small" variant="tonal" prepend-icon="mdi-swap-horizontal" @click="swap">
-        Swap Sides
-      </v-btn>
-      <v-btn size="small" variant="tonal" class="ml-1" prepend-icon="mdi-close" @click="exitDiff">
+      <v-btn variant="text" prepend-icon="mdi-swap-horizontal" @click="swap"> Swap Sides </v-btn>
+      <v-btn variant="text" class="ml-1" prepend-icon="mdi-close" @click="exitDiff">
         Exit Comparison
       </v-btn>
     </template>
 
     <template v-slot:append>
-      <span class="key-label ml-1 key-label-truncate"
-        ><span class="key-label-head">{{ keyPrefix }}</span
-        ><span class="key-label-tail">{{ keyBSuffix }}</span></span
-      >
-      <v-btn size="small" class="ml-1" variant="tonal" density="comfortable" @click="editB"
-        >Edit</v-btn
-      >
+      <v-btn class="ml-1" variant="tonal" text="Edit B" @click="editB"></v-btn>
     </template>
   </v-toolbar>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  keyRoute,
-  parseVersion,
-  withDiffQuery,
-  type DiffTarget,
-  type VersionTarget,
-} from '@/router'
+import { keyRoute, parseVersion, withDiffQuery, type DiffTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
-import { useChangesStore } from '@/stores/changes'
 
 const props = defineProps<{
   diffTarget: DiffTarget
@@ -51,28 +29,6 @@ const props = defineProps<{
 const route = useRoute()
 const router = useRouter()
 const nav = useNavStore()
-const changes = useChangesStore()
-
-const keyPrefix = computed(() => `${route.params.subsystem}/${route.params.name}`)
-
-function versionLabel(mode: string, version: VersionTarget | undefined): string {
-  if (version !== 'pending') return version === undefined ? '' : `v${version}`
-  const staged = changes.stagedForMode(
-    route.params.subsystem as string,
-    route.params.name as string,
-    mode,
-  )
-  return staged ? `v${staged.expected_version}` : ''
-}
-
-function suffixFor(mode: string, version: VersionTarget | undefined): string {
-  return `/${mode}/${versionLabel(mode, version)}`
-}
-
-const keyASuffix = computed(() =>
-  suffixFor(route.params.mode as string, parseVersion(route.params.version as string)),
-)
-const keyBSuffix = computed(() => suffixFor(props.diffTarget.mode, props.diffTarget.version))
 
 function exitDiff() {
   const returnTo = nav.preDiffLocation

@@ -7,7 +7,7 @@
       <v-row>
         <v-col cols="12" md="4">
           <v-card
-            prepend-icon="mdi-folder-key"
+            prepend-icon="mdi-folder-key-outline"
             text="Explore the subsystem tree and pick a key to view or edit."
             title="Browse Keys"
             @click="browseKeys"

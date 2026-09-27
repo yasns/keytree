@@ -1,15 +1,17 @@
 <template>
-  <div
-    v-if="detail"
-    class="d-flex flex-column elevation-2 elevation-overlay"
-    style="flex: 3 1 0; min-height: 0"
-  >
-    <div class="d-flex align-center justify-space-between pa-4 ga-1 border-b-sm">
-      <div class="text-title-small">Select mode</div>
-
-      <v-btn prepend-icon="mdi-arrow-left" variant="text" size="small" @click="clearPending"
-        >Back to Browsing</v-btn
-      >
+  <div v-if="detail" class="d-flex flex-column h-100">
+    <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
+      <div class="d-flex align-center justify-space-between ga-1">
+        <div class="text-body-medium">
+          <span class="text-medium-emphasis"
+            >{{ nav.subsystemDisplayName(detail.subsystem_name) }} / </span
+          >{{ detail.name }}
+        </div>
+        <v-btn prepend-icon="mdi-arrow-left" variant="tonal" @click="clearPending"
+          >Back to Browse</v-btn
+        >
+      </div>
+      <div class="text-title-medium">Select mode</div>
     </div>
 
     <div class="overflow-y-auto flex-grow-1" style="min-height: 0">
@@ -108,10 +110,6 @@
       <p v-else class="text-medium-emphasis px-4">No {{ filter === 'all' ? '' : filter }} modes.</p>
     </div>
 
-    <div v-if="pendingEditors.length" class="flex-shrink-0">
-      <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
-    </div>
-
     <div class="d-flex flex-wrap align-center ga-2 border-t-sm px-4 pt-3 pb-3">
       <v-text-field
         v-model="search"
@@ -128,12 +126,18 @@
       </v-chip-group>
     </div>
   </div>
-  <div
-    v-else-if="nav.pendingVertexId !== null"
-    class="d-flex flex-column elevation-2 elevation-overlay"
-    style="flex: 2 1 0; min-height: 0"
-  >
-    <div class="pa-4"><v-skeleton-loader type="text" width="140"></v-skeleton-loader></div>
+  <div v-else-if="nav.pendingVertexId !== null" class="d-flex flex-column h-100">
+    <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
+      <div class="d-flex align-center justify-space-between ga-1">
+        <v-skeleton-loader type="text" width="180"></v-skeleton-loader>
+
+        <v-btn prepend-icon="mdi-arrow-left" variant="tonal" @click="clearPending"
+          >Back to Browse</v-btn
+        >
+      </div>
+      <div class="text-title-medium">Select mode</div>
+    </div>
+
     <v-skeleton-loader type="list-item@6"></v-skeleton-loader>
   </div>
 
@@ -142,7 +146,7 @@
       <v-card-text class="text-body-medium">
         <div class="meta-grid">
           <span class="font-weight-medium">Subsystem:</span>
-          <span>{{ detail?.subsystem_name }}</span>
+          <span>{{ detail && nav.subsystemDisplayName(detail.subsystem_name) }}</span>
 
           <span class="font-weight-medium">Path:</span>
           <span>{{ detail?.name }}</span>
@@ -177,11 +181,9 @@ import { keyRoute, type VersionTarget } from '@/router'
 import { useNavStore } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
 import { useClearPending } from '@/composables/usePendingKey'
-import { usePendingEditors } from '@/composables/usePendingEditors'
 import { useToggleArchival } from '@/composables/useModes'
 import { goodTip, versionLabel } from '@/mode'
 import type { components } from '@/api-types'
-import PendingEditorsAlert from '../key/PendingEditorsAlert.vue'
 
 type ModeOut = components['schemas']['ModeOut']
 type VertexOut = components['schemas']['VertexOut']
@@ -244,7 +246,6 @@ function isSelected(mode: ModeOut) {
 }
 
 const selectedMode = computed(() => detail.value?.modes.find(isSelected))
-const pendingEditors = usePendingEditors(computed(() => selectedMode.value?.id))
 
 // Not deduped against mode.versions: a conflict can leave your pending version and
 // someone else's committed one sharing the same number, and both need to stay selectable.
@@ -259,12 +260,12 @@ function selectedVersion(mode: ModeOut) {
 }
 
 function defaultVersion(mode: ModeOut): number | undefined {
-  return goodTip(mode) ?? pendingVersion(mode)
+  return pendingVersion(mode) ?? goodTip(mode)
 }
 
 function defaultTarget(mode: ModeOut): VersionTarget | undefined {
-  if (mode.versions.length) return goodTip(mode)
-  return pendingVersion(mode) !== undefined ? 'pending' : undefined
+  if (pendingVersion(mode) !== undefined) return 'pending'
+  return goodTip(mode)
 }
 
 function versionOptions(mode: ModeOut): { version: VersionTarget; label: string }[] {

@@ -16,9 +16,6 @@
     <div v-if="key?.retired_descendants.length" class="flex-shrink-0">
       <RetiredDescendantsAlert :refs="key.retired_descendants"></RetiredDescendantsAlert>
     </div>
-    <div v-if="pendingEditors.length" class="flex-shrink-0">
-      <PendingEditorsAlert :editors="pendingEditors"></PendingEditorsAlert>
-    </div>
 
     <KeyToolbar
       :dirty="dirty"
@@ -57,7 +54,6 @@ import { useChangesStore, useDirtySource } from '@/stores/changes'
 import { useKeyReadOnly } from '@/composables/useReadOnly'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
 import { useStagedNavigation } from '@/composables/useStagedNavigation'
-import { usePendingEditors } from '@/composables/usePendingEditors'
 import {
   useMonacoTheme,
   createPayloadModel,
@@ -69,7 +65,6 @@ import KeyMetadata from './KeyMetadata.vue'
 import KeyToolbar from './KeyToolbar.vue'
 import ReadOnlyAlert from './ReadOnlyAlert.vue'
 import RetiredDescendantsAlert from './RetiredDescendantsAlert.vue'
-import PendingEditorsAlert from './PendingEditorsAlert.vue'
 
 const {
   subsystem,
@@ -93,8 +88,8 @@ const {
   category?: string | null
   canQueue?: boolean
   pending?: boolean
-  /** Bundle-path index when rendered inside a bundle */
-  depth?: number
+  /** Bundle-path index; the root editor is 0. */
+  depth: number
   /** Prefills Monaco's find widget when arriving from a search. */
   searchQuery?: string
   searchRegex?: boolean
@@ -105,7 +100,7 @@ const emit = defineEmits<{ queue: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
-const { navigateToStaged, showStaged, afterStage } = useStagedNavigation()
+const { navigateToStaged, routeStaged, afterStage } = useStagedNavigation()
 
 const editorElem = ref<HTMLDivElement>()
 const key = ref<Awaited<ReturnType<typeof nav.fetchKeyPayload>>>()
@@ -118,8 +113,8 @@ const currentMode = useCurrentMode(
   computed(() => mode),
 )
 const archived = useIsArchived(currentMode)
-const { readOnly, readOnlyText } = useKeyReadOnly(() => subsystem, key, archived)
-const pendingEditors = usePendingEditors(computed(() => currentMode.value?.id))
+const notFound = ref(false)
+const { readOnly, readOnlyText } = useKeyReadOnly(() => subsystem, key, archived, notFound)
 const dirty = ref(false)
 // Always the rightmost column, so nothing is ever deeper than it
 useDirtySource(dirty, Infinity)
@@ -195,6 +190,7 @@ async function loadPayload() {
   const token = ++loadToken
   const fetched = pending ? undefined : await nav.fetchKeyPayload(subsystem, name, mode, version)
   if (token !== loadToken || !editor) return
+  notFound.value = !pending && !fetched
   key.value = fetched
   if (format !== modelFormat) {
     modelFormat = format
@@ -260,12 +256,7 @@ async function save(comment: string) {
   if (left) return
   resetToBaseline()
   if (pending) return
-  if (!canQueue) {
-    showStaged(subsystem, name, mode)
-    return
-  }
-  if (depth === undefined) return
-  if (edit) nav.markPathStaged(depth - 1, edit.expected_version)
+  routeStaged(subsystem, name, mode, edit, depth, canQueue)
 }
 
 async function saveAndQueue(comment: string) {

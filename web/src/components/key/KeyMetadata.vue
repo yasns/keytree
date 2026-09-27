@@ -3,7 +3,10 @@
     <v-expansion-panel>
       <v-expansion-panel-title>
         <div class="d-flex flex-column align-start ga-2" style="min-width: 0">
-          <div class="text-body-small text-medium-emphasis">{{ subsystem }} / {{ name }}</div>
+          <div class="text-body-medium">
+            <span class="text-medium-emphasis">{{ nav.subsystemDisplayName(subsystem) }} / </span
+            >{{ name }}
+          </div>
           <div class="d-flex align-center ga-1">
             <span class="text-title-medium"
               ><DiffText :runs="modeRuns" :highlight-class="diffHighlightClass"></DiffText
@@ -57,20 +60,19 @@
             >
           </div>
           <div
-            v-if="hasDetail"
+            v-if="hasSubtitle"
             class="text-body-small text-medium-emphasis text-truncate"
             style="width: 100%"
           >
-            <template v-if="!pendingEdit">{{ relativeTime(payload?.created_at!) }}</template
-            ><template v-if="pendingEdit?.comment ?? payload?.comment"
-              >{{ pendingEdit ? '' : ' | '
-              }}{{ pendingEdit?.comment ?? payload?.comment }}</template
+            <template v-if="showCreatedAt">{{ relativeTime(payload!.created_at!) }}</template
+            ><template v-if="ownFields.comment"
+              >{{ showCreatedAt ? ' | ' : '' }}{{ ownFields.comment }}</template
             >
           </div>
         </div>
       </v-expansion-panel-title>
       <v-expansion-panel-text v-if="hasDetail" class="text-body-medium">
-        <label>
+        <label v-if="ownFields.displayLabel">
           <div class="font-weight-medium">Key label</div>
           <div class="d-flex align-center ga-1">
             <CopyButton :text="ownFields.displayLabel"></CopyButton>
@@ -89,20 +91,11 @@
           </div>
         </label>
 
-        <template v-if="pendingEdit?.comment ?? payload?.comment">
-          <div class="comment-block mt-2">
-            <div class="font-weight-medium">Comment</div>
-            <div class="text-body-medium">
-              <DiffText :runs="commentRuns" :highlight-class="diffHighlightClass"></DiffText>
-            </div>
-          </div>
-        </template>
-
         <v-divider class="my-2"></v-divider>
 
         <div class="meta-grid">
           <span class="font-weight-medium">Subsystem:</span>
-          <span>{{ subsystem }}</span>
+          <span>{{ nav.subsystemDisplayName(subsystem) }}</span>
 
           <span class="font-weight-medium">Path:</span>
           <span>{{ name }}</span>
@@ -119,17 +112,24 @@
         <v-divider class="my-2"></v-divider>
 
         <div class="meta-grid">
-          <span class="font-weight-medium">Validation:</span>
-          <span
-            ><DiffText :runs="validationStatusRuns" :highlight-class="diffHighlightClass"></DiffText
-          ></span>
+          <template v-if="ownFields.validationStatus">
+            <span class="font-weight-medium">Validation:</span>
+            <span
+              ><DiffText
+                :runs="validationStatusRuns"
+                :highlight-class="diffHighlightClass"
+              ></DiffText
+            ></span>
+          </template>
 
-          <template v-if="!pendingEdit">
+          <template v-if="ownFields.createdAtText">
             <span class="font-weight-medium">Created at:</span>
             <span
               ><DiffText :runs="createdAtRuns" :highlight-class="diffHighlightClass"></DiffText
             ></span>
+          </template>
 
+          <template v-if="ownFields.createdByText">
             <span class="font-weight-medium">Created by:</span>
             <span
               ><DiffText :runs="createdByRuns" :highlight-class="diffHighlightClass"></DiffText
@@ -137,31 +137,46 @@
           </template>
         </div>
 
-        <template v-if="archived">
+        <div v-if="ownFields.comment" class="comment-block mt-2">
+          <div class="font-weight-medium">Comment</div>
+          <div class="text-body-medium">
+            <DiffText :runs="commentRuns" :highlight-class="diffHighlightClass"></DiffText>
+          </div>
+        </div>
+
+        <template v-if="archived && (archivedAtText || archivedByText)">
           <v-divider class="my-2"></v-divider>
 
           <div class="meta-grid">
-            <span class="font-weight-medium">Archived at:</span>
-            <span>{{ archivedAtText }}</span>
+            <template v-if="archivedAtText">
+              <span class="font-weight-medium">Archived at:</span>
+              <span>{{ archivedAtText }}</span>
+            </template>
 
-            <span class="font-weight-medium">Archived by:</span>
-            <span>{{ archivedByText }}</span>
+            <template v-if="archivedByText">
+              <span class="font-weight-medium">Archived by:</span>
+              <span>{{ archivedByText }}</span>
+            </template>
           </div>
         </template>
 
-        <template v-if="decommissioned">
+        <template v-if="decommissioned && (decommissionedAtText || decommissionedByText)">
           <v-divider class="my-2"></v-divider>
 
           <div class="meta-grid">
-            <span class="font-weight-medium">Decommissioned at:</span>
-            <span>{{ decommissionedAtText }}</span>
+            <template v-if="decommissionedAtText">
+              <span class="font-weight-medium">Decommissioned at:</span>
+              <span>{{ decommissionedAtText }}</span>
+            </template>
 
-            <span class="font-weight-medium">Decommissioned by:</span>
-            <span>{{ decommissionedByText }}</span>
+            <template v-if="decommissionedByText">
+              <span class="font-weight-medium">Decommissioned by:</span>
+              <span>{{ decommissionedByText }}</span>
+            </template>
           </div>
         </template>
 
-        <template v-if="basedOn">
+        <template v-if="basedOn && ownFields.basedOnLabel">
           <v-divider class="my-2"></v-divider>
 
           <div>
@@ -200,10 +215,12 @@ import { computed, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import type { components } from '@/api-types'
 import { useCurrentMode, useIsArchived, useModesByPath } from '@/composables/useModes'
+import { useIsDecommissioned } from '@/composables/useReadOnly'
 import { LOCALE, relativeTime } from '@/format'
 import { keyRoute } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useChangesStore } from '@/stores/changes'
+import { useNavStore } from '@/stores/nav'
 import type { ScrollSide } from '@/composables/useSyncedScroll'
 import {
   runsFor,
@@ -274,6 +291,7 @@ const panel = defineModel<number | undefined>('panel')
 
 const auth = useAuthStore()
 const changes = useChangesStore()
+const nav = useNavStore()
 const router = useRouter()
 
 const pendingEdit = computed(() => (props.pending ? props.staged : undefined))
@@ -310,16 +328,25 @@ const archivedByText = computed(() =>
   formatBy(currentMode.value?.archived_by, currentMode.value?.archived_by_display_name),
 )
 
-const decommissioned = computed(() => !!props.payload && changes.decommissioned(props.payload))
+// On a pending version `payload` is the key it is based on, whose state isn't this version's.
+const statePayload = computed(() => (props.pending ? undefined : props.payload))
+const decommissioned = useIsDecommissioned(statePayload)
 const decommissionPending = computed(
-  () => !!props.payload && !!changes.stagedDecommission(props.payload.id),
+  () => !!statePayload.value && !!changes.stagedDecommission(statePayload.value.id),
 )
-const decommissionedAtText = computed(() => formatAt(props.payload?.decommissioned_at))
+const decommissionedAtText = computed(() => formatAt(statePayload.value?.decommissioned_at))
 const decommissionedByText = computed(() =>
-  formatBy(props.payload?.decommissioned_by, props.payload?.decommissioned_by_display_name),
+  formatBy(
+    statePayload.value?.decommissioned_by,
+    statePayload.value?.decommissioned_by_display_name,
+  ),
 )
 
 const hasDetail = computed(() => !!pendingEdit.value || !!props.payload)
+const showCreatedAt = computed(() => !pendingEdit.value && !!props.payload?.created_at)
+const hasSubtitle = computed(
+  () => hasDetail.value && (!!ownFields.value.comment || showCreatedAt.value),
+)
 
 const ownFields = computed(() => fieldsOf(props, auth.displayName))
 const counterpartFields = computed(

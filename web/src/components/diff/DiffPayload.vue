@@ -38,6 +38,12 @@
               }
             "
           ></KeyMetadata>
+          <v-alert
+            v-else
+            variant="tonal"
+            text="Not present at this version"
+            class="rounded-0 h-100"
+          ></v-alert>
         </div>
       </div>
 
@@ -53,7 +59,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as monaco from 'monaco-editor'
 import { useNavStore, type BundleRoot } from '@/stores/nav'
 import { useChangesStore } from '@/stores/changes'
+import { useSnackbarStore } from '@/stores/snackbar'
 import { useMonacoTheme, createPayloadModel } from '@/composables/useMonaco'
+import { pendingSourceRef } from '@/composables/useDiff'
 import type { components } from '@/api-types'
 import KeyMetadata from '../key/KeyMetadata.vue'
 
@@ -73,6 +81,7 @@ const emit = defineEmits<{ back: [] }>()
 
 const nav = useNavStore()
 const changes = useChangesStore()
+const snackbar = useSnackbarStore()
 
 const panel = ref<number>()
 const editorElem = ref<HTMLDivElement>()
@@ -124,15 +133,26 @@ const sides = computed<(SideView & { other: SideView })[]>(() => {
   ]
 })
 
-async function keyOf(side: LeafSide | undefined): Promise<KeyOut | undefined> {
-  if (!side || side.root.pending) return undefined
+async function keyOf(
+  side: LeafSide | undefined,
+  staged: StagedEditOut | undefined,
+): Promise<KeyOut | undefined> {
+  if (!side) return undefined
+  if (side.root.pending && !staged?.based_on) return undefined
   const { root } = side
-  return nav.fetchKeyPayload(root.subsystem, root.name, root.mode, root.version)
+  const { mode, version } = pendingSourceRef(root.pending, staged, root.mode, root.version)
+  return nav.fetchKeyPayload(root.subsystem, root.name, mode, version)
 }
 
-function textOf(side: LeafSide | undefined, staged: string, key: KeyOut | undefined): string {
+function textOf(
+  side: LeafSide | undefined,
+  staged: string | null | undefined,
+  key: KeyOut | undefined,
+): string {
   if (!side) return ''
-  return side.root.pending ? staged : (key?.payload ?? '')
+  if (!side.root.pending) return key?.payload ?? ''
+  // An edit that only restages children leaves the payload untouched: show the ancestor's.
+  return staged ?? key?.payload ?? ''
 }
 
 let loadToken = 0
@@ -140,12 +160,22 @@ let loadToken = 0
 async function load() {
   if (!diffEditor) return
   const token = ++loadToken
-  const [leftKey, rightKey] = await Promise.all([keyOf(props.left), keyOf(props.right)])
+  let keys: [KeyOut | undefined, KeyOut | undefined]
+  try {
+    keys = await Promise.all([
+      keyOf(props.left, leftStaged.value),
+      keyOf(props.right, rightStaged.value),
+    ])
+  } catch (e) {
+    if (token === loadToken) snackbar.notifyError(e)
+    return
+  }
   if (token !== loadToken || !diffEditor) return
+  const [leftKey, rightKey] = keys
   leftPayload.value = leftKey
   rightPayload.value = rightKey
-  const originalValue = textOf(props.left, leftStaged.value?.proposed_payload ?? '', leftKey)
-  const modifiedValue = textOf(props.right, rightStaged.value?.proposed_payload ?? '', rightKey)
+  const originalValue = textOf(props.left, leftStaged.value?.proposed_payload, leftKey)
+  const modifiedValue = textOf(props.right, rightStaged.value?.proposed_payload, rightKey)
   originalModel?.dispose()
   modifiedModel?.dispose()
   originalModel = createPayloadModel(originalValue, props.left?.format, props.left?.category)

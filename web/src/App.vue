@@ -20,8 +20,8 @@
     <ConfirmDialog
       v-model="changes.confirmOpen"
       title="Unsaved changes"
-      text="Continue without saving? This action is irreversible."
-      confirm-text="Discard & Continue"
+      text="You are trying to navigate away from this page, which will discard your changes. Are you sure you want to continue?"
+      confirm-text="Discard changes"
       @confirm="changes.resolveConfirm(true)"
       @cancel="changes.resolveConfirm(false)"
     ></ConfirmDialog>

@@ -19,7 +19,6 @@ from app.db.models import (
     Vertex,
 )
 from app.routers.commit import (
-    CommitIn,
     _build_key_children,
     _build_keys,
     _CommitRow,
@@ -38,7 +37,6 @@ from app.routers.staging import (
     _resolve_bases,
     discard_edit,
     fork_mode,
-    pending_editors,
     stage_edits,
 )
 from app.routers.user import upsert_app_user
@@ -428,7 +426,7 @@ def test_restaging_a_fresh_fork_back_to_its_source_leaves_nothing_pending(
             await session.commit()
 
         async with session_factory() as session:
-            await commit_changeset(CommitIn(), request, session, BackgroundTasks())
+            await commit_changeset(request, session, BackgroundTasks())
 
         async with session_factory() as session:
             await fork_mode(
@@ -473,44 +471,6 @@ def test_restaging_a_fresh_fork_back_to_its_source_leaves_nothing_pending(
 
     remaining_edit_id = asyncio.run(run())
     assert remaining_edit_id is None
-
-
-@pytest.mark.docker
-def test_pending_editors_excludes_self_and_committed_changesets(
-    session_factory: async_sessionmaker[AsyncSession],
-):
-    async def run() -> tuple[list, list, list]:
-        changeset_id, mode_id = await _forked_mode(
-            session_factory, cern_login="editor_a", mode_name="pending_editors_test"
-        )
-        async with session_factory() as session:
-            user = await session.get(AppUser, "editor_a")
-            assert user is not None
-            user.email = "editor_a@cern.ch"
-            await session.commit()
-
-        async with session_factory() as session:
-            seen_by_other = await pending_editors(mode_id, _fake_request("editor_b"), session)
-        async with session_factory() as session:
-            seen_by_self = await pending_editors(mode_id, _fake_request("editor_a"), session)
-
-        async with session_factory() as session:
-            changeset = await session.get(Changeset, changeset_id)
-            assert changeset is not None
-            changeset.committed_at = datetime(2026, 1, 1, tzinfo=UTC)
-            changeset.committed_with_roles = []
-            await session.commit()
-        async with session_factory() as session:
-            seen_after_commit = await pending_editors(mode_id, _fake_request("editor_b"), session)
-
-        return seen_by_other, seen_by_self, seen_after_commit
-
-    seen_by_other, seen_by_self, seen_after_commit = asyncio.run(run())
-    assert [e.cern_login for e in seen_by_other] == ["editor_a"]
-    assert seen_by_other[0].display_name == "editor_a"
-    assert seen_by_other[0].email == "editor_a@cern.ch"
-    assert seen_by_self == []
-    assert seen_after_commit == []
 
 
 def test_conflicts_ignores_an_old_base_and_flags_a_taken_version():

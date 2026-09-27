@@ -1,6 +1,8 @@
 <template>
   <div class="d-flex flex-column h-100" style="min-height: 0">
-    <div class="pa-4 border-b-sm"><span class="text-title-small">Pending Changes</span></div>
+    <div class="d-flex flex-column px-4 py-3 ga-1 border-b-sm">
+      <div class="text-title-medium">Pending Changes</div>
+    </div>
 
     <v-empty-state
       v-if="!changes.pendingCount"
@@ -47,6 +49,7 @@
           v-for="archival in changes.archivals"
           :key="`archival-${archival.mode_id}`"
           slim
+          class="discardable"
           @click="goToArchival(archival)"
         >
           <template #prepend>
@@ -70,11 +73,25 @@
           <v-list-item-subtitle>
             {{ archival.archived ? 'Archive mode' : 'Unarchive mode' }}
           </v-list-item-subtitle>
+          <template #append>
+            <v-btn
+              class="discard-btn"
+              icon="mdi-close"
+              size="small"
+              variant="text"
+              density="comfortable"
+              @click.stop="discardArchival(archival)"
+            >
+              <v-icon icon="mdi-close"></v-icon>
+              <v-tooltip activator="parent" location="top">Discard this change</v-tooltip>
+            </v-btn>
+          </template>
         </v-list-item>
         <v-list-item
           v-for="decommission in changes.decommissions"
           :key="`decommission-${decommission.key_id}`"
           slim
+          class="discardable"
           @click="goToDecommission(decommission)"
         >
           <template #prepend>
@@ -100,6 +117,19 @@
           <v-list-item-subtitle>
             {{ decommission.decommissioned ? 'Decommission key' : 'Recommission key' }}
           </v-list-item-subtitle>
+          <template #append>
+            <v-btn
+              class="discard-btn"
+              icon="mdi-close"
+              size="small"
+              variant="text"
+              density="comfortable"
+              @click.stop="discardDecommission(decommission)"
+            >
+              <v-icon icon="mdi-close"></v-icon>
+              <v-tooltip activator="parent" location="top">Discard this change</v-tooltip>
+            </v-btn>
+          </template>
         </v-list-item>
       </v-list>
     </div>
@@ -108,9 +138,7 @@
       v-model="confirmCommit"
       :title="hasInvalidEdits ? 'Commit with validation errors?' : 'Commit changes?'"
       :text="
-        hasInvalidEdits
-          ? 'Some saved edits failed validation. Commit anyway?'
-          : 'This will permanently write every saved edit in this changeset to the database. This cannot be undone.'
+        hasInvalidEdits ? `Some saved edits failed validation. ${commitSummary}` : commitSummary
       "
       :confirm-text="hasInvalidEdits ? 'Accept Risk & Commit' : 'Commit'"
       :confirm-color="hasInvalidEdits ? 'error' : 'primary'"
@@ -122,8 +150,8 @@
       :conflicts="conflicts"
       :rebasing="rebasing"
       :committing="committing"
-      @rebase="rebase"
-      @overwrite="commit(true)"
+      @rebase="rebaseOnly"
+      @rebase-and-commit="rebaseAndCommit"
       @diff="goToConflict"
       @compare="goToCompare"
     ></CommitConflictsDialog>
@@ -171,7 +199,7 @@ import {
   useDiffCountCache,
   type KeyRef,
 } from '@/composables/useDiff'
-import { pluralize } from '@/format'
+import { formatList, pluralize } from '@/format'
 import { keyRoute, parseVersion, pushDiffRoute } from '@/router'
 import {
   type Conflict,
@@ -200,7 +228,18 @@ const confirmDiscardAll = ref(false)
 const confirmCommit = ref(false)
 const committing = ref(false)
 const rebasing = ref(false)
-const conflicts = ref<Conflict[]>([])
+const rawConflicts = ref<Conflict[]>([])
+// Drops entries whose edit was since discarded, so callers don't have to scrub the cache themselves.
+const conflicts = computed(() =>
+  rawConflicts.value.filter((c) =>
+    changes.visibleEdits.some(
+      (e) =>
+        e.subsystem_name === c.subsystem_name &&
+        e.vertex_name === c.vertex_name &&
+        e.mode_name === c.mode_name,
+    ),
+  ),
+)
 const conflictsOpen = ref(false)
 
 const fetchPayload = memoizeByRef((ref: KeyRef) =>
@@ -215,6 +254,22 @@ const { get: diffCounts } = useDiffCountCache(
   (edit) => edit.id,
   (edit) => diffAgainstAncestor(edit, fetchPayload, fetchChildren),
 )
+
+const commitSummary = computed(() => {
+  const parts = [
+    changes.visibleEdits.length && pluralize(changes.visibleEdits.length, 'key version'),
+    changes.archivals.length && pluralize(changes.archivals.length, 'mode archival'),
+    changes.decommissions.length && pluralize(changes.decommissions.length, 'key decommission'),
+  ].filter((p) => typeof p === 'string')
+  const subsystems = [
+    ...new Set(
+      [...changes.visibleEdits, ...changes.archivals, ...changes.decommissions].map((e) =>
+        nav.subsystemDisplayName(e.subsystem_name),
+      ),
+    ),
+  ].sort()
+  return `Writes ${formatList(parts)} to ${formatList(subsystems)}. This cannot be undone.`
+})
 
 const hasInvalidEdits = computed(() =>
   changes.visibleEdits.some((e) => e.validation_status === 'failed'),
@@ -321,6 +376,26 @@ async function discardAll() {
   await nav.refreshKeys()
 }
 
+async function discardToggle(toggle: Promise<void>, label: string) {
+  await toggle
+  snackbar.notify(`Discarded ${label}`, 'info')
+  await nav.refreshKeys()
+}
+
+function discardArchival(archival: StagedArchivalOut) {
+  return discardToggle(
+    changes.toggleArchival(archival.mode_id),
+    `archival change on "${archival.vertex_name}/${archival.mode_name}"`,
+  )
+}
+
+function discardDecommission(decommission: StagedDecommissionOut) {
+  return discardToggle(
+    changes.toggleDecommission(decommission.key_id),
+    `decommission change on "${decommission.vertex_name}/${decommission.mode_name}"`,
+  )
+}
+
 async function discardEdit(edit: StagedEditOut) {
   const key = routedKey()
   const onThisEdit =
@@ -337,31 +412,43 @@ async function discardEdit(edit: StagedEditOut) {
   await nav.refreshKeys()
 }
 
-async function rebase() {
+async function rebase(): Promise<boolean> {
   rebasing.value = true
   try {
     await changes.rebase()
     conflictsOpen.value = false
-    snackbar.notify('Saved changes rebased onto the newer versions', 'info')
+    rawConflicts.value = []
+    return true
   } catch (err) {
     snackbar.notifyError(err)
+    return false
   } finally {
     rebasing.value = false
   }
 }
 
-function onCommitClick() {
+async function rebaseOnly() {
+  if (await rebase()) snackbar.notify('Saved changes re-staged onto the newer versions', 'info')
+}
+
+async function rebaseAndCommit() {
+  if (!(await rebase())) return
   confirmCommit.value = true
 }
 
-async function commit(overwriteConflicts = false) {
+function onCommitClick() {
+  if (conflicts.value.length) conflictsOpen.value = true
+  else confirmCommit.value = true
+}
+
+async function commit() {
   committing.value = true
   // only moves if this changeset edits it; capture before commit clears the edits
   const key = routedKey()
   const staged = key && changes.stagedForMode(key.subsystem, key.name, key.mode)
   const count = changes.pendingCount
   try {
-    await changes.commit(overwriteConflicts)
+    await changes.commit()
     conflictsOpen.value = false
     snackbar.notify(`Committed ${pluralize(count, 'change')}. Job well done.`, 'success')
     await nav.refreshKeys()
@@ -376,7 +463,7 @@ async function commit(overwriteConflicts = false) {
   } catch (err) {
     const found = conflictsFrom(err)
     if (found) {
-      conflicts.value = found
+      rawConflicts.value = found
       conflictsOpen.value = true
       void nav.refreshKeys()
     } else {
@@ -389,10 +476,12 @@ async function commit(overwriteConflicts = false) {
 </script>
 
 <style scoped>
-.edit-btn {
+.edit-btn,
+.discard-btn {
   display: none;
 }
-.discardable:hover .edit-btn {
+.discardable:hover .edit-btn,
+.discardable:hover .discard-btn {
   display: inline-flex;
 }
 :deep(.v-list-item:not(:last-child)) {
