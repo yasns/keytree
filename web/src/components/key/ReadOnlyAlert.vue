@@ -1,11 +1,5 @@
 <template>
-  <v-alert
-    type="info"
-    variant="tonal"
-    density="compact"
-    :text="reason ?? readOnlyReason"
-    class="rounded-0"
-  ></v-alert>
+  <v-alert type="info" variant="tonal" :text="reason ?? readOnlyReason" class="rounded-0"></v-alert>
 </template>
 
 <script setup lang="ts">

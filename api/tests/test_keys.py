@@ -30,9 +30,13 @@ from app.routers.keys import (
 )
 from app.routers.staging import (
     ArchivalIn,
+    CopyIn,
     DecommissionIn,
+    ForkIn,
     StagedEditIn,
+    copy_to_mode,
     discard_changeset,
+    fork_mode,
     stage_edits,
     toggle_archival,
     toggle_decommission,
@@ -704,6 +708,344 @@ def test_restaging_the_original_payload_undoes_the_staged_edit(
         return [e.mode_name for e in changeset.edits]
 
     assert asyncio.run(run()) == []
+
+
+@pytest.mark.docker
+def test_staging_rejects_a_child_whose_mode_is_archived(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """The archival counterpart of the decommissioned-child guard, committed and staged alike."""
+
+    async def run() -> tuple[int | None, int | None]:
+        statuses: list[int | None] = []
+        for login, source_mode, target_mode, commit_archival in (
+            ("child_arch_committed", "child_arch_src_a", "child_arch_tgt_a", True),
+            ("child_arch_staged", "child_arch_src_b", "child_arch_tgt_b", False),
+        ):
+            request = _fake_request(login)
+            for mode_name in (source_mode, target_mode):
+                await _forked_key(
+                    session_factory,
+                    cern_login=login,
+                    subsystem="ugt",
+                    vertex="l1_menu",
+                    mode_name=mode_name,
+                    payload="<menu/>",
+                )
+            source_key_id = await _key_id_by_label(session_factory, f"ugt/l1_menu/{source_mode}/v1")
+            source_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", source_mode)
+
+            async with session_factory() as session:
+                await toggle_archival(ArchivalIn(mode_id=source_mode_id), request, session)
+            if commit_archival:
+                async with session_factory() as session:
+                    await commit_changeset(request, session, BackgroundTasks())
+
+            status: int | None = None
+            try:
+                async with session_factory() as session:
+                    await stage_edits(
+                        [
+                            StagedEditIn(
+                                subsystem_name="ugt",
+                                vertex_name="l1_menu",
+                                mode_name=target_mode,
+                                base_version=1,
+                                proposed_children={"archived_child": source_key_id},
+                                comment="should be rejected",
+                            )
+                        ],
+                        request,
+                        session,
+                    )
+            except HTTPException as e:
+                status = e.status_code
+            statuses.append(status)
+
+        return statuses[0], statuses[1]
+
+    assert asyncio.run(run()) == (400, 400)
+
+
+@pytest.mark.docker
+def test_toggle_archival_rejects_a_mode_still_referenced_by_staged_edits(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Reverse direction: the reference is staged first, then the archival is queued."""
+
+    async def run() -> tuple[int | None, int | None]:
+        child_login = "arch_rev_child"
+        child_request = _fake_request(child_login)
+        for mode_name in ("arch_rev_src", "arch_rev_parent"):
+            await _forked_key(
+                session_factory,
+                cern_login=child_login,
+                subsystem="ugt",
+                vertex="l1_menu",
+                mode_name=mode_name,
+                payload="<menu/>",
+            )
+        source_key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/arch_rev_src/v1")
+        source_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", "arch_rev_src")
+
+        async with session_factory() as session:
+            await stage_edits(
+                [
+                    StagedEditIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="arch_rev_parent",
+                        base_version=1,
+                        proposed_children={"live_child": source_key_id},
+                        comment="references the mode about to be archived",
+                    )
+                ],
+                child_request,
+                session,
+            )
+
+        child_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await toggle_archival(ArchivalIn(mode_id=source_mode_id), child_request, session)
+        except HTTPException as e:
+            child_status = e.status_code
+
+        # An edit *on* the mode being archived is just as contradictory as one referencing it.
+        self_login = "arch_rev_self"
+        self_request = _fake_request(self_login)
+        await _forked_key(
+            session_factory,
+            cern_login=self_login,
+            subsystem="ugt",
+            vertex="l1_menu",
+            mode_name="arch_rev_self",
+            payload="<menu/>",
+        )
+        self_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", "arch_rev_self")
+        async with session_factory() as session:
+            await stage_edits(
+                [
+                    StagedEditIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="arch_rev_self",
+                        base_version=1,
+                        proposed_payload="v2",
+                        comment="new version on the mode about to be archived",
+                    )
+                ],
+                self_request,
+                session,
+            )
+
+        self_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await toggle_archival(ArchivalIn(mode_id=self_mode_id), self_request, session)
+        except HTTPException as e:
+            self_status = e.status_code
+
+        return child_status, self_status
+
+    assert asyncio.run(run()) == (400, 400)
+
+
+@pytest.mark.docker
+def test_toggle_decommission_rejects_a_key_still_referenced_by_a_staged_edit(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Previously this slipped past the toggle and only surfaced as a 409 at commit."""
+
+    async def run() -> int | None:
+        login = "decom_rev"
+        request = _fake_request(login)
+        for mode_name in ("decom_rev_src", "decom_rev_parent"):
+            await _forked_key(
+                session_factory,
+                cern_login=login,
+                subsystem="ugt",
+                vertex="l1_menu",
+                mode_name=mode_name,
+                payload="<menu/>",
+            )
+        source_key_id = await _key_id_by_label(session_factory, "ugt/l1_menu/decom_rev_src/v1")
+
+        async with session_factory() as session:
+            await stage_edits(
+                [
+                    StagedEditIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="decom_rev_parent",
+                        base_version=1,
+                        proposed_children={"live_child": source_key_id},
+                        comment="references the key about to be decommissioned",
+                    )
+                ],
+                request,
+                session,
+            )
+
+        try:
+            async with session_factory() as session:
+                await toggle_decommission(DecommissionIn(key_id=source_key_id), request, session)
+        except HTTPException as e:
+            return e.status_code
+        return None
+
+    assert asyncio.run(run()) == 400
+
+
+@pytest.mark.docker
+def test_staged_unretirement_lets_a_reference_be_staged_again(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Relaxing is never blocked, and a staged toggle overrides committed state both ways."""
+
+    async def run() -> tuple[int, int]:
+        counts: list[int] = []
+        for login, source_mode, parent_mode, archive in (
+            ("relax_arch", "relax_arch_src", "relax_arch_parent", True),
+            ("relax_decom", "relax_decom_src", "relax_decom_parent", False),
+        ):
+            request = _fake_request(login)
+            for mode_name in (source_mode, parent_mode):
+                await _forked_key(
+                    session_factory,
+                    cern_login=login,
+                    subsystem="ugt",
+                    vertex="l1_menu",
+                    mode_name=mode_name,
+                    payload="<menu/>",
+                )
+            source_key_id = await _key_id_by_label(session_factory, f"ugt/l1_menu/{source_mode}/v1")
+            source_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", source_mode)
+
+            # Retire it, commit, then queue the reverse toggle in a fresh changeset.
+            for _ in range(2):
+                async with session_factory() as session:
+                    if archive:
+                        await toggle_archival(ArchivalIn(mode_id=source_mode_id), request, session)
+                    else:
+                        await toggle_decommission(
+                            DecommissionIn(key_id=source_key_id), request, session
+                        )
+                if _ == 0:
+                    async with session_factory() as session:
+                        await commit_changeset(request, session, BackgroundTasks())
+
+            async with session_factory() as session:
+                changeset = await stage_edits(
+                    [
+                        StagedEditIn(
+                            subsystem_name="ugt",
+                            vertex_name="l1_menu",
+                            mode_name=parent_mode,
+                            base_version=1,
+                            proposed_children={"revived_child": source_key_id},
+                            comment="allowed by the staged unretirement",
+                        )
+                    ],
+                    request,
+                    session,
+                )
+            counts.append(len(changeset.edits))
+
+        return counts[0], counts[1]
+
+    assert asyncio.run(run()) == (1, 1)
+
+
+@pytest.mark.docker
+def test_fork_and_copy_guard_children_but_allow_an_archived_source(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Forking out of an archived mode is the only migration path off it, so it stays allowed."""
+
+    async def run() -> tuple[int, int | None, int | None]:
+        login = "fork_guard"
+        request = _fake_request(login)
+        for mode_name in ("fork_guard_arch", "fork_guard_retired", "fork_guard_healthy"):
+            await _forked_key(
+                session_factory,
+                cern_login=login,
+                subsystem="ugt",
+                vertex="l1_menu",
+                mode_name=mode_name,
+                payload="<menu/>",
+            )
+        arch_mode_id = await _mode_id(session_factory, "ugt", "l1_menu", "fork_guard_arch")
+        retired_key_id = await _key_id_by_label(
+            session_factory, "ugt/l1_menu/fork_guard_retired/v1"
+        )
+
+        async with session_factory() as session:
+            await toggle_archival(ArchivalIn(mode_id=arch_mode_id), request, session)
+        async with session_factory() as session:
+            await toggle_decommission(DecommissionIn(key_id=retired_key_id), request, session)
+        async with session_factory() as session:
+            await commit_changeset(request, session, BackgroundTasks())
+
+        async with session_factory() as session:
+            changeset = await fork_mode(
+                ForkIn(
+                    subsystem_name="ugt",
+                    vertex_name="l1_menu",
+                    mode_name="fork_guard_arch",
+                    base_version=1,
+                    new_mode_name="fork_guard_revived",
+                    description="revived off an archived mode",
+                    proposed_payload="<menu/>",
+                    comment="allowed",
+                ),
+                request,
+                session,
+            )
+        forked = len(changeset.edits)
+
+        fork_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await fork_mode(
+                    ForkIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="fork_guard_healthy",
+                        base_version=1,
+                        new_mode_name="fork_guard_rejected",
+                        description="pins a decommissioned child",
+                        proposed_children={"retired_child": retired_key_id},
+                        comment="should be rejected",
+                    ),
+                    request,
+                    session,
+                )
+        except HTTPException as e:
+            fork_status = e.status_code
+
+        copy_status: int | None = None
+        try:
+            async with session_factory() as session:
+                await copy_to_mode(
+                    CopyIn(
+                        subsystem_name="ugt",
+                        vertex_name="l1_menu",
+                        mode_name="fork_guard_healthy",
+                        base_version=1,
+                        target_mode_name="fork_guard_revived",
+                        proposed_children={"retired_child": retired_key_id},
+                        comment="should be rejected",
+                    ),
+                    request,
+                    session,
+                )
+        except HTTPException as e:
+            copy_status = e.status_code
+
+        return forked, fork_status, copy_status
+
+    assert asyncio.run(run()) == (1, 400, 400)
 
 
 def _flatten(node: AggregateOut, prefix: str = "") -> dict[str, tuple[str | None, str | None]]:

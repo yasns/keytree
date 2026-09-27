@@ -34,7 +34,7 @@
     <template v-slot:append>
       <DisabledTooltip :reason="saveDisabledReason" location="bottom">
         <v-btn
-          :prepend-icon="canQueue ? 'mdi-tray-arrow-up' : 'mdi-content-save'"
+          :prepend-icon="canQueue ? 'mdi-content-save-move-outline' : 'mdi-content-save'"
           @click="saveDialog = true"
           variant="flat"
           color="primary"
@@ -280,15 +280,20 @@ function itemReason(item: KebabItem): string | undefined {
 
 const menuGroups = computed(() => {
   const versionControlItems: KebabItem[] = [
+    // Archived is deliberately not disqualifying: forking is the migration path off an archived mode.
     {
       title: 'Fork to New Mode...',
       icon: 'mdi-source-fork',
       onClick: () => (forkDialog.value = true),
+      disabled: decommissioned.value,
+      disabledReason: decommissioned.value ? 'This key is decommissioned' : undefined,
     },
     {
       title: 'Copy to Existing Mode...',
       icon: 'mdi-source-pull',
       onClick: () => (copyDialog.value = true),
+      disabled: decommissioned.value,
+      disabledReason: decommissioned.value ? 'This key is decommissioned' : undefined,
     },
     {
       title: 'Restore as Latest Version...',

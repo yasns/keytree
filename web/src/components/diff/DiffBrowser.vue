@@ -65,7 +65,7 @@
                   variant="tonal"
                   :text="
                     slot.reason === 'leaf'
-                      ? 'Not a bundle at this version'
+                      ? 'Not a key at this version'
                       : 'Not present at this version'
                   "
                 ></v-alert>

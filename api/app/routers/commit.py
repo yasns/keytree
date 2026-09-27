@@ -38,9 +38,10 @@ from app.routers.keys import key_ancestry
 from app.routers.staging import (
     ChangesetOut,
     changeset_out,
-    decommissioned_labels,
+    effective_flag,
     join_mode_names,
     open_changeset,
+    retired_key_labels,
 )
 
 router = APIRouter(
@@ -71,6 +72,8 @@ class _CommitRow(NamedTuple):
     base_version: int | None
     tip_version: int
     category: str | None
+    staged_archived: bool | None = None
+    """This changeset's own queued archival of the edited mode, if any."""
 
 
 def _is_conflicted(row: _CommitRow) -> bool:
@@ -323,14 +326,40 @@ async def _commit_rows(changeset_id: int, session: SessionDep) -> list[_CommitRo
                 Key.version,
                 func.coalesce(tip_versions.c.tip_version, 0),
                 Vertex.category,
+                StagedArchival.archived,
             ),
             StagedEdit.mode_id,
         )
         .outerjoin(Key, Key.id == StagedEdit.base_key_id)
+        .outerjoin(
+            StagedArchival,
+            (StagedArchival.changeset_id == changeset_id)
+            & (StagedArchival.mode_id == StagedEdit.mode_id),
+        )
         .outerjoin(tip_versions, tip_versions.c.mode_id == StagedEdit.mode_id)
         .where(StagedEdit.changeset_id == changeset_id)
     )
     return [_CommitRow(*row) for row in result.tuples()]
+
+
+async def _guard_retired(rows: list[_CommitRow], changeset_id: int, session: SessionDep) -> None:
+    """Defence in depth: re-check retirement that may have landed since these edits were staged."""
+    _, concrete_ids = _proposed_child_refs(rows)
+    base_key_ids = {row.edit.base_key_id for row in rows if row.edit.base_key_id is not None}
+    retired_keys = await retired_key_labels(base_key_ids | concrete_ids, changeset_id, session)
+    retired_modes = [
+        f"{row.subsystem_name}/{row.vertex_name}/{row.mode_name}"
+        for row in rows
+        if effective_flag(row.staged_archived, row.mode_archived_at is not None)
+    ]
+    if not retired_keys and not retired_modes:
+        return
+    parts = []
+    if retired_keys:
+        parts.append(f"retired key(s): {', '.join(sorted(retired_keys))}")
+    if retired_modes:
+        parts.append(f"archived mode(s): {', '.join(sorted(retired_modes))}")
+    raise HTTPException(status_code=409, detail="; ".join(parts))
 
 
 def _proposed_child_refs(rows: list[_CommitRow]) -> tuple[set[tuple[int, str]], set[int]]:
@@ -379,6 +408,8 @@ async def rebase_changeset(request: Request, session: SessionDep) -> ChangesetOu
     conflicted = [row for row in rows if _is_conflicted(row)]
     if not conflicted:
         return await changeset_out(changeset, session)
+
+    await _guard_retired(conflicted, changeset.id, session)
 
     key_rows = await session.execute(
         select(Key.mode_id, Key.id, Key.version).where(
@@ -442,22 +473,7 @@ async def commit_changeset(
 
     none_aliases, concrete_ids = _proposed_child_refs(rows)
 
-    # Defence in depth: re-check retirement that may have landed between staging and commit.
-    base_key_ids = {row.edit.base_key_id for row in rows if row.edit.base_key_id is not None}
-    retired_keys = await decommissioned_labels(base_key_ids | concrete_ids, changeset.id, session)
-    # Committed state only: an archival by this same changeset isn't applied yet, so it's excluded.
-    retired_modes = [
-        f"{row.subsystem_name}/{row.vertex_name}/{row.mode_name}"
-        for row in rows
-        if row.mode_archived_at is not None
-    ]
-    if retired_keys or retired_modes:
-        parts = []
-        if retired_keys:
-            parts.append(f"decommissioned key(s): {', '.join(sorted(retired_keys))}")
-        if retired_modes:
-            parts.append(f"archived mode(s): {', '.join(sorted(retired_modes))}")
-        raise HTTPException(status_code=409, detail="; ".join(parts))
+    await _guard_retired(rows, changeset.id, session)
 
     keys = _build_keys(rows, changeset)
     session.add_all(keys)
