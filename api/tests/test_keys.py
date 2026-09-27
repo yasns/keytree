@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -18,10 +19,13 @@ from app.db.models import (
 )
 from app.routers.commit import commit_changeset
 from app.routers.keys import (
+    AggregateOut,
+    KeyVersion,
     RetiredRefOut,
     _build_child_meta,
     _build_key_detail,
     _retired_descendants,
+    aggregate_key,
     search_keys,
 )
 from app.routers.staging import (
@@ -50,6 +54,15 @@ def _key() -> Key:
         comment="new menu",
         validation_status="skipped",
     )
+
+
+def test_version_path_param_accepts_the_label_v_prefix():
+    adapter = TypeAdapter(KeyVersion)
+
+    assert adapter.validate_python("v12") == 12
+    assert adapter.validate_python("12") == 12
+    with pytest.raises(ValidationError):
+        adapter.validate_python("draft")
 
 
 def test_build_child_meta_fills_key_fields():
@@ -691,3 +704,85 @@ def test_restaging_the_original_payload_undoes_the_staged_edit(
         return [e.mode_name for e in changeset.edits]
 
     assert asyncio.run(run()) == []
+
+
+def _flatten(node: AggregateOut, prefix: str = "") -> dict[str, tuple[str | None, str | None]]:
+    """Alias path -> (label, format), the root sitting at the empty path."""
+    flat = {prefix: (node.label, node.format)}
+    for child in node.children:
+        assert child.alias is not None
+        flat |= _flatten(child, f"{prefix}/{child.alias}" if prefix else child.alias)
+    return flat
+
+
+@pytest.mark.docker
+def test_aggregate_nests_every_seeded_payload_under_the_root(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """Crosses subsystem boundaries and reaches leaves several levels down."""
+
+    async def run() -> dict[str, tuple[str | None, str | None]]:
+        async with session_factory() as session:
+            return _flatten(await aggregate_key("l1_hlt", "conf", "default", 1, session))
+
+    flat = asyncio.run(run())
+
+    assert flat[""] == ("l1_hlt/conf/default/v1", None)
+    assert flat["hlt_key"] == ("l1_hlt/hlt_key/default/v1", None)
+    # l1_hlt -> l1_trg -> ugt -> l1_menu, crossing three subsystem boundaries
+    assert flat["l1_trg_conf/ugt_conf"] == ("ugt/conf/default/v1", None)
+    assert flat["l1_trg_conf/ugt_conf/l1_menu"] == ("ugt/l1_menu/default/v1", "yaml")
+    assert flat["l1_trg_conf/tcds/ugt/pi"] == ("tcds/pi/default/v1", "plaintext")
+    # format is per-leaf, not per-tree: cppf is xml where its siblings are yaml
+    assert flat["l1_trg_conf/cppf_conf/algo"] == ("cppf/algo/default/v1", "xml")
+    # ugt/rs is pointed at under two aliases; both expand, and neither recurses forever
+    assert flat["l1_trg_rs/ugt_rs"] == flat["l1_trg_rs/spare_ugt_rs"] == ("ugt/rs/default/v1", None)
+    assert flat["l1_trg_rs/spare_ugt_rs/rs_mp7"] == ("ugt/rs_mp7/default/v1", "yaml")
+
+
+@pytest.mark.docker
+def test_aggregate_emits_an_emptied_alias_as_a_null_node(
+    session_factory: async_sessionmaker[AsyncSession],
+):
+    """An alias with no key_child row is a slot to be filled, not an error."""
+
+    async def run() -> dict[str, tuple[str | None, str | None]]:
+        cern_login = "aggregate_empty"
+        mode_name = "aggregate_empty_mode"
+        async with session_factory() as session:
+            await upsert_app_user({"cern_upn": cern_login, "name": cern_login}, session)
+            vertex_id = await session.scalar(
+                select(Vertex.id)
+                .join(Subsystem, Subsystem.id == Vertex.subsystem_id)
+                .where(Subsystem.name == "ugt", Vertex.name == "conf")
+            )
+            assert vertex_id is not None
+            mode = Mode(vertex_id=vertex_id, name=mode_name, description="d", created_by=cern_login)
+            session.add(mode)
+            changeset = Changeset(created_by=cern_login)
+            session.add(changeset)
+            await session.flush()
+            session.add(
+                StagedEdit(
+                    changeset_id=changeset.id,
+                    mode_id=mode.id,
+                    base_key_id=None,
+                    expected_version=1,
+                    proposed_children={},
+                    comment="every alias left empty",
+                    validation_status="skipped",
+                )
+            )
+            await session.commit()
+        async with session_factory() as session:
+            await commit_changeset(_fake_request(cern_login), session, BackgroundTasks())
+        async with session_factory() as session:
+            return _flatten(await aggregate_key("ugt", "conf", mode_name, 1, session))
+
+    flat = asyncio.run(run())
+
+    assert flat[""] == ("ugt/conf/aggregate_empty_mode/v1", None)
+    # the slot still advertises the format its eventual occupant must use
+    assert flat["l1_menu"] == (None, "yaml")
+    assert sorted(flat) == ["", "algo", "hw", "infra", "l1_menu"]
+    assert all(label is None for path, (label, _) in flat.items() if path)
