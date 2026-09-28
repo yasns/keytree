@@ -57,6 +57,15 @@
         </template>
         <v-list density="compact">
           <template v-if="subsystem && name && mode">
+            <v-list-subheader>View</v-list-subheader>
+            <v-list-item
+              v-if="selfHref"
+              title="Open in New Tab"
+              prepend-icon="mdi-open-in-new"
+              :href="selfHref"
+              target="_blank"
+              rel="noopener"
+            ></v-list-item>
             <v-list-item
               title="Compare with..."
               prepend-icon="mdi-compare-horizontal"
@@ -151,7 +160,7 @@ import {
 import { readOnlyReason, useIsDecommissioned, useReadOnly } from '@/composables/useReadOnly'
 import { useChangesStore } from '@/stores/changes'
 import { useSnackbarStore } from '@/stores/snackbar'
-import { pushDiffRoute, type DiffTarget } from '@/router'
+import { keyRoute, pushDiffRoute, type DiffTarget } from '@/router'
 import type { components } from '@/api-types'
 
 type KeyOut = components['schemas']['KeyOut']
@@ -315,7 +324,7 @@ const menuGroups = computed(() => {
           title: props.payloadFileType
             ? `Import ${props.payloadFileType} File...`
             : 'Import File...',
-          icon: 'mdi-import',
+          icon: 'mdi-upload',
           onClick: () => emit('import-payload'),
           disabled: props.readOnly,
           disabledReason: props.readOnly ? readOnlyReason : undefined,
@@ -364,6 +373,12 @@ function onSaveConfirmed(comment: string) {
 const currentVersionTarget = computed<DiffTarget['version'] | undefined>(() => {
   if (props.version === undefined) return undefined
   return props.committed ? props.version : ('pending' as const)
+})
+
+const selfHref = computed(() => {
+  const { subsystem, name, mode } = props
+  if (!subsystem || !name || !mode || currentVersionTarget.value === undefined) return undefined
+  return router.resolve(keyRoute(subsystem, name, mode, currentVersionTarget.value)).href
 })
 
 async function onCompare(target: DiffTarget) {
