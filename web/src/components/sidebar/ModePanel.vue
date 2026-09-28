@@ -122,7 +122,9 @@
       <v-chip-group v-model="filter" mandatory>
         <v-chip value="all" size="small" variant="outlined" filter>All</v-chip>
         <v-chip value="active" size="small" variant="outlined" filter>Active</v-chip>
-        <v-chip value="archived" size="small" variant="outlined" filter>Archived</v-chip>
+        <v-chip value="archived" size="small" variant="outlined" filter class="mr-0"
+          >Archived</v-chip
+        >
       </v-chip-group>
     </div>
   </div>

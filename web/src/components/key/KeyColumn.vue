@@ -452,11 +452,11 @@ function resolvedChild(child: KeyChildMetaOut): KeyChildMetaOut {
 // already-open row: closes. any other row: opens at its current selection
 async function onRowClick(child: KeyChildMetaOut) {
   if (child.category === 'external') return
+  if (!(await changes.confirmDiscardBeyond(props.depth))) return
   if (child.alias !== props.selectedAlias) {
     emit('select', resolvedChild(child))
     return
   }
-  if (!(await changes.confirmDiscardBeyond(props.depth))) return
   emit('close')
 }
 

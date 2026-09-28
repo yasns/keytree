@@ -22,7 +22,7 @@
             class="d-flex h-100 overflow-x-auto"
             style="flex: 1 1 50%; min-width: 0"
           >
-            <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+            <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 420px">
               <DiffColumn
                 :subsystem="side.root.subsystem"
                 :name="side.root.name"
@@ -42,7 +42,7 @@
               v-for="slot in side.slots"
               :key="slot.index"
               class="h-100 border-e-sm"
-              style="flex: 0 0 auto; width: 400px"
+              style="flex: 0 0 auto; width: 420px"
             >
               <DiffColumn
                 v-if="slot.present"
@@ -76,10 +76,10 @@
       </template>
 
       <template v-else>
-        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 420px">
           <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
         </div>
-        <div class="h-100 border-e-sm border-s-sm" style="flex: 0 0 auto; width: 400px">
+        <div class="h-100 border-e-sm border-s-sm" style="flex: 0 0 auto; width: 420px">
           <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
         </div>
       </template>
