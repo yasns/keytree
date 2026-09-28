@@ -245,8 +245,6 @@ function isSelected(mode: ModeOut) {
   return root !== null && root.name === detail.value?.name && root.mode === mode.name
 }
 
-const selectedMode = computed(() => detail.value?.modes.find(isSelected))
-
 // Not deduped against mode.versions: a conflict can leave your pending version and
 // someone else's committed one sharing the same number, and both need to stay selectable.
 function pendingVersion(mode: ModeOut): number | undefined {
