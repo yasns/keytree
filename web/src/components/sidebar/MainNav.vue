@@ -133,11 +133,11 @@ import SearchPanel from './SearchPanel.vue'
 import PendingChangesPanel from './PendingChangesPanel.vue'
 
 const RAIL_WIDTH = 56
-const MIN_WIDTH = 280
+const MIN_WIDTH = 320
 const MAX_WIDTH = 640
-const CUTOFF = 180
+const CUTOFF = 210
 
-const panelWidth = ref(400)
+const panelWidth = ref(420)
 const lastPanel = shallowRef<Component | null>(null)
 const resizing = ref(false)
 const handleLeft = computed(() => RAIL_WIDTH + (nav.activePanel ? panelWidth.value : 0))

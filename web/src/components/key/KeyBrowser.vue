@@ -7,7 +7,7 @@
         class="d-flex h-100 flex-grow-1 overflow-x-auto"
         style="min-width: 0"
       >
-        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+        <div class="h-100 border-e-sm" style="flex: 0 0 auto; width: 420px">
           <KeyColumn
             ref="rootColumnRef"
             :subsystem="nav.bundleRoot.subsystem"
@@ -27,7 +27,7 @@
           v-for="column in columns"
           :key="column.index"
           class="h-100 border-e-sm"
-          style="flex: 0 0 auto; width: 400px"
+          style="flex: 0 0 auto; width: 420px"
         >
           <KeyColumn
             :ref="(el) => setColumnRef(column.index, el)"
@@ -81,7 +81,7 @@
       </template>
     </template>
 
-    <div v-else class="h-100 border-e-sm" style="flex: 0 0 auto; width: 400px">
+    <div v-else class="h-100 border-e-sm" style="flex: 0 0 auto; width: 420px">
       <v-skeleton-loader type="list-item@8" class="h-100"></v-skeleton-loader>
     </div>
   </div>
