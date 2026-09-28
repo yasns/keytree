@@ -64,7 +64,7 @@
               class="key-label"
               :model-value="externalChoice.get(row.child.alias) || undefined"
               :items="externalItems(row.child)"
-              :disabled="readOnly || row.child.id === null"
+              :disabled="readOnly"
               :label="row.child.alias"
               placeholder="Select key"
               hide-details
@@ -326,6 +326,18 @@ function selectionTail(child: KeyChildMetaOut): string {
   return choice.version === null ? `/${choice.mode}` : `/${choice.mode}/v${choice.version}`
 }
 
+/** Bump target for an alias with no existing key_child: that leaf's own default mode tip. */
+function defaultLocator(child: KeyChildMetaOut) {
+  const tip = tipOf(child, 'default')
+  if (!tip) return undefined
+  return {
+    subsystem: child.subsystem_name,
+    name: child.namespace_name,
+    mode: 'default',
+    version: tip.version,
+  }
+}
+
 function baselineExternal(child: KeyChildMetaOut): string {
   return changes.overlayStagedChild(props.pending ? staged.value : undefined, child).payload ?? ''
 }
@@ -482,8 +494,7 @@ function buildEdits(comment: string): {
 
   for (const child of children.value ?? []) {
     if (child.category === 'external') {
-      // empty alias: no base key to stage against
-      const locator = childLocator(child)
+      const locator = childLocator(child) ?? defaultLocator(child)
       if (!locator) continue
       const value = externalChoice.get(child.alias) ?? ''
       const changed = value !== (child.payload ?? '')
@@ -603,9 +614,9 @@ async function load() {
   payload.value = p
   children.value = c
   for (const child of c) {
-    // fetchNamespaceDetail dedups by namespace id, so repeated aliases cost nothing
     if (child.category === 'external') ensureExternalOptions(child)
-    else void nav.fetchNamespaceDetail(child.namespace_id).catch(() => {})
+    // fetchNamespaceDetail dedups by namespace id, so repeated aliases cost nothing
+    void nav.fetchNamespaceDetail(child.namespace_id).catch(() => {})
   }
   applyBaseline()
 }

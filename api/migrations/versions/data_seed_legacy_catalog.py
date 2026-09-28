@@ -10,9 +10,8 @@ from collections.abc import Sequence
 from typing import TypedDict
 
 from alembic import op
-from sqlalchemy import column, select, table
 
-from migrations.seed import seed
+from migrations.seed import namespace_ids_global, subsystem_ids, upsert
 
 # revision identifiers, used by Alembic
 revision: str = "data_seed_legacy_catalog"
@@ -270,9 +269,8 @@ CATALOG: dict[str, SubsystemSpec] = {
     },
 }
 
-# (parent subsystem, namespace, child subsystem, namespace, alias): cross-subsystem containment.
-# alias is the legacy column name; set where one parent needs several distinct pointers to the same
-# child namespace.
+# (parent subsystem, namespace, child subsystem, namespace, alias); alias set where one parent
+# needs several pointers to the same child namespace.
 REFERENCES: list[tuple[str, str, str, str, str | None]] = [
     ("l1_hlt", "conf", "l1_trg", "conf", None),
     ("l1_hlt", "conf", "l1_trg", "rs", None),
@@ -377,7 +375,7 @@ def _edge_rows(namespace_ids: dict[tuple[str, str], int]) -> list[dict[str, obje
         )
         for parent_sub, parent_namespace, child_sub, child_namespace, alias in REFERENCES
     )
-    # seed() sends one INSERT, and Postgres refuses to resolve the same conflict twice.
+    # upsert() sends one INSERT, and Postgres refuses to resolve the same conflict twice.
     return [
         {
             "parent_namespace_id": namespace_ids[parent],
@@ -388,31 +386,13 @@ def _edge_rows(namespace_ids: dict[tuple[str, str], int]) -> list[dict[str, obje
     ]
 
 
-def _subsystem_ids() -> dict[str, int]:
-    subsystem = table("subsystem", column("id"), column("name"))
-    rows = op.get_bind().execute(select(subsystem.c.name, subsystem.c.id))
-    return {name: subsystem_id for name, subsystem_id in rows}
-
-
-def _namespace_ids() -> dict[tuple[str, str], int]:
-    namespace = table("namespace", column("id"), column("name"), column("subsystem_id"))
-    subsystem = table("subsystem", column("id"), column("name"))
-    rows = op.get_bind().execute(
-        select(subsystem.c.name, namespace.c.name, namespace.c.id).where(
-            namespace.c.subsystem_id == subsystem.c.id
-        )
-    )
-    return {
-        (sub_name, namespace_name): namespace_id for sub_name, namespace_name, namespace_id in rows
-    }
-
-
 def upgrade() -> None:
-    seed("subsystem", _subsystem_rows(), key=["name"])
-    seed("namespace", _namespace_rows(_subsystem_ids()), key=["subsystem_id", "name"])
-    seed(
+    bind = op.get_bind()
+    upsert("subsystem", _subsystem_rows(), key=["name"])
+    upsert("namespace", _namespace_rows(subsystem_ids(bind)), key=["subsystem_id", "name"])
+    upsert(
         "namespace_edge",
-        _edge_rows(_namespace_ids()),
+        _edge_rows(namespace_ids_global(bind)),
         key=["parent_namespace_id", "child_namespace_id", "alias"],
     )
 
