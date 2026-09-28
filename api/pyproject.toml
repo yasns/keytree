@@ -3,6 +3,7 @@ name = "keytree-api"
 version = "0.1.0"
 description = "Keytree API"
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = [
     "fastapi>=0.141",
     "uvicorn>=0.52",
