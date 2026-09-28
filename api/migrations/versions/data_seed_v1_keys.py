@@ -11,6 +11,8 @@ from collections.abc import Sequence
 from alembic import op
 from sqlalchemy import text
 
+from migrations.seed import DEFAULT_MODE_DESCRIPTION
+
 # revision identifiers, used by Alembic
 revision: str = "data_seed_v1_keys"
 down_revision: str | Sequence[str] | None = "data_seed_default_modes"
@@ -21,7 +23,6 @@ depends_on: str | Sequence[str] | None = "schema_tables"
 def upgrade() -> None:
     bind = op.get_bind()
 
-    # raw SQL: no commit path exists yet, and seed() is reserved for tables the API can't write
     if bind.scalar(text("SELECT 1 FROM key LIMIT 1")) is not None:
         return
 
@@ -33,7 +34,6 @@ def upgrade() -> None:
         """)
     )
 
-    # bundle namespace's proposed_children is a placeholder, backfilled below once child keys exist
     _ = bind.execute(
         text("""
             INSERT INTO staged_edit
@@ -42,11 +42,11 @@ def upgrade() -> None:
             SELECT :changeset_id, m.id, 1,
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
                    CASE WHEN n.category IS NULL THEN '{}'::jsonb ELSE NULL END,
-                   'Bootstrap v1 seed', 'skipped'
+                   :description, 'skipped'
             FROM mode m JOIN namespace n ON n.id = m.namespace_id
             WHERE m.name = 'default'
         """),
-        {"changeset_id": changeset_id},
+        {"changeset_id": changeset_id, "description": DEFAULT_MODE_DESCRIPTION},
     )
 
     _ = bind.execute(
@@ -57,17 +57,16 @@ def upgrade() -> None:
             SELECT m.id, n.id, 1,
                    s.name || '/' || n.name || '/' || m.name || '/v1',
                    CASE WHEN n.category IS NULL THEN NULL ELSE '' END,
-                   se.id, 'keytree_app', 'Bootstrap v1 seed', se.validation_status
+                   se.id, 'keytree_app', :description, se.validation_status
             FROM staged_edit se
             JOIN mode m ON m.id = se.mode_id
             JOIN namespace n ON n.id = m.namespace_id
             JOIN subsystem s ON s.id = n.subsystem_id
             WHERE se.changeset_id = :changeset_id
         """),
-        {"changeset_id": changeset_id},
+        {"changeset_id": changeset_id, "description": DEFAULT_MODE_DESCRIPTION},
     )
 
-    # (namespace_id, version=1) is unambiguous: one default mode, one version, per namespace
     _ = bind.execute(
         text("""
             INSERT INTO key_child
