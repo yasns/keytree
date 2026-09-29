@@ -12,6 +12,7 @@ from alembic import op
 from sqlalchemy import column, select, table, text
 
 from migrations.seed import (
+    insert_bundle_key,
     insert_changeset,
     insert_key,
     insert_mode,
@@ -29,59 +30,18 @@ depends_on: str | Sequence[str] | None = "schema_tables"
 MODE_T = table("mode", column("id"), column("name"), column("namespace_id"))
 KEY_T = table("key", column("id"), column("mode_id"), column("namespace_id"), column("version"))
 
-# subsystems that follow the standard import -> archive conf/rs -> demo-bundle pattern;
-# archive_ns is which of "conf"/"rs" to archive, demo is add_demo_bundle_key's children arg
-SUBSYSTEMS: dict[str, dict] = {
-    "ugt": {
-        "archive_ns": ("conf", "rs"),
-        "demo": [
-            ("hw", "ugt", "hw"),
-            ("infra", "ugt", "infra"),
-            ("algo", "ugt", "algo"),
-            ("l1_menu", "ugt", "l1_menu"),
-        ],
-    },
-    "ugmt": {
-        "archive_ns": ("conf", "rs"),
-        "demo": [("hw", "ugmt", "hw"), ("infra", "ugmt", "infra"), ("algo", "ugmt", "algo")],
-    },
-    "calol1": {
-        "archive_ns": ("conf", "rs"),
-        "demo": [("hw", "calol1", "hw"), ("infra", "calol1", "infra"), ("algo", "calol1", "algo")],
-    },
-    "calol2": {
-        "archive_ns": ("conf", "rs"),
-        "demo": [("hw", "calol2", "hw"), ("infra", "calol2", "infra"), ("algo", "calol2", "algo")],
-    },
-    "bmtf": {
-        "archive_ns": ("conf", "rs"),
-        "demo": [("hw", "bmtf", "hw"), ("infra", "bmtf", "infra"), ("algo", "bmtf", "algo")],
-    },
-    "emtf": {
-        "archive_ns": (),
-        "demo": [("hw", "emtf", "hw"), ("infra", "emtf", "infra"), ("algo", "emtf", "algo")],
-    },
-    "omtf": {
-        "archive_ns": (),
-        "demo": [("hw", "omtf", "hw"), ("infra", "omtf", "infra"), ("algo", "omtf", "algo")],
-    },
-    "twinmux": {
-        "archive_ns": ("conf",),
-        "demo": [
-            ("hw", "twinmux", "hw"),
-            ("infra", "twinmux", "infra"),
-            ("algo", "twinmux", "algo"),
-        ],
-    },
-    "spare_ugt": {
-        "archive_ns": ("conf",),
-        "demo": [
-            ("hw", "spare_ugt", "hw"),
-            ("ugt_infra", "ugt", "infra"),
-            ("ugt_algo", "ugt", "algo"),
-            ("ugt_l1_menu", "ugt", "l1_menu"),
-        ],
-    },
+# subsystems that follow the standard import -> archive modes pattern; value is which of
+# "conf"/"rs" to archive
+SUBSYSTEMS: dict[str, tuple[str, ...]] = {
+    "ugt": ("conf", "rs"),
+    "ugmt": ("conf", "rs"),
+    "calol1": ("conf", "rs"),
+    "calol2": ("conf", "rs"),
+    "bmtf": ("conf", "rs"),
+    "emtf": (),
+    "omtf": (),
+    "twinmux": ("conf",),
+    "spare_ugt": ("conf",),
 }
 
 
@@ -171,32 +131,6 @@ def decommission_keys(
         )
 
 
-def insert_key_child(
-    bind,
-    *,
-    parent_key_id: int,
-    alias: str,
-    child_key_id: int,
-    parent_namespace_id: int,
-    child_namespace_id: int,
-) -> None:
-    bind.execute(
-        text("""
-            INSERT INTO key_child
-                (parent_key_id, alias, child_key_id, parent_namespace_id, child_namespace_id)
-            VALUES
-                (:parent_key_id, :alias, :child_key_id, :parent_namespace_id, :child_namespace_id)
-        """),
-        {
-            "parent_key_id": parent_key_id,
-            "alias": alias,
-            "child_key_id": child_key_id,
-            "parent_namespace_id": parent_namespace_id,
-            "child_namespace_id": child_namespace_id,
-        },
-    )
-
-
 def key_id_by_version(bind, namespace_id: int, mode: str, version: int) -> int | None:
     return bind.execute(
         select(KEY_T.c.id)
@@ -207,46 +141,6 @@ def key_id_by_version(bind, namespace_id: int, mode: str, version: int) -> int |
             KEY_T.c.version == version,
         )
     ).scalar()
-
-
-def insert_bundle_key(
-    bind,
-    *,
-    changeset_id: int,
-    mode_id: int,
-    namespace_id: int,
-    version: int,
-    label: str,
-    created_by: str,
-    comment: str,
-    children: dict[str, tuple[int, int]],
-    created_at=None,
-    validation_status: str = "skipped",
-) -> int:
-    """insert_key with `children` (alias -> (key_id, namespace_id)), then wire key_child rows."""
-    key_id = insert_key(
-        bind,
-        changeset_id=changeset_id,
-        mode_id=mode_id,
-        namespace_id=namespace_id,
-        version=version,
-        label=label,
-        created_by=created_by,
-        created_at=created_at,
-        comment=comment,
-        children={alias: child_key_id for alias, (child_key_id, _) in children.items()},
-        validation_status=validation_status,
-    )
-    for alias, (child_key_id, child_namespace_id) in children.items():
-        insert_key_child(
-            bind,
-            parent_key_id=key_id,
-            alias=alias,
-            child_key_id=child_key_id,
-            parent_namespace_id=namespace_id,
-            child_namespace_id=child_namespace_id,
-        )
-    return key_id
 
 
 def import_legacy(bind, subsystem: str, modes: list[dict], keys: list[dict]) -> int:
@@ -334,40 +228,6 @@ def import_legacy(bind, subsystem: str, modes: list[dict], keys: list[dict]) -> 
     return changeset_id
 
 
-def add_demo_bundle_key(
-    bind, subsystem: str, namespace: str, children: list[tuple[str, str, str]]
-) -> None:
-    """A child with no shepherd_demo key (non-yaml format) is silently skipped for that alias."""
-    ns_ids = namespace_ids_global(bind)
-    namespace_id = ns_ids[(subsystem, namespace)]
-
-    resolved: dict[str, tuple[int, int]] = {}
-    for alias, child_subsystem, child_namespace in children:
-        child_namespace_id = ns_ids.get((child_subsystem, child_namespace))
-        if child_namespace_id is None:
-            continue
-        child_key_id = key_id_by_version(bind, child_namespace_id, "shepherd_demo", 2)
-        if child_key_id is not None:
-            resolved[alias] = (child_key_id, child_namespace_id)
-
-    comment = "Demo bundle wired to ShepHerd fixture children"
-    mode_id = insert_mode(bind, namespace_id, "shepherd_demo", comment, "keytree_app")
-    changeset_id = insert_changeset(bind, "keytree_app", ["keytree_superuser"])
-    label = f"{subsystem}/{namespace}/shepherd_demo/v1"
-    insert_bundle_key(
-        bind,
-        changeset_id=changeset_id,
-        mode_id=mode_id,
-        namespace_id=namespace_id,
-        version=1,
-        label=label,
-        created_by="keytree_app",
-        comment=comment,
-        children=resolved,
-        validation_status="passed",
-    )
-
-
 def _seed_external_leaves(bind) -> None:
     ns_ids = namespace_ids_global(bind)
 
@@ -437,12 +297,11 @@ def upgrade() -> None:
     fx = load_fixture("legacy_cppf")
     import_legacy(bind, "cppf", fx["modes"], fx["keys"])
 
-    for name, cfg in SUBSYSTEMS.items():
+    for name, archive_ns in SUBSYSTEMS.items():
         fx = load_fixture(f"legacy_{name}")
         changeset_id = import_legacy(bind, name, fx["modes"], fx["keys"])
-        for ns in cfg["archive_ns"]:
+        for ns in archive_ns:
             archive_modes(bind, name, ns, by_namespace(fx["archived_modes"], ns), changeset_id)
-        add_demo_bundle_key(bind, name, "conf", cfg["demo"])
 
     _seed_external_leaves(bind)
 
