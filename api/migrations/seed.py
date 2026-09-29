@@ -154,3 +154,69 @@ def insert_key(
             "validation_status": validation_status,
         },
     )
+
+
+def insert_key_child(
+    bind,
+    *,
+    parent_key_id: int,
+    alias: str,
+    child_key_id: int,
+    parent_namespace_id: int,
+    child_namespace_id: int,
+) -> None:
+    bind.execute(
+        text("""
+            INSERT INTO key_child
+                (parent_key_id, alias, child_key_id, parent_namespace_id, child_namespace_id)
+            VALUES
+                (:parent_key_id, :alias, :child_key_id, :parent_namespace_id, :child_namespace_id)
+        """),
+        {
+            "parent_key_id": parent_key_id,
+            "alias": alias,
+            "child_key_id": child_key_id,
+            "parent_namespace_id": parent_namespace_id,
+            "child_namespace_id": child_namespace_id,
+        },
+    )
+
+
+def insert_bundle_key(
+    bind,
+    *,
+    changeset_id: int,
+    mode_id: int,
+    namespace_id: int,
+    version: int,
+    label: str,
+    created_by: str,
+    comment: str,
+    children: dict[str, tuple[int, int]],
+    created_at=None,
+    validation_status: str = "skipped",
+) -> int:
+    """insert_key with `children` (alias -> (key_id, namespace_id)), then wire key_child rows."""
+    key_id = insert_key(
+        bind,
+        changeset_id=changeset_id,
+        mode_id=mode_id,
+        namespace_id=namespace_id,
+        version=version,
+        label=label,
+        created_by=created_by,
+        created_at=created_at,
+        comment=comment,
+        children={alias: child_key_id for alias, (child_key_id, _) in children.items()},
+        validation_status=validation_status,
+    )
+    for alias, (child_key_id, child_namespace_id) in children.items():
+        insert_key_child(
+            bind,
+            parent_key_id=key_id,
+            alias=alias,
+            child_key_id=child_key_id,
+            parent_namespace_id=namespace_id,
+            child_namespace_id=child_namespace_id,
+        )
+    return key_id
